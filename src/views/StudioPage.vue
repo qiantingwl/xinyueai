@@ -352,6 +352,15 @@
           <div v-else class="project-detail-body" :class="{ 'is-member-view': projectDetail?.accessRole === 'MEMBER' }">
             <div class="project-detail-main">
               <section class="project-detail-section project-content-section"><div class="project-section-heading"><div><span class="project-detail-eyebrow">CONTENT</span><h3>项目内容</h3></div><span class="project-content-total">{{ projectDetail?.conversationCount || 0 }} 个对话 · {{ projectDetail?.assetCount || 0 }} 个文件</span></div><div class="project-content-grid"><div><h4>最近对话</h4><button v-for="conversation in projectDetail?.conversations || []" :key="conversation.id" class="project-content-row" type="button" @click="openProjectConversation(conversation.id)"><MessageSquare :size="15" /><span><strong>{{ conversation.title }}</strong><small>{{ conversation.author?.displayName || '我' }} · {{ conversation.model }} · {{ formatDate(conversation.updatedAt) }}</small><em v-if="conversation.deletedMessageCount" class="project-deleted-badge">{{ conversation.deletedMessageCount }} 条已删除提问</em></span><ChevronRight :size="15" /></button><p v-if="!projectDetail?.conversations.length" class="project-content-empty">在选中此项目后开始对话，对话会显示在这里。</p></div><div><h4>项目文件</h4><button v-for="asset in projectDetail?.assets || []" :key="asset.id" class="project-content-row" type="button" @click="openProjectAsset(asset)"><ImageIcon v-if="asset.kind === 'image'" :size="15" /><Video v-else-if="asset.kind === 'video'" :size="15" /><FileText v-else :size="15" /><span><strong>{{ asset.title }}</strong><small>{{ asset.tags.join(' · ') }}</small></span><ChevronRight :size="15" /></button><p v-if="!projectDetail?.assets.length" class="project-content-empty">上传到项目或在项目中生成的文件会显示在这里。</p></div></div></section>
+              <section class="project-detail-section project-skill-section">
+                <div class="project-section-heading"><div><span class="project-detail-eyebrow">PROJECT SKILL</span><h3>项目技能</h3></div><span class="project-skill-state" :class="{ enabled: projectSkillStatus?.active?.enabled }">{{ projectSkillStatus?.active?.enabled ? `已启用 v${projectSkillStatus.active.version}` : '未启用' }}</span></div>
+                <div v-if="projectSkillStatus?.active?.enabled" class="project-skill-current"><header><div><strong>{{ projectSkillStatus.active.name }}</strong><span>所有项目对话自动使用</span></div><div v-if="projectDetail?.accessRole === 'OWNER'" class="project-skill-actions"><button type="button" class="project-inline-button" @click="openProjectSkillEditor"><Pencil :size="14" />编辑</button><button type="button" class="project-inline-button is-danger" :disabled="projectSkillBusy" @click="disableProjectSkill"><Power :size="14" />停用</button></div></header><pre>{{ projectSkillStatus.active.content }}</pre></div>
+                <div v-else class="project-skill-empty"><Layers3 :size="19" /><span>当前项目没有绑定技能，对话将按原有配置回答。</span><button v-if="projectDetail?.accessRole === 'OWNER'" type="button" class="project-inline-button" @click="openProjectSkillEditor"><Plus :size="14" />设置技能</button></div>
+                <form v-if="projectSkillEditorOpen && projectDetail?.accessRole === 'OWNER'" class="project-skill-editor" @submit.prevent="saveProjectSkill"><label><span>技能名称</span><input v-model="projectSkillName" required maxlength="80" placeholder="例如：客户方案撰写规范" /></label><label><span>技能内容</span><textarea v-model="projectSkillContent" required maxlength="50000" rows="8" placeholder="填写本项目所有回答需要遵循的角色、流程、规则和质量标准" /></label><footer><button type="button" class="project-secondary-button" @click="projectSkillEditorOpen = false">取消</button><button type="submit" class="project-primary-button" :disabled="projectSkillBusy || !projectSkillName.trim() || !projectSkillContent.trim()"><Save :size="14" />保存并启用</button></footer></form>
+                <div class="project-skill-summary"><h4>从对话总结新技能</h4><form @submit.prevent="summarizeProjectSkill"><select v-model="projectSkillConversationId" required aria-label="选择来源对话"><option value="" disabled>选择我的项目对话</option><option v-for="conversation in projectSkillConversations" :key="conversation.id" :value="conversation.id">{{ conversation.title }}</option></select><input v-model="projectSkillRequest" maxlength="2000" placeholder="可选：说明这次希望补充或调整什么" /><button type="submit" class="project-primary-button" :disabled="projectSkillBusy || !projectSkillConversationId"><LoaderCircle v-if="projectSkillBusy && !projectSkillCandidate" class="admin-spin" :size="14" /><Sparkles v-else :size="14" />生成候选技能</button></form></div>
+                <form v-if="projectSkillCandidate" class="project-skill-candidate" @submit.prevent="activateProjectSkillCandidate"><header><div><span>候选技能</span><small>基于 {{ projectSkillCandidate.sourceConversation.title }}</small></div><button type="button" class="project-icon-button" title="关闭候选技能" @click="projectSkillCandidate = null"><X :size="15" /></button></header><label><span>名称</span><input v-model="projectSkillCandidate.name" required maxlength="80" /></label><label><span>内容</span><textarea v-model="projectSkillCandidate.content" required maxlength="50000" rows="9" /></label><label><span>变化摘要</span><input v-model="projectSkillCandidate.changeSummary" maxlength="500" /></label><footer><button type="submit" class="project-primary-button" :disabled="projectSkillBusy"><RefreshCw :size="14" />确认替换</button></footer></form>
+                <div v-if="projectSkillStatus?.versions.length" class="project-skill-history"><h4>技能变化记录</h4><article v-for="version in projectSkillStatus.versions" :key="version.id" :class="{ active: version.active }"><div class="project-skill-history-meta"><strong>v{{ version.version }} · {{ version.name }}</strong><span>{{ projectSkillChangeLabel(version.changeType) }}<template v-if="version.active"> · 当前</template></span></div><p>{{ version.changeSummary || '未填写变化摘要' }}</p><small>{{ version.createdBy.displayName }} · {{ formatDate(version.createdAt) }}<template v-if="version.sourceConversation"> · 来源：{{ version.sourceConversation.title }}</template></small><details><summary>查看技能内容</summary><pre>{{ version.content }}</pre></details><button v-if="!version.active" type="button" class="project-restore-button" :disabled="projectSkillRestoringVersion === version.version" @click="restoreProjectSkill(version)"><RotateCcw :size="13" />{{ projectSkillRestoringVersion === version.version ? '回退中' : '回退到此版本' }}</button></article></div>
+              </section>
               <section v-if="projectDetail?.accessRole === 'OWNER'" class="project-detail-section"><div class="project-section-heading"><div><span class="project-detail-eyebrow">MEMBERS</span><h3>项目成员</h3></div><span class="project-content-total">{{ projectDetail.members.length }} 位成员</span></div><form class="project-member-invite" @submit.prevent="inviteProjectMember"><input v-model.trim="projectMemberEmail" required type="email" placeholder="输入已注册成员邮箱" /><button type="submit" :disabled="projectMemberBusy"><UserPlus :size="15" />{{ projectMemberBusy ? '邀请中' : '邀请成员' }}</button></form><div class="project-member-list"><article><span><strong>{{ projectDetail.owner?.displayName || '项目创建者' }}</strong><small>{{ projectDetail.owner?.email || '' }}</small></span><em>创建者</em></article><article v-for="member in projectDetail.members" :key="member.userId"><span><strong>{{ member.user.displayName }}</strong><small>{{ member.user.email }}</small></span><button type="button" :aria-label="`移除成员${member.user.displayName}`" title="移除成员" :disabled="projectMemberBusy" @click="removeProjectMember(member)"><Trash2 :size="14" /></button></article></div></section>
               <section v-if="projectDetail?.accessRole === 'OWNER'" class="project-detail-section"><div class="project-section-heading"><div><span class="project-detail-eyebrow">WORKFLOW</span><h3>工作流设置</h3></div><span class="project-revision">v{{ projectDetail?.revision || 1 }}</span></div>
                 <div class="project-form-grid"><label><span>项目状态</span><select v-model="projectWorkflowStatus"><option value="PLANNING">规划中</option><option value="IN_PROGRESS">进行中</option><option value="REVIEW">待审核</option><option value="COMPLETED">已完成</option><option value="ARCHIVED">已归档</option></select></label><label><span>默认模型</span><input v-model="projectDefaultModel" maxlength="160" placeholder="跟随系统默认模型" /></label></div>
@@ -380,7 +389,7 @@ import { useI18n } from 'vue-i18n'
 import {
   Archive, ArchiveRestore, ArrowUp, BadgeCheck, Blend, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Eye, FileSpreadsheet, FileText, FileType2, Folder,
   Download, Image as ImageIcon, ImagePlus, Images, KeyRound, Layers3, LayoutGrid, LibraryBig, Lightbulb, List, ListFilter, Paperclip,
-  History, LoaderCircle, Maximize2, MessageSquare, Mic, Pencil, Play, Plus, RefreshCw, RotateCcw, Save, Search, Settings2, SlidersHorizontal, Sparkles, Square, ThumbsDown, ThumbsUp, Trash2, Upload, UserPlus, Video, X,
+  History, LoaderCircle, Maximize2, MessageSquare, Mic, Pencil, Play, Plus, Power, RefreshCw, RotateCcw, Save, Search, Settings2, SlidersHorizontal, Sparkles, Square, ThumbsDown, ThumbsUp, Trash2, Upload, UserPlus, Video, X,
 } from 'lucide-vue-next'
 import AssetGrid from '../components/AssetGrid.vue'
 import CommerceGallery from '../components/CommerceGallery.vue'
@@ -392,7 +401,7 @@ import PluginSelector from '../components/PluginSelector.vue'
 import { useAuthStore } from '../stores/auth'
 import { useCatalogStore } from '../stores/catalog'
 import { ChatSendError, useStudioStore } from '../stores/studio'
-import type { CodeArtifact, GenerationRun, Message, PluginCapability, Project, ProjectMember, ProjectStepStatus, ProjectVersion, ProjectWorkflowStatus, StudioAsset, StudioMode } from '../types'
+import type { CodeArtifact, GenerationRun, Message, PluginCapability, Project, ProjectMember, ProjectSkillCandidate, ProjectSkillStatus, ProjectSkillVersion, ProjectStepStatus, ProjectVersion, ProjectWorkflowStatus, StudioAsset, StudioMode } from '../types'
 import { api, apiUrl } from '../services/api'
 import { consumeImagePrompt } from '../utils/prompt-transfer'
 import { createClientId } from '../utils/client-id'
@@ -468,6 +477,15 @@ const projectMemberEmail = ref('')
 const projectMemberBusy = ref(false)
 const projectVersions = ref<ProjectVersion[]>([])
 const projectVersionPreview = ref<ProjectVersion | null>(null)
+const projectSkillStatus = ref<ProjectSkillStatus | null>(null)
+const projectSkillEditorOpen = ref(false)
+const projectSkillName = ref('')
+const projectSkillContent = ref('')
+const projectSkillConversationId = ref('')
+const projectSkillRequest = ref('')
+const projectSkillCandidate = ref<ProjectSkillCandidate | null>(null)
+const projectSkillBusy = ref(false)
+const projectSkillRestoringVersion = ref<number | null>(null)
 const projectWorkflowStatus = ref<ProjectWorkflowStatus>('PLANNING')
 const projectDefaultModel = ref('')
 const projectDefaultAssistantId = ref('')
@@ -655,6 +673,7 @@ const pendingVideoRuns = computed(() => {
 const filteredProjects = computed(() => store.projects.filter((project) => Boolean(project.archived) === (projectTab.value === 'archived') && project.name.toLowerCase().includes(projectSearch.value.trim().toLowerCase())))
 const activeProjectCount = computed(() => store.projects.filter((project) => !project.archived).length)
 const archivedProjectCount = computed(() => store.projects.filter((project) => project.archived).length)
+const projectSkillConversations = computed(() => (projectDetail.value?.conversations || []).filter((conversation) => !auth.session?.id || conversation.author?.id === auth.session.id))
 const filteredAssets = computed(() => store.recentAssets.filter((asset) => {
   const matchesTab = assetTab.value === 'all' || (assetTab.value === 'generated' ? asset.purpose === 'generated' : assetTab.value === 'reference' ? asset.purpose === 'reference' || asset.purpose === 'mask' : asset.kind === assetTab.value)
   const matchesSource = assetFilter.value === 'all' || (assetFilter.value === 'uploaded' ? asset.source === 'upload' : asset.source === 'generated')
@@ -1320,6 +1339,9 @@ function closeProjectDetails() {
   projectDetail.value = null
   projectVersions.value = []
   projectVersionPreview.value = null
+  projectSkillStatus.value = null
+  projectSkillCandidate.value = null
+  projectSkillEditorOpen.value = false
   projectDetailError.value = ''
 }
 function formatProjectSnapshot(snapshot: ProjectVersion['snapshot']) { return JSON.stringify(snapshot, null, 2) }
@@ -1343,12 +1365,75 @@ async function openProjectDetails(project: Project) {
     const detail = await store.loadProjectDetail(project.id)
     const assistantPromise = detail.accessRole === 'OWNER' && !assistants.value.length ? loadAssistants() : Promise.resolve()
     const versionsPromise = detail.accessRole === 'OWNER' ? store.loadProjectVersions(project.id) : Promise.resolve([])
-    const [versions] = await Promise.all([versionsPromise, assistantPromise])
+    const [versions, , skillStatus] = await Promise.all([versionsPromise, assistantPromise, store.loadProjectSkill(project.id)])
     fillProjectEditor(detail)
     projectVersions.value = versions
+    projectSkillStatus.value = skillStatus
+    projectSkillConversationId.value = projectSkillConversations.value[0]?.id || ''
   } catch (reason) {
     projectDetailError.value = reason instanceof Error ? reason.message : '项目详情加载失败'
   } finally { projectDetailLoading.value = false }
+}
+function projectSkillChangeLabel(type: ProjectSkillVersion['changeType']) {
+  return type === 'SUMMARY' ? '对话总结' : type === 'RESTORE' ? '版本回退' : type === 'DISABLE' ? '已停用' : '手动设置'
+}
+function openProjectSkillEditor() {
+  projectSkillName.value = projectSkillStatus.value?.active?.name || ''
+  projectSkillContent.value = projectSkillStatus.value?.active?.content || ''
+  projectSkillEditorOpen.value = true
+}
+async function refreshProjectSkill() {
+  if (projectDetail.value) projectSkillStatus.value = await store.loadProjectSkill(projectDetail.value.id)
+}
+async function saveProjectSkill() {
+  if (!projectDetail.value || projectSkillBusy.value) return
+  projectSkillBusy.value = true
+  projectDetailError.value = ''
+  try {
+    await store.setProjectSkill(projectDetail.value.id, { name: projectSkillName.value, content: projectSkillContent.value, changeSummary: '创建者手动更新项目技能' })
+    projectSkillEditorOpen.value = false
+    await refreshProjectSkill()
+  } catch (reason) { projectDetailError.value = reason instanceof Error ? reason.message : '项目技能保存失败' }
+  finally { projectSkillBusy.value = false }
+}
+async function summarizeProjectSkill() {
+  if (!projectDetail.value || !projectSkillConversationId.value || projectSkillBusy.value) return
+  projectSkillBusy.value = true
+  projectSkillCandidate.value = null
+  projectDetailError.value = ''
+  try { projectSkillCandidate.value = await store.summarizeProjectSkill(projectDetail.value.id, { conversationId: projectSkillConversationId.value, request: projectSkillRequest.value.trim() || undefined }) }
+  catch (reason) { projectDetailError.value = reason instanceof Error ? reason.message : '技能总结失败' }
+  finally { projectSkillBusy.value = false }
+}
+async function activateProjectSkillCandidate() {
+  if (!projectDetail.value || !projectSkillCandidate.value || projectSkillBusy.value) return
+  projectSkillBusy.value = true
+  projectDetailError.value = ''
+  try {
+    const candidate = projectSkillCandidate.value
+    await store.activateProjectSkillSummary(projectDetail.value.id, { name: candidate.name, content: candidate.content, changeSummary: candidate.changeSummary, sourceConversationId: candidate.sourceConversation.id })
+    projectSkillCandidate.value = null
+    projectSkillRequest.value = ''
+    await refreshProjectSkill()
+  } catch (reason) { projectDetailError.value = reason instanceof Error ? reason.message : '技能替换失败' }
+  finally { projectSkillBusy.value = false }
+}
+async function restoreProjectSkill(version: ProjectSkillVersion) {
+  if (!projectDetail.value || projectSkillBusy.value || !window.confirm(`确认回退到技能 v${version.version}？系统会保留当前版本并新增一条回退记录。`)) return
+  projectSkillBusy.value = true
+  projectSkillRestoringVersion.value = version.version
+  projectDetailError.value = ''
+  try { await store.restoreProjectSkill(projectDetail.value.id, version.version); await refreshProjectSkill() }
+  catch (reason) { projectDetailError.value = reason instanceof Error ? reason.message : '技能回退失败' }
+  finally { projectSkillBusy.value = false; projectSkillRestoringVersion.value = null }
+}
+async function disableProjectSkill() {
+  if (!projectDetail.value || projectSkillBusy.value || !window.confirm('确认停用项目技能？后续对话将不再自动使用该技能，历史版本会继续保留。')) return
+  projectSkillBusy.value = true
+  projectDetailError.value = ''
+  try { await store.disableProjectSkill(projectDetail.value.id); await refreshProjectSkill() }
+  catch (reason) { projectDetailError.value = reason instanceof Error ? reason.message : '技能停用失败' }
+  finally { projectSkillBusy.value = false }
 }
 async function deleteProjectQuestion(message: Message) {
   if (!message.canDelete || !window.confirm('删除这条提问？删除后你将看不到该内容，项目创建者仍可在审计视图中查看。')) return

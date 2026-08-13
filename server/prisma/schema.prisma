@@ -212,6 +212,13 @@ enum WebSearchProviderType {
   CUSTOM
 }
 
+enum ProjectSkillChangeType {
+  MANUAL
+  SUMMARY
+  RESTORE
+  DISABLE
+}
+
 model User {
   id                  String                 @id @default(cuid())
   email               String?                @unique
@@ -266,6 +273,7 @@ model User {
   pluginUsages         PluginUsage[]
   agentTasks           AgentTask[]
   agentSchedules       AgentSchedule[]
+  projectSkillVersions ProjectSkillVersion[]
 }
 
 model ExternalIdentity {
@@ -419,6 +427,8 @@ model Project {
   defaultModel       String           @default("")
   defaultAssistantId String?
   revision           Int              @default(1)
+  skillRevision      Int              @default(0)
+  activeSkillVersionId String?         @unique
   archivedAt         DateTime?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
@@ -430,9 +440,37 @@ model Project {
   versions           ProjectVersion[]
   agentTasks         AgentTask[]
   members            ProjectMember[]
+  activeSkillVersion ProjectSkillVersion? @relation("ProjectActiveSkill", fields: [activeSkillVersionId], references: [id], onDelete: SetNull)
+  skillVersions      ProjectSkillVersion[] @relation("ProjectSkillVersions")
 
   @@index([userId, updatedAt])
   @@index([defaultAssistantId])
+}
+
+model ProjectSkillVersion {
+  id                   String                 @id @default(cuid())
+  projectId            String
+  version              Int
+  name                 String
+  content              String                 @db.Text
+  enabled              Boolean                @default(true)
+  changeType           ProjectSkillChangeType
+  changeSummary        String                 @default("") @db.Text
+  previousVersionId    String?
+  sourceConversationId String?
+  createdById          String
+  createdAt            DateTime               @default(now())
+  project              Project                @relation("ProjectSkillVersions", fields: [projectId], references: [id], onDelete: Cascade)
+  activeForProject     Project?               @relation("ProjectActiveSkill")
+  previousVersion      ProjectSkillVersion?   @relation("ProjectSkillPrevious", fields: [previousVersionId], references: [id], onDelete: SetNull)
+  nextVersions         ProjectSkillVersion[]  @relation("ProjectSkillPrevious")
+  sourceConversation   Conversation?          @relation(fields: [sourceConversationId], references: [id], onDelete: SetNull)
+  createdBy            User                   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, version])
+  @@index([projectId, createdAt])
+  @@index([createdById, createdAt])
+  @@index([sourceConversationId])
 }
 
 model ProjectMember {
@@ -479,6 +517,7 @@ model Conversation {
   messages   Message[]
   jobs       GenerationJob[]
   agentTask  AgentTask?
+  skillSourceVersions ProjectSkillVersion[]
 
   @@index([userId, updatedAt])
   @@index([userId, pinnedAt, updatedAt])

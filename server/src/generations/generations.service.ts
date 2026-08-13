@@ -25,7 +25,7 @@ export class GenerationsService {
     const moderationSource = input.kind === 'CHAT' ? 'CHAT' : input.kind === 'COMMERCE' ? 'COMMERCE' : 'IMAGE'
     await this.moderation.inspect(userId, moderationSource, input.prompt, { conversationId: input.conversationId || null, projectId: input.projectId || null, kind: input.kind })
     const [project, conversation] = await Promise.all([
-      input.projectId ? this.prisma.project.findFirst({ where: { id: input.projectId, OR: [{ userId }, { members: { some: { userId } } }] }, select: { id: true } }) : null,
+      input.projectId ? this.prisma.project.findFirst({ where: { id: input.projectId, OR: [{ userId }, { members: { some: { userId } } }] }, select: { id: true, instructions: true, activeSkillVersion: { select: { id: true, version: true, name: true, content: true, enabled: true } } } }) : null,
       input.conversationId ? this.prisma.conversation.findFirst({ where: { id: input.conversationId, userId }, select: { id: true, projectId: true } }) : null,
     ])
     if (input.projectId && !project) throw new NotFoundException('项目不存在')
@@ -58,11 +58,13 @@ export class GenerationsService {
     if (creationToolId && !creationTool) throw new NotFoundException('图片工具不存在或已停用')
     const requestedModel = creationTool?.model || input.model || assistant?.defaultModel || plugin?.recommendedModel || undefined
     const resolved = await this.providers.resolve(userId, requestedModel, capability, input.options)
-    const normalizedOptions = input.kind === 'IMAGE' || input.kind === 'COMMERCE'
+    const projectSkillSnapshot = input.kind === 'CHAT' && project?.activeSkillVersion?.enabled ? { id: project.activeSkillVersion.id, version: project.activeSkillVersion.version, name: project.activeSkillVersion.name, content: project.activeSkillVersion.content } : undefined
+    const projectInstructions = input.kind === 'CHAT' ? project?.instructions.trim() || undefined : undefined
+    const normalizedOptions: Record<string, unknown> = input.kind === 'IMAGE' || input.kind === 'COMMERCE'
       ? { ...input.options, ...(creationTool ? { creationTool: { id: creationTool.id, title: creationTool.title, instruction: creationTool.prompt, options: creationTool.options } } : {}), ...normalizeImageOptions(input.options, resolved.imageCapabilities) }
       : input.kind === 'VIDEO'
         ? { ...input.options, ...normalizeVideoOptions(input.options, resolved.videoCapabilities) }
-        : input.options
+        : { ...input.options, ...(projectSkillSnapshot ? { projectSkill: projectSkillSnapshot } : {}), ...(projectInstructions ? { projectInstructions } : {}) }
     if (input.kind === 'IMAGE' || input.kind === 'COMMERCE') await this.assertImageAssets(userId, normalizedOptions)
     const quantity = input.kind === 'COMMERCE' ? Math.max(1, Math.min(Number(normalizedOptions.modules || 8), 12)) : input.kind === 'IMAGE' ? Math.max(1, Math.min(Number(normalizedOptions.count || 1), 10)) : 1
     let unitCreditCost = Math.max(0, resolved.creditCost)

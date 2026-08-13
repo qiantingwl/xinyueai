@@ -91,6 +91,39 @@ export interface Project {
   members: ProjectMember[]
 }
 
+export type ProjectSkillChangeType = 'MANUAL' | 'SUMMARY' | 'RESTORE' | 'DISABLE'
+
+export interface ProjectSkillVersion {
+  id: string
+  projectId: string
+  version: number
+  name: string
+  content: string
+  enabled: boolean
+  changeType: ProjectSkillChangeType
+  changeSummary: string
+  previousVersionId?: string | null
+  sourceConversationId?: string | null
+  sourceConversation?: { id: string; title: string } | null
+  createdBy: { id: string; displayName: string; email: string | null }
+  createdAt: number
+  active: boolean
+}
+
+export interface ProjectSkillStatus {
+  activeVersionId: string | null
+  active: ProjectSkillVersion | null
+  versions: ProjectSkillVersion[]
+}
+
+export interface ProjectSkillCandidate {
+  name: string
+  content: string
+  changeSummary: string
+  basedOnVersion: number | null
+  sourceConversation: { id: string; title: string }
+}
+
 export type ProjectWorkflowStatus = 'PLANNING' | 'IN_PROGRESS' | 'REVIEW' | 'COMPLETED' | 'ARCHIVED'
 export type ProjectStepStatus = 'TODO' | 'IN_PROGRESS' | 'DONE'
 

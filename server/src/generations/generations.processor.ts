@@ -347,10 +347,17 @@ export class GenerationsProcessor extends WorkerHost {
     const officeMode = options.officeMode === 'agent' ? 'agent' : options.officeMode === 'expert' ? 'expert' : options.officeMode === 'fast' ? 'fast' : ''
     const officePrompt = officeSkillPrompts[officeSkill]
     const pluginPrompt = await this.pluginInstruction(task, officeSkill ? PluginCapability.OFFICE : PluginCapability.CHAT)
+    const projectSkill = options.projectSkill && typeof options.projectSkill === 'object' && !Array.isArray(options.projectSkill) ? options.projectSkill as Record<string, unknown> : null
+    const projectSkillPrompt = projectSkill && typeof projectSkill.content === 'string' && projectSkill.content.trim()
+      ? `当前对话属于一个启用了项目技能的协作项目。以下技能适用于本项目中的所有回答，必须遵循。\n技能名称：${String(projectSkill.name || '项目技能')}\n技能版本：v${Number(projectSkill.version || 1)}\n技能内容：\n${projectSkill.content.trim()}`
+      : ''
+    const projectInstructions = typeof options.projectInstructions === 'string' && options.projectInstructions.trim()
+      ? `项目创建者设置的项目指令：\n${options.projectInstructions.trim()}`
+      : ''
     const officeDepth = officeMode === 'agent'
       ? '你正在执行办公任务模式。围绕用户最终目标自主组织步骤，充分使用已授权资料与工具，校验关键结论，最后直接交付完整成品内容；不要把工作重新推给用户。'
       : officeMode === 'expert' ? '先分析任务约束与缺失信息，再给出完整、专业、可复用的交付结果。' : officeMode === 'fast' ? '直接给出简洁、可用的最终结果。' : ''
-    const systemParts = [assistant?.systemPrompt?.trim(), pluginPrompt, officePrompt, officeDepth, knowledgeContext ? `以下是已授权知识库上下文，仅在相关时参考，不要臆造：\n${knowledgeContext}` : '', attachmentContext].filter(Boolean)
+    const systemParts = [assistant?.systemPrompt?.trim(), projectSkillPrompt, projectInstructions, pluginPrompt, officePrompt, officeDepth, knowledgeContext ? `以下是已授权知识库上下文，仅在相关时参考，不要臆造：\n${knowledgeContext}` : '', attachmentContext].filter(Boolean)
     const providerMessages = systemParts.length ? [{ role: 'system', content: systemParts.join('\n\n') }, ...messages.map((message) => ({ role: message.role.toLowerCase(), content: message.content }))] : messages.map((message) => ({ role: message.role.toLowerCase(), content: message.content }))
     const approvedToolIds = assistantId ? new Set((await this.prisma.toolApprovalRequest.findMany({ where: { userId: task.userId, assistantId, status: 'APPROVED', consumedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { toolId: true } })).map((item) => item.toolId)) : new Set<string>()
     const agentTools = (assistant?.tools || []).map((binding) => binding.tool).filter((tool) => Boolean(tool.endpoint) && (!tool.requiresApproval || approvedToolIds.has(tool.id)))

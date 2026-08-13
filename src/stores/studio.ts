@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { api, streamApiEvents } from '../services/api'
-import type { ConversationSummary, GenerationOptions, GenerationRun, Message, Project, ProjectVersion, ProjectWorkflowConfig, ProjectWorkflowStatus, StudioAsset, StudioMode } from '../types'
+import type { ConversationSummary, GenerationOptions, GenerationRun, Message, Project, ProjectSkillCandidate, ProjectSkillStatus, ProjectSkillVersion, ProjectVersion, ProjectWorkflowConfig, ProjectWorkflowStatus, StudioAsset, StudioMode } from '../types'
 import { createClientId } from '../utils/client-id'
 
 type ServerConversation = { id: string; title: string; model: string; projectId?: string | null; temporary?: boolean; auditReadOnly?: boolean; auditProtected?: boolean; pinnedAt?: string | null; sharedAt?: string | null; createdAt: string; updatedAt: string; user?: { id: string; displayName: string; email?: string | null } | null; deletedMessageCount?: number; messages?: ServerMessage[]; generationJobs?: ServerJob[] }
@@ -8,6 +8,8 @@ type ServerMessage = { id: string; role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL
 type ServerProjectMember = { userId: string; joinedAt: string; user: { id: string; displayName: string; email: string | null; avatarUrl?: string | null } }
 type ServerProject = { id: string; name: string; description?: string; instructions?: string; workflowStatus?: ProjectWorkflowStatus; workflowConfig?: ProjectWorkflowConfig | null; defaultModel?: string; defaultAssistantId?: string | null; revision?: number; accessRole?: 'OWNER' | 'MEMBER'; user?: { id: string; displayName: string; email: string | null }; members?: ServerProjectMember[]; archivedAt?: string | null; updatedAt: string; assets?: ServerAsset[]; conversations?: ServerConversation[]; _count?: { assets?: number; conversations?: number; versions?: number } }
 type ServerVersion = Omit<ProjectVersion, 'createdAt' | 'snapshot'> & { createdAt: string; snapshot: ProjectVersion['snapshot'] }
+type ServerSkillVersion = Omit<ProjectSkillVersion, 'createdAt'> & { createdAt: string }
+type ServerSkillStatus = Omit<ProjectSkillStatus, 'active' | 'versions'> & { active: ServerSkillVersion | null; versions: ServerSkillVersion[] }
 type ServerAsset = { id: string; kind: 'IMAGE' | 'VIDEO' | 'FILE' | 'PRODUCT_PACK'; name: string; mimeType: string; size: number; objectKey?: string; contentUrl: string; createdAt: string; metadata?: Record<string, unknown> | null }
 type ServerJob = { id: string; conversationId?: string | null; kind: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE'; status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'; model: string; prompt: string; options?: Record<string, unknown>; creditCost?: number; errorMessage?: string | null; stream?: { messageId: string; content: string; model?: string | null } | null; outputs?: { asset: ServerAsset }[]; createdAt: string }
 
@@ -59,6 +61,10 @@ function mapProject(item: ServerProject): Project {
 function mapVersion(item: ServerVersion): ProjectVersion {
   const snapshot = item.snapshot || {} as ProjectVersion['snapshot']
   return { ...item, createdAt: Date.parse(item.createdAt) || Date.now(), snapshot: { ...snapshot, workflowStatus: snapshot.workflowStatus || 'PLANNING', workflowConfig: mapWorkflowConfig(snapshot.workflowConfig), defaultModel: snapshot.defaultModel || '', defaultAssistantId: snapshot.defaultAssistantId || null } }
+}
+
+function mapSkillVersion(item: ServerSkillVersion): ProjectSkillVersion {
+  return { ...item, createdAt: Date.parse(item.createdAt) || Date.now() }
 }
 
 function mapAsset(item: ServerAsset): StudioAsset {
@@ -426,6 +432,25 @@ export const useStudioStore = defineStore('studio', {
       const index = this.projects.findIndex((item) => item.id === projectId)
       if (index >= 0) this.projects[index] = project
       return project
+    },
+    async loadProjectSkill(projectId: string): Promise<ProjectSkillStatus> {
+      const status = await api<ServerSkillStatus>(`/projects/${projectId}/skill`)
+      return { activeVersionId: status.activeVersionId, active: status.active ? mapSkillVersion(status.active) : null, versions: status.versions.map(mapSkillVersion) }
+    },
+    async setProjectSkill(projectId: string, payload: { name: string; content: string; changeSummary?: string }) {
+      return mapSkillVersion(await api<ServerSkillVersion>(`/projects/${projectId}/skill/manual`, { method: 'POST', body: JSON.stringify(payload) }))
+    },
+    summarizeProjectSkill(projectId: string, payload: { conversationId: string; request?: string }) {
+      return api<ProjectSkillCandidate>(`/projects/${projectId}/skill/summarize`, { method: 'POST', body: JSON.stringify(payload) })
+    },
+    async activateProjectSkillSummary(projectId: string, payload: { name: string; content: string; changeSummary?: string; sourceConversationId: string }) {
+      return mapSkillVersion(await api<ServerSkillVersion>(`/projects/${projectId}/skill/activate-summary`, { method: 'POST', body: JSON.stringify(payload) }))
+    },
+    async restoreProjectSkill(projectId: string, version: number) {
+      return mapSkillVersion(await api<ServerSkillVersion>(`/projects/${projectId}/skill/versions/${version}/restore`, { method: 'POST' }))
+    },
+    async disableProjectSkill(projectId: string) {
+      return mapSkillVersion(await api<ServerSkillVersion>(`/projects/${projectId}/skill`, { method: 'DELETE' }))
     },
     selectProject(projectId: string) { if (this.projects.some((project) => project.id === projectId)) this.currentProjectId = projectId },
     async setProjectArchived(projectId: string, archived: boolean) {
