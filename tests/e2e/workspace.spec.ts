@@ -483,7 +483,7 @@ test('聊天设置可切换浅色模式，模型菜单显示后台信息', async
   await expect(page.getByRole('button', { name: '全部删除', exact: true })).toBeVisible()
 })
 
-test('最近对话可以重命名并归档', async ({ page }) => {
+test('最近对话可以直接重命名并归档', async ({ page }) => {
   const title = `e2e-conversation-${Date.now()}`
   const renamed = `${title}-renamed`
   const created = await page.request.post('/v1/conversations', { data: { title, model: 'gpt-5.5' } })
@@ -493,10 +493,9 @@ test('最近对话可以重命名并归档', async ({ page }) => {
   try {
     await page.goto('/chat')
     await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible()
-    await page.getByRole('button', { name: `打开“${title}”的对话选项`, exact: true }).click()
-    await page.getByRole('menuitem', { name: '重命名', exact: true }).click()
+    await page.getByRole('button', { name: `重命名“${title}”`, exact: true }).click()
     await page.getByLabel('对话名称').fill(renamed)
-    await page.getByLabel('对话名称').press('Enter')
+    await page.getByRole('button', { name: '保存对话名称', exact: true }).click()
     await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible()
 
     await page.getByRole('button', { name: `打开“${renamed}”的对话选项`, exact: true }).click()

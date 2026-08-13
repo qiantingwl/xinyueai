@@ -119,9 +119,11 @@ function parseMarkdownTables(content: string) {
 export class OfficeExportService {
   constructor(private readonly prisma: PrismaService, private readonly assets: AssetsService) {}
 
-  async create(userId: string, conversationId: string) {
+  async create(userId: string, conversationId: string, requestedFormat?: OfficeFormat, messageId?: string) {
     const conversation = await this.prisma.conversation.findFirst({ where: { id: conversationId, userId }, select: { id: true, title: true } })
-    if (!conversation) throw new NotFoundException('办公任务不存在')
+    if (!conversation) throw new NotFoundException('对话不存在')
+    const requestedMessage = messageId ? await this.prisma.message.findFirst({ where: { id: messageId, conversationId, role: 'ASSISTANT', deletedAt: null }, select: { id: true, content: true } }) : null
+    if (messageId && !requestedMessage) throw new NotFoundException('要导出的回答不存在')
     const agentTask = await this.prisma.agentTask.findFirst({
       where: { userId, conversationId, status: 'SUCCEEDED' },
       include: { runs: { where: { status: 'SUCCEEDED' }, orderBy: { completedAt: 'desc' }, take: 1 } },
@@ -136,20 +138,21 @@ export class OfficeExportService {
       const options = item.options && typeof item.options === 'object' && !Array.isArray(item.options) ? item.options as Record<string, unknown> : {}
       return typeof options.officeSkill === 'string'
     })
-    if (!job && !agentTask?.runs[0]) throw new BadRequestException('该对话不是可导出的办公任务')
-    const sourceId = agentTask?.runs[0]?.id || job!.id
-    const existing = await this.prisma.asset.findFirst({ where: { userId, deletedAt: null, OR: [{ metadata: { path: ['officeJobId'], equals: sourceId } }, { metadata: { path: ['agentRunId'], equals: sourceId } }] } })
+    if (!requestedMessage && !job && !agentTask?.runs[0]) throw new BadRequestException('该对话不是可导出的办公任务')
+    const sourceId = requestedMessage?.id || agentTask?.runs[0]?.id || job!.id
+    const options = job?.options && typeof job.options === 'object' && !Array.isArray(job.options) ? job.options as Record<string, unknown> : {}
+    const skillId = agentTask?.skillId || String(options.officeSkill || '')
+    const format = requestedFormat || (skillId.startsWith('assistant:') ? 'docx' : skillFormats[skillId] || 'docx')
+    const sourceMetadata = requestedMessage ? { path: ['officeMessageId'], equals: sourceId } : agentTask?.runs[0] ? { path: ['agentRunId'], equals: sourceId } : { path: ['officeJobId'], equals: sourceId }
+    const existing = await this.prisma.asset.findFirst({ where: { userId, deletedAt: null, AND: [{ metadata: sourceMetadata }, { metadata: { path: ['officeFormat'], equals: format } }] } })
     if (existing) {
       if (agentTask?.runs[0]) await this.attachArtifact(agentTask.runs[0].id, agentTask.runs[0].artifactIds, existing.id)
       return this.publicAsset(existing)
     }
 
-    const message = job ? await this.prisma.message.findFirst({ where: { conversationId, metadata: { path: ['jobId'], equals: job.id } }, select: { content: true } }) : null
-    const content = agentTask?.runs[0]?.finalAnswer || message?.content || ''
+    const message = !requestedMessage && job ? await this.prisma.message.findFirst({ where: { conversationId, metadata: { path: ['jobId'], equals: job.id } }, select: { content: true } }) : null
+    const content = requestedMessage?.content || agentTask?.runs[0]?.finalAnswer || message?.content || ''
     if (!content.trim()) throw new BadRequestException('办公任务尚未生成可导出的内容')
-    const options = job?.options && typeof job.options === 'object' && !Array.isArray(job.options) ? job.options as Record<string, unknown> : {}
-    const skillId = agentTask?.skillId || String(options.officeSkill || '')
-    const format = skillId.startsWith('assistant:') ? 'docx' : skillFormats[skillId] || 'docx'
     const title = safeBaseName(conversation.title.replace(/^[^·]+·\s*/, ''))
     const bytes = await this.render(format, title, content)
     const name = `${title}.${format}`
@@ -157,7 +160,7 @@ export class OfficeExportService {
       name,
       mimeType: mimeTypes[format],
       kind: AssetKind.FILE,
-      metadata: { purpose: 'generated', ...(agentTask?.runs[0] ? { agentRunId: sourceId } : { officeJobId: sourceId }), officeConversationId: conversationId, officeSkill: skillId, officeFormat: format },
+      metadata: { purpose: 'generated', ...(requestedMessage ? { officeMessageId: sourceId } : agentTask?.runs[0] ? { agentRunId: sourceId } : { officeJobId: sourceId }), officeConversationId: conversationId, officeSkill: skillId, officeFormat: format },
     })
     if (agentTask?.runs[0]) {
       await this.attachArtifact(agentTask.runs[0].id, agentTask.runs[0].artifactIds, asset.id)

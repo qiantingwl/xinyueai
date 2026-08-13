@@ -43,11 +43,14 @@
           <label v-if="recentSearchOpen" class="workspace-recent__search-field"><Search :size="14" /><input v-model="conversationSearch" aria-label="搜索对话" placeholder="搜索对话" /></label>
           <div v-for="conversation in filteredConversations" :key="conversation.id" class="workspace-recent-row" :class="{ 'is-active': activeMode === 'chat' && conversation.id === studio.currentConversationId }">
             <form v-if="renamingConversationId === conversation.id" class="workspace-recent-rename" @submit.prevent="saveConversationRename(conversation.id)">
-              <input v-model="conversationRename" maxlength="120" aria-label="对话名称" autofocus @keydown.esc="cancelConversationRename" />
+              <input v-model="conversationRename" maxlength="120" aria-label="对话名称" autofocus :disabled="conversationRenameBusy" @keydown.esc="cancelConversationRename" />
+              <button type="submit" aria-label="保存对话名称" title="保存" :disabled="conversationRenameBusy || !conversationRename.trim()"><Check :size="15" /></button>
+              <button type="button" aria-label="取消修改对话名称" title="取消" :disabled="conversationRenameBusy" @click="cancelConversationRename"><X :size="15" /></button>
             </form>
             <template v-else>
-              <button class="workspace-recent-item" type="button" @click="openConversation(conversation.id)">{{ conversation.title }}</button>
+              <button class="workspace-recent-item" type="button" :title="conversation.title" @click="openConversation(conversation.id)" @dblclick.prevent="startConversationRename(conversation)">{{ conversation.title }}</button>
               <span v-if="conversation.pinnedAt" class="workspace-recent-pin" :title="`已置顶：${conversation.title}`"><Pin :size="12" /></span>
+              <button class="workspace-recent-edit" type="button" :aria-label="`重命名“${conversation.title}”`" title="重命名" @click.stop="startConversationRename(conversation)"><Pencil :size="14" /></button>
               <button class="workspace-recent-more" type="button" :aria-label="`打开“${conversation.title}”的对话选项`" :aria-expanded="conversationMenuId === conversation.id" @click.stop="openConversationMenu($event, conversation)"><MoreHorizontal :size="17" /></button>
             </template>
           </div>
@@ -128,8 +131,8 @@
         <button role="menuitem" type="button" :disabled="conversationActionBusy" @click="shareConversation(activeConversationMenu)"><Share2 :size="16" />分享</button>
         <button role="menuitem" type="button" :disabled="conversationActionBusy" @click="startConversationRename(activeConversationMenu)"><Pencil :size="16" />重命名</button>
         <button role="menuitem" type="button" :disabled="conversationActionBusy" @click="toggleConversationPinned(activeConversationMenu)"><PinOff v-if="activeConversationMenu.pinnedAt" :size="16" /><Pin v-else :size="16" />{{ activeConversationMenu.pinnedAt ? '取消置顶' : '置顶聊天' }}</button>
-        <button role="menuitem" type="button" :disabled="conversationActionBusy" @click="archiveConversation(activeConversationMenu.id)"><Archive :size="16" />归档</button>
-        <button class="is-danger" role="menuitem" type="button" :disabled="conversationActionBusy" @click="deleteConversation(activeConversationMenu)"><Trash2 :size="16" />删除</button>
+        <button v-if="!activeConversationMenu.auditProtected" role="menuitem" type="button" :disabled="conversationActionBusy" @click="archiveConversation(activeConversationMenu.id)"><Archive :size="16" />归档</button>
+        <button v-if="!activeConversationMenu.auditProtected" class="is-danger" role="menuitem" type="button" :disabled="conversationActionBusy" @click="deleteConversation(activeConversationMenu)"><Trash2 :size="16" />删除</button>
       </div>
       <div v-if="settingsOpen" class="studio-modal-backdrop" @click.self="settingsOpen = false">
         <section class="studio-settings-dialog" role="dialog" aria-modal="true" :aria-labelledby="`settings-${settingsSection}`">
@@ -295,6 +298,7 @@ import {
   ChevronUp,
   CircleGauge,
   CirclePlus,
+  Check,
   CheckCircle2,
   CreditCard,
   Download,
@@ -358,6 +362,7 @@ const conversationMenuPosition = reactive({ left: 0, top: 0 })
 const conversationActionBusy = ref(false)
 const renamingConversationId = ref('')
 const conversationRename = ref('')
+const conversationRenameBusy = ref(false)
 const settingsOpen = ref(false)
 const upgradeOpen = ref(false)
 const pricingMode = ref<'personal' | 'team'>('personal')
@@ -1091,11 +1096,25 @@ function startConversationRename(conversation: { id: string; title: string }) {
   renamingConversationId.value = conversation.id
   conversationRename.value = conversation.title
 }
-function cancelConversationRename() { renamingConversationId.value = ''; conversationRename.value = '' }
+function cancelConversationRename() {
+  if (conversationRenameBusy.value) return
+  renamingConversationId.value = ''
+  conversationRename.value = ''
+}
 async function saveConversationRename(conversationId: string) {
-  if (!conversationRename.value.trim()) return
-  await studio.renameConversation(conversationId, conversationRename.value).catch(() => undefined)
-  cancelConversationRename()
+  const title = conversationRename.value.trim()
+  if (!title || conversationRenameBusy.value) return
+  conversationRenameBusy.value = true
+  try {
+    await studio.renameConversation(conversationId, title)
+    renamingConversationId.value = ''
+    conversationRename.value = ''
+    message.success('对话名称已更新')
+  } catch (reason) {
+    message.error(reason instanceof Error ? reason.message : '对话名称更新失败')
+  } finally {
+    conversationRenameBusy.value = false
+  }
 }
 async function archiveConversation(conversationId: string) {
   closeConversationMenu()

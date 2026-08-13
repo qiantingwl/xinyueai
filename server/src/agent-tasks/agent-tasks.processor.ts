@@ -115,7 +115,7 @@ export class AgentTasksProcessor extends WorkerHost {
       conversationId = conversation.id
       const prompt = [task.goal, task.instructions ? `执行要求：\n${task.instructions}` : ''].filter(Boolean).join('\n\n')
       await this.prisma.message.create({
-        data: { conversationId, role: 'USER', content: prompt, attachments: this.attachmentIds(task.attachmentIds).length ? { create: this.attachmentIds(task.attachmentIds).map((assetId) => ({ assetId })) } : undefined },
+        data: { conversationId, authorId: task.userId, role: 'USER', content: prompt, attachments: this.attachmentIds(task.attachmentIds).length ? { create: this.attachmentIds(task.attachmentIds).map((assetId) => ({ assetId })) } : undefined },
       })
       await this.prisma.agentTask.update({ where: { id: task.id }, data: { conversationId } })
     }

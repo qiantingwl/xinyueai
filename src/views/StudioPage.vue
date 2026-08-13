@@ -3,6 +3,7 @@
       <div class="chat-dialog-pane">
       <header class="chat-page__header"><h1>{{ store.temporaryChat ? '' : 'Xinyue AI' }}</h1><div class="chat-page__header-actions"><button v-if="auth.isAuthenticated" class="temporary-chat-toggle" :class="{ active: store.temporaryChat }" type="button" :aria-pressed="store.temporaryChat" :title="store.temporaryChat ? '删除临时聊天并返回新对话' : '开启临时聊天'" @click="toggleTemporaryChat"><Trash2 v-if="store.temporaryChat" :size="15" /><Clock3 v-else :size="15" /><span>{{ store.temporaryChat ? '退出临时聊天' : '临时聊天' }}</span></button><div v-else-if="catalog.loginEnabled" class="chat-page__auth-actions"><RouterLink to="/login?redirect=/chat">登录</RouterLink><RouterLink v-if="catalog.registrationAvailable" class="is-primary" to="/login?redirect=/chat&amp;register=1">免费注册</RouterLink></div></div></header>
       <div v-if="store.lastError" class="studio-feedback" role="alert"><span>{{ store.lastError }}</span><button type="button" aria-label="关闭提示" @click="store.clearError"><X :size="15" /></button></div>
+      <div v-if="store.conversationAuditReadOnly" class="project-audit-banner"><Eye :size="16" /><span>项目成员对话审计，只读查看成员提问及删除记录</span></div>
 
       <div class="chat-center" :class="{ 'chat-center--thread': hasChatThread }">
         <div v-if="!hasChatThread && store.temporaryChat" class="temporary-chat-intro"><h2>临时聊天</h2><p>这次聊天不会出现在历史记录中，也不会用于改进模型。</p></div>
@@ -15,14 +16,18 @@
                 <footer><button type="button" @click="cancelMessageEdit">取消</button><button type="submit" :disabled="!editingMessageContent.trim() || store.isGenerating">保存并提交</button></footer>
               </form>
               <template v-else>
-                <article :class="`message message--${entry.message.role}`">
+                <article :class="[`message message--${entry.message.role}`, { 'is-soft-deleted': entry.message.deletedAt }]">
+                  <header v-if="entry.message.author || entry.message.deletedAt" class="message-audit-meta"><span v-if="entry.message.author">{{ entry.message.author.displayName }}</span><em v-if="entry.message.deletedAt">成员已删除</em></header>
                   <ChatMessageContent v-if="entry.message.role === 'assistant'" :content="entry.message.content" @preview="openCodeArtifact" />
                   <template v-else>{{ entry.message.content }}</template>
                 </article>
                 <nav v-if="entry.message.id !== 'welcome'" class="message-actions" :aria-label="`${entry.message.role === 'user' ? '用户' : '助手'}消息操作`">
                   <button type="button" :title="copiedMessageId === entry.message.id ? '已复制' : '复制'" @click="copyMessage(entry.message)"><Check v-if="copiedMessageId === entry.message.id" :size="15" /><Copy v-else :size="15" /></button>
-                  <button v-if="entry.message.role === 'user'" type="button" title="编辑消息" :disabled="store.isGenerating" @click="startMessageEdit(entry.message)"><Pencil :size="15" /></button>
-                  <template v-else>
+                  <button v-if="entry.message.canEdit" type="button" title="编辑消息" :disabled="store.isGenerating" @click="startMessageEdit(entry.message)"><Pencil :size="15" /></button>
+                  <button v-if="entry.message.canDelete" type="button" title="删除提问" :disabled="store.isGenerating" @click="deleteProjectQuestion(entry.message)"><Trash2 :size="15" /></button>
+                  <template v-else-if="!store.conversationAuditReadOnly">
+                    <button v-if="entry.message.role === 'assistant'" type="button" title="导出为 Word" :disabled="Boolean(exportingMessage)" @click="exportChatAnswer(entry.message, 'docx')"><LoaderCircle v-if="exportingMessage === `${entry.message.id}:docx`" class="admin-spin" :size="15" /><FileType2 v-else :size="15" /></button>
+                    <button v-if="entry.message.role === 'assistant'" type="button" title="导出为 Excel" :disabled="Boolean(exportingMessage)" @click="exportChatAnswer(entry.message, 'xlsx')"><LoaderCircle v-if="exportingMessage === `${entry.message.id}:xlsx`" class="admin-spin" :size="15" /><FileSpreadsheet v-else :size="15" /></button>
                     <button type="button" title="重新生成" :disabled="store.isGenerating" @click="retryAssistantMessage(entry.message.id)"><RefreshCw :size="15" /></button>
                     <button type="button" title="有帮助" :class="{ 'is-active': entry.message.feedback === 'UP' }" :aria-pressed="entry.message.feedback === 'UP'" @click="setMessageFeedback(entry.message.id, 'UP')"><ThumbsUp :size="15" /></button>
                     <button type="button" title="没有帮助" :class="{ 'is-active': entry.message.feedback === 'DOWN' }" :aria-pressed="entry.message.feedback === 'DOWN'" @click="setMessageFeedback(entry.message.id, 'DOWN')"><ThumbsDown :size="15" /></button>
@@ -72,7 +77,7 @@
           <article v-if="showChatThinking" class="message message--assistant message--thinking">{{ t('studio.thinking') }}</article>
         </div>
 
-        <form class="chat-composer" @submit.prevent="submitMessage">
+        <form v-if="!store.conversationAuditReadOnly" class="chat-composer" @submit.prevent="submitMessage">
           <div v-if="attachments.length" class="attachment-list" aria-label="待发送附件">
             <article v-for="(asset, index) in attachments" :key="asset.id" class="attachment-card" :class="hasImagePreview(asset) ? 'attachment-card--image' : 'attachment-card--file'">
               <img v-if="hasImagePreview(asset)" :src="asset.contentUrl" :alt="asset.title" />
@@ -291,7 +296,7 @@
         <div class="project-table-head"><span>名称</span><span>项目内容</span><span>修改时间</span><span>操作</span></div>
         <div v-if="auth.isAuthenticated && store.workspaceHydrating && !store.projects.length" class="project-loading"><LoaderCircle class="admin-spin" :size="18" />正在加载项目</div>
         <div v-else-if="filteredProjects.length" class="project-table">
-          <article v-for="project in filteredProjects" :key="project.id" class="project-row" :class="{ 'is-active': project.id === store.currentProjectId }"><button type="button" :title="project.archived ? '已归档项目不能设为当前项目' : '设为当前项目'" :disabled="project.archived" @click="selectCurrentProject(project)"><span class="project-row-name"><Folder :size="18" /><span><strong>{{ project.name }}</strong><small>{{ project.brief }}</small></span></span><span class="project-row-content">{{ project.conversationCount }} 个对话 · {{ project.assetCount }} 个文件 · {{ project.versionCount }} 个版本</span><time>{{ formatDate(project.updatedAt) }}</time></button><div><button type="button" :aria-label="`打开${project.name}详情`" title="项目详情" @click="openProjectDetails(project)"><Settings2 :size="16" /></button><button type="button" :aria-label="project.archived ? `恢复${project.name}` : `归档${project.name}`" :title="project.archived ? '恢复' : '归档'" @click="toggleProjectArchive(project.id, !project.archived)"><ArchiveRestore v-if="project.archived" :size="16" /><Archive v-else :size="16" /></button><button type="button" :aria-label="`删除${project.name}`" title="删除" @click="deleteProject(project.id, project.name)"><Trash2 :size="16" /></button></div></article>
+          <article v-for="project in filteredProjects" :key="project.id" class="project-row" :class="{ 'is-active': project.id === store.currentProjectId }"><button type="button" :title="project.archived ? '已归档项目不能设为当前项目' : '设为当前项目'" :disabled="project.archived" @click="selectCurrentProject(project)"><span class="project-row-name"><Folder :size="18" /><span><strong>{{ project.name }} <em v-if="project.accessRole === 'MEMBER'" class="project-member-badge">受邀</em></strong><small>{{ project.brief }}</small></span></span><span class="project-row-content">{{ project.conversationCount }} 个对话 · {{ project.assetCount }} 个文件 · {{ project.versionCount }} 个版本</span><time>{{ formatDate(project.updatedAt) }}</time></button><div><button type="button" :aria-label="`打开${project.name}详情`" title="项目详情" @click="openProjectDetails(project)"><Settings2 :size="16" /></button><button v-if="project.accessRole === 'OWNER'" type="button" :aria-label="project.archived ? `恢复${project.name}` : `归档${project.name}`" :title="project.archived ? '恢复' : '归档'" @click="toggleProjectArchive(project.id, !project.archived)"><ArchiveRestore v-if="project.archived" :size="16" /><Archive v-else :size="16" /></button><button v-if="project.accessRole === 'OWNER'" type="button" :aria-label="`删除${project.name}`" title="删除" @click="deleteProject(project.id, project.name)"><Trash2 :size="16" /></button></div></article>
         </div>
         <div v-else class="project-empty"><ArchiveRestore v-if="projectTab === 'archived'" :size="30" /><Folder v-else :size="30" /><strong>{{ projectSearch ? '没有匹配的项目' : projectTab === 'archived' ? '还没有已归档项目' : '还没有项目' }}</strong><p>{{ projectSearch ? '换一个关键词继续查找。' : projectTab === 'archived' ? '归档后的项目会保留聊天、文件和版本，并显示在这里。' : '把同一主题的聊天、文件和工作流集中到一个项目中。' }}</p><button v-if="projectSearch" type="button" @click="projectSearch = ''">清除搜索</button><button v-else-if="projectTab === 'active'" type="button" @click="projectModalOpen = true">创建项目</button></div>
       </div>
@@ -344,21 +349,22 @@
           <header class="project-detail-header"><div><span class="project-detail-eyebrow">PROJECT WORKSPACE</span><h2 id="project-detail-title">{{ projectDetail?.name || '项目详情' }}</h2><p>修订 {{ projectDetail?.revision || 1 }} · {{ projectDetail?.workflowConfig.steps.length || 0 }} 个工作步骤</p></div><button type="button" aria-label="关闭项目详情" title="关闭" @click="closeProjectDetails"><X :size="20" /></button></header>
           <div v-if="projectDetailError" class="modal-error">{{ projectDetailError }}</div>
           <div v-if="projectDetailLoading" class="project-detail-loading"><LoaderCircle class="admin-spin" :size="18" />正在加载项目</div>
-          <div v-else class="project-detail-body">
+          <div v-else class="project-detail-body" :class="{ 'is-member-view': projectDetail?.accessRole === 'MEMBER' }">
             <div class="project-detail-main">
-              <section class="project-detail-section project-content-section"><div class="project-section-heading"><div><span class="project-detail-eyebrow">CONTENT</span><h3>项目内容</h3></div><span class="project-content-total">{{ projectDetail?.conversationCount || 0 }} 个对话 · {{ projectDetail?.assetCount || 0 }} 个文件</span></div><div class="project-content-grid"><div><h4>最近对话</h4><button v-for="conversation in projectDetail?.conversations || []" :key="conversation.id" class="project-content-row" type="button" @click="openProjectConversation(conversation.id)"><MessageSquare :size="15" /><span><strong>{{ conversation.title }}</strong><small>{{ conversation.model }} · {{ formatDate(conversation.updatedAt) }}</small></span><ChevronRight :size="15" /></button><p v-if="!projectDetail?.conversations.length" class="project-content-empty">在选中此项目后开始对话，对话会显示在这里。</p></div><div><h4>项目文件</h4><button v-for="asset in projectDetail?.assets || []" :key="asset.id" class="project-content-row" type="button" @click="openProjectAsset(asset)"><ImageIcon v-if="asset.kind === 'image'" :size="15" /><Video v-else-if="asset.kind === 'video'" :size="15" /><FileText v-else :size="15" /><span><strong>{{ asset.title }}</strong><small>{{ asset.tags.join(' · ') }}</small></span><ChevronRight :size="15" /></button><p v-if="!projectDetail?.assets.length" class="project-content-empty">上传到项目或在项目中生成的文件会显示在这里。</p></div></div></section>
-              <section class="project-detail-section"><div class="project-section-heading"><div><span class="project-detail-eyebrow">WORKFLOW</span><h3>工作流设置</h3></div><span class="project-revision">v{{ projectDetail?.revision || 1 }}</span></div>
+              <section class="project-detail-section project-content-section"><div class="project-section-heading"><div><span class="project-detail-eyebrow">CONTENT</span><h3>项目内容</h3></div><span class="project-content-total">{{ projectDetail?.conversationCount || 0 }} 个对话 · {{ projectDetail?.assetCount || 0 }} 个文件</span></div><div class="project-content-grid"><div><h4>最近对话</h4><button v-for="conversation in projectDetail?.conversations || []" :key="conversation.id" class="project-content-row" type="button" @click="openProjectConversation(conversation.id)"><MessageSquare :size="15" /><span><strong>{{ conversation.title }}</strong><small>{{ conversation.author?.displayName || '我' }} · {{ conversation.model }} · {{ formatDate(conversation.updatedAt) }}</small><em v-if="conversation.deletedMessageCount" class="project-deleted-badge">{{ conversation.deletedMessageCount }} 条已删除提问</em></span><ChevronRight :size="15" /></button><p v-if="!projectDetail?.conversations.length" class="project-content-empty">在选中此项目后开始对话，对话会显示在这里。</p></div><div><h4>项目文件</h4><button v-for="asset in projectDetail?.assets || []" :key="asset.id" class="project-content-row" type="button" @click="openProjectAsset(asset)"><ImageIcon v-if="asset.kind === 'image'" :size="15" /><Video v-else-if="asset.kind === 'video'" :size="15" /><FileText v-else :size="15" /><span><strong>{{ asset.title }}</strong><small>{{ asset.tags.join(' · ') }}</small></span><ChevronRight :size="15" /></button><p v-if="!projectDetail?.assets.length" class="project-content-empty">上传到项目或在项目中生成的文件会显示在这里。</p></div></div></section>
+              <section v-if="projectDetail?.accessRole === 'OWNER'" class="project-detail-section"><div class="project-section-heading"><div><span class="project-detail-eyebrow">MEMBERS</span><h3>项目成员</h3></div><span class="project-content-total">{{ projectDetail.members.length }} 位成员</span></div><form class="project-member-invite" @submit.prevent="inviteProjectMember"><input v-model.trim="projectMemberEmail" required type="email" placeholder="输入已注册成员邮箱" /><button type="submit" :disabled="projectMemberBusy"><UserPlus :size="15" />{{ projectMemberBusy ? '邀请中' : '邀请成员' }}</button></form><div class="project-member-list"><article><span><strong>{{ projectDetail.owner?.displayName || '项目创建者' }}</strong><small>{{ projectDetail.owner?.email || '' }}</small></span><em>创建者</em></article><article v-for="member in projectDetail.members" :key="member.userId"><span><strong>{{ member.user.displayName }}</strong><small>{{ member.user.email }}</small></span><button type="button" :aria-label="`移除成员${member.user.displayName}`" title="移除成员" :disabled="projectMemberBusy" @click="removeProjectMember(member)"><Trash2 :size="14" /></button></article></div></section>
+              <section v-if="projectDetail?.accessRole === 'OWNER'" class="project-detail-section"><div class="project-section-heading"><div><span class="project-detail-eyebrow">WORKFLOW</span><h3>工作流设置</h3></div><span class="project-revision">v{{ projectDetail?.revision || 1 }}</span></div>
                 <div class="project-form-grid"><label><span>项目状态</span><select v-model="projectWorkflowStatus"><option value="PLANNING">规划中</option><option value="IN_PROGRESS">进行中</option><option value="REVIEW">待审核</option><option value="COMPLETED">已完成</option><option value="ARCHIVED">已归档</option></select></label><label><span>默认模型</span><input v-model="projectDefaultModel" maxlength="160" placeholder="跟随系统默认模型" /></label></div>
                 <label class="project-form-field"><span>默认项目指令</span><textarea v-model="projectInstructions" maxlength="4000" rows="4" placeholder="每次在此项目中开始工作时使用的背景和约束" /></label>
                 <div class="project-form-grid"><label><span>默认助手</span><select v-model="projectDefaultAssistantId"><option value="">不使用默认助手</option><option v-for="assistant in assistants" :key="assistant.id" :value="assistant.id">{{ assistant.name }}</option></select></label><label><span>版本标签</span><input v-model="projectVersionLabel" maxlength="80" placeholder="例如：第一轮方案" /></label></div>
                 <label class="project-form-field"><span>默认提示词</span><textarea v-model="projectDefaultPrompt" maxlength="10000" rows="3" placeholder="工作流开始时自动带入的提示词" /></label>
                 <label class="project-form-field"><span>交付要求</span><textarea v-model="projectOutputRequirements" maxlength="10000" rows="3" placeholder="定义最终产物、格式和验收标准" /></label>
               </section>
-              <section class="project-detail-section"><div class="project-section-heading"><div><span class="project-detail-eyebrow">STEPS</span><h3>工作流步骤</h3></div><button class="project-inline-button" type="button" @click="addProjectStep"><Plus :size="15" />新增步骤</button></div>
+              <section v-if="projectDetail?.accessRole === 'OWNER'" class="project-detail-section"><div class="project-section-heading"><div><span class="project-detail-eyebrow">STEPS</span><h3>工作流步骤</h3></div><button class="project-inline-button" type="button" @click="addProjectStep"><Plus :size="15" />新增步骤</button></div>
                 <div v-if="projectSteps.length" class="project-steps"><article v-for="(step, index) in projectSteps" :key="step.id" class="project-step"><span class="project-step-number">{{ String(index + 1).padStart(2, '0') }}</span><div class="project-step-fields"><input v-model="step.title" maxlength="120" placeholder="步骤名称" /><input v-model="step.description" maxlength="1000" placeholder="这一步的目标和交付物" /></div><select v-model="step.status" aria-label="步骤状态"><option value="TODO">待开始</option><option value="IN_PROGRESS">进行中</option><option value="DONE">已完成</option></select><button type="button" aria-label="删除步骤" title="删除步骤" @click="removeProjectStep(index)"><Trash2 :size="15" /></button></article></div>
                 <div v-else class="project-steps-empty"><Layers3 :size="20" /><span>还没有工作步骤，从拆解第一项任务开始。</span></div>
               </section>
-              <footer class="project-detail-actions"><button type="button" class="project-secondary-button" @click="closeProjectDetails">取消</button><button type="button" class="project-primary-button" :disabled="projectSaving" @click="saveProjectWorkflow"><LoaderCircle v-if="projectSaving" class="admin-spin" :size="15" /><Save v-else :size="15" />保存工作流</button></footer>
+              <footer v-if="projectDetail?.accessRole === 'OWNER'" class="project-detail-actions"><button type="button" class="project-secondary-button" @click="closeProjectDetails">取消</button><button type="button" class="project-primary-button" :disabled="projectSaving" @click="saveProjectWorkflow"><LoaderCircle v-if="projectSaving" class="admin-spin" :size="15" /><Save v-else :size="15" />保存工作流</button></footer>
             </div>
             <aside class="project-version-panel"><div class="project-section-heading"><div><span class="project-detail-eyebrow">HISTORY</span><h3>版本历史</h3></div><button type="button" class="project-icon-button" title="创建版本检查点" aria-label="创建版本检查点" @click="createProjectCheckpoint"><Plus :size="16" /></button></div><p class="project-version-note">每次保存都会自动留下版本，可随时恢复。</p><div v-if="projectVersions.length" class="project-versions"><article v-for="version in projectVersions" :key="version.id" class="project-version" :class="{ 'is-current': version.version === projectDetail?.revision }"><div class="project-version-dot"></div><div class="project-version-copy"><div><strong>v{{ version.version }}</strong><span>{{ version.label || '未命名版本' }}</span></div><p>{{ version.changeSummary || '未填写修改摘要' }}</p><time>{{ formatDate(version.createdAt) }}</time><div class="project-version-actions"><button type="button" class="project-restore-button" @click="projectVersionPreview = projectVersionPreview?.id === version.id ? null : version"><FileText :size="13" />{{ projectVersionPreview?.id === version.id ? '收起快照' : '查看快照' }}</button><button type="button" class="project-restore-button" :disabled="version.version === projectDetail?.revision || projectRestoringVersion === version.version" @click="restoreProject(version)"><RotateCcw :size="13" />{{ projectRestoringVersion === version.version ? '恢复中' : version.version === projectDetail?.revision ? '当前版本' : '恢复此版本' }}</button></div><pre v-if="projectVersionPreview?.id === version.id" class="project-version-snapshot">{{ formatProjectSnapshot(version.snapshot) }}</pre></div></article></div><div v-else class="project-steps-empty"><History :size="20" /><span>暂无版本历史</span></div></aside>
           </div>
@@ -372,9 +378,9 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchEffect } f
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
-  Archive, ArchiveRestore, ArrowUp, BadgeCheck, Blend, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, FileType2, Folder,
+  Archive, ArchiveRestore, ArrowUp, BadgeCheck, Blend, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Eye, FileSpreadsheet, FileText, FileType2, Folder,
   Download, Image as ImageIcon, ImagePlus, Images, KeyRound, Layers3, LayoutGrid, LibraryBig, Lightbulb, List, ListFilter, Paperclip,
-  History, LoaderCircle, Maximize2, MessageSquare, Mic, Pencil, Play, Plus, RefreshCw, RotateCcw, Save, Search, Settings2, SlidersHorizontal, Sparkles, Square, ThumbsDown, ThumbsUp, Trash2, Upload, Video, X,
+  History, LoaderCircle, Maximize2, MessageSquare, Mic, Pencil, Play, Plus, RefreshCw, RotateCcw, Save, Search, Settings2, SlidersHorizontal, Sparkles, Square, ThumbsDown, ThumbsUp, Trash2, Upload, UserPlus, Video, X,
 } from 'lucide-vue-next'
 import AssetGrid from '../components/AssetGrid.vue'
 import CommerceGallery from '../components/CommerceGallery.vue'
@@ -386,8 +392,8 @@ import PluginSelector from '../components/PluginSelector.vue'
 import { useAuthStore } from '../stores/auth'
 import { useCatalogStore } from '../stores/catalog'
 import { ChatSendError, useStudioStore } from '../stores/studio'
-import type { CodeArtifact, GenerationRun, Message, PluginCapability, Project, ProjectStepStatus, ProjectVersion, ProjectWorkflowStatus, StudioAsset, StudioMode } from '../types'
-import { api } from '../services/api'
+import type { CodeArtifact, GenerationRun, Message, PluginCapability, Project, ProjectMember, ProjectStepStatus, ProjectVersion, ProjectWorkflowStatus, StudioAsset, StudioMode } from '../types'
+import { api, apiUrl } from '../services/api'
 import { consumeImagePrompt } from '../utils/prompt-transfer'
 import { createClientId } from '../utils/client-id'
 
@@ -458,6 +464,8 @@ const projectSaving = ref(false)
 const projectRestoringVersion = ref<number | null>(null)
 const projectDetailError = ref('')
 const projectDetail = ref<Project | null>(null)
+const projectMemberEmail = ref('')
+const projectMemberBusy = ref(false)
 const projectVersions = ref<ProjectVersion[]>([])
 const projectVersionPreview = ref<ProjectVersion | null>(null)
 const projectWorkflowStatus = ref<ProjectWorkflowStatus>('PLANNING')
@@ -475,6 +483,7 @@ const model = ref('gpt-5.5')
 const editingMessageId = ref('')
 const editingMessageContent = ref('')
 const copiedMessageId = ref('')
+const exportingMessage = ref('')
 type SpeechRecognizer = { lang: string; interimResults: boolean; continuous: boolean; onresult: ((event: { results: { [key: number]: { [key: number]: { transcript: string } } } }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null; start: () => void; stop: () => void }
 type SpeechRecognizerConstructor = new () => SpeechRecognizer
 const voiceListening = ref(false)
@@ -921,6 +930,26 @@ function copyMessage(message: { id: string; content: string }) {
   copiedMessageId.value = message.id
   window.setTimeout(() => { if (copiedMessageId.value === message.id) copiedMessageId.value = '' }, 1600)
 }
+async function exportChatAnswer(message: Message, format: 'docx' | 'xlsx') {
+  if (!store.currentConversationId || exportingMessage.value) return
+  exportingMessage.value = `${message.id}:${format}`
+  try {
+    const deliverable = await api<{ name: string; contentUrl: string }>('/office/exports', { method: 'POST', body: JSON.stringify({ conversationId: store.currentConversationId, messageId: message.id, format }) })
+    const response = await fetch(apiUrl(deliverable.contentUrl), { credentials: 'include' })
+    if (!response.ok) throw new Error(`文件下载失败 (${response.status})`)
+    const objectUrl = URL.createObjectURL(await response.blob())
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = deliverable.name
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+    await store.refreshAssets()
+  } catch (reason) {
+    store.lastError = reason instanceof Error ? reason.message : '回答导出失败'
+  } finally {
+    exportingMessage.value = ''
+  }
+}
 function openCodeArtifact(artifact: CodeArtifact) { activeArtifact.value = artifact }
 async function saveMessageEdit(messageId: string) {
   if (!editingMessageContent.value.trim()) return
@@ -1311,13 +1340,41 @@ async function openProjectDetails(project: Project) {
   projectDetailLoading.value = true
   projectDetailError.value = ''
   try {
-    const assistantPromise = assistants.value.length ? Promise.resolve() : loadAssistants()
-    const [detail, versions] = await Promise.all([store.loadProjectDetail(project.id), store.loadProjectVersions(project.id), assistantPromise])
+    const detail = await store.loadProjectDetail(project.id)
+    const assistantPromise = detail.accessRole === 'OWNER' && !assistants.value.length ? loadAssistants() : Promise.resolve()
+    const versionsPromise = detail.accessRole === 'OWNER' ? store.loadProjectVersions(project.id) : Promise.resolve([])
+    const [versions] = await Promise.all([versionsPromise, assistantPromise])
     fillProjectEditor(detail)
     projectVersions.value = versions
   } catch (reason) {
     projectDetailError.value = reason instanceof Error ? reason.message : '项目详情加载失败'
   } finally { projectDetailLoading.value = false }
+}
+async function deleteProjectQuestion(message: Message) {
+  if (!message.canDelete || !window.confirm('删除这条提问？删除后你将看不到该内容，项目创建者仍可在审计视图中查看。')) return
+  try { await store.softDeleteMessage(message.id) }
+  catch (reason) { store.lastError = reason instanceof Error ? reason.message : '提问删除失败' }
+}
+async function inviteProjectMember() {
+  if (!projectDetail.value || !projectMemberEmail.value.trim() || projectMemberBusy.value) return
+  projectMemberBusy.value = true
+  projectDetailError.value = ''
+  try {
+    await store.addProjectMember(projectDetail.value.id, projectMemberEmail.value)
+    projectDetail.value = await store.loadProjectDetail(projectDetail.value.id)
+    projectMemberEmail.value = ''
+  } catch (reason) { projectDetailError.value = reason instanceof Error ? reason.message : '成员邀请失败' }
+  finally { projectMemberBusy.value = false }
+}
+async function removeProjectMember(member: ProjectMember) {
+  if (!projectDetail.value || projectMemberBusy.value || !window.confirm(`确认移除成员“${member.user.displayName}”？`)) return
+  projectMemberBusy.value = true
+  projectDetailError.value = ''
+  try {
+    await store.removeProjectMember(projectDetail.value.id, member.userId)
+    projectDetail.value = await store.loadProjectDetail(projectDetail.value.id)
+  } catch (reason) { projectDetailError.value = reason instanceof Error ? reason.message : '移除成员失败' }
+  finally { projectMemberBusy.value = false }
 }
 function addProjectStep() { projectSteps.value.push({ id: createClientId(), title: '', description: '', status: 'TODO', sortOrder: projectSteps.value.length }) }
 function removeProjectStep(index: number) { projectSteps.value.splice(index, 1); projectSteps.value.forEach((step, stepIndex) => { step.sortOrder = stepIndex }) }

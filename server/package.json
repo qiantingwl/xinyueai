@@ -32,6 +32,7 @@
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "ioredis": "^5.7.0",
+    "mammoth": "^1.12.1",
     "nodemailer": "^9.0.4",
     "officegen": "^0.6.5",
     "reflect-metadata": "^0.2.2",

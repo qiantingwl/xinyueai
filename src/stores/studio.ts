@@ -3,9 +3,10 @@ import { api, streamApiEvents } from '../services/api'
 import type { ConversationSummary, GenerationOptions, GenerationRun, Message, Project, ProjectVersion, ProjectWorkflowConfig, ProjectWorkflowStatus, StudioAsset, StudioMode } from '../types'
 import { createClientId } from '../utils/client-id'
 
-type ServerConversation = { id: string; title: string; model: string; projectId?: string | null; temporary?: boolean; pinnedAt?: string | null; sharedAt?: string | null; createdAt: string; updatedAt: string; messages?: ServerMessage[]; generationJobs?: ServerJob[] }
-type ServerMessage = { id: string; role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL'; content: string; model?: string | null; metadata?: { feedback?: 'UP' | 'DOWN' | null } | null; createdAt: string; attachments?: { assetId?: string; asset?: { id: string } }[] }
-type ServerProject = { id: string; name: string; description?: string; instructions?: string; workflowStatus?: ProjectWorkflowStatus; workflowConfig?: ProjectWorkflowConfig | null; defaultModel?: string; defaultAssistantId?: string | null; revision?: number; archivedAt?: string | null; updatedAt: string; assets?: ServerAsset[]; conversations?: ServerConversation[]; _count?: { assets?: number; conversations?: number; versions?: number } }
+type ServerConversation = { id: string; title: string; model: string; projectId?: string | null; temporary?: boolean; auditReadOnly?: boolean; auditProtected?: boolean; pinnedAt?: string | null; sharedAt?: string | null; createdAt: string; updatedAt: string; user?: { id: string; displayName: string; email?: string | null } | null; deletedMessageCount?: number; messages?: ServerMessage[]; generationJobs?: ServerJob[] }
+type ServerMessage = { id: string; role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL'; content: string; model?: string | null; metadata?: { feedback?: 'UP' | 'DOWN' | null } | null; author?: { id: string; displayName: string; email?: string | null } | null; deletedAt?: string | null; canDelete?: boolean; canEdit?: boolean; createdAt: string; attachments?: { assetId?: string; asset?: { id: string } }[] }
+type ServerProjectMember = { userId: string; joinedAt: string; user: { id: string; displayName: string; email: string | null; avatarUrl?: string | null } }
+type ServerProject = { id: string; name: string; description?: string; instructions?: string; workflowStatus?: ProjectWorkflowStatus; workflowConfig?: ProjectWorkflowConfig | null; defaultModel?: string; defaultAssistantId?: string | null; revision?: number; accessRole?: 'OWNER' | 'MEMBER'; user?: { id: string; displayName: string; email: string | null }; members?: ServerProjectMember[]; archivedAt?: string | null; updatedAt: string; assets?: ServerAsset[]; conversations?: ServerConversation[]; _count?: { assets?: number; conversations?: number; versions?: number } }
 type ServerVersion = Omit<ProjectVersion, 'createdAt' | 'snapshot'> & { createdAt: string; snapshot: ProjectVersion['snapshot'] }
 type ServerAsset = { id: string; kind: 'IMAGE' | 'VIDEO' | 'FILE' | 'PRODUCT_PACK'; name: string; mimeType: string; size: number; objectKey?: string; contentUrl: string; createdAt: string; metadata?: Record<string, unknown> | null }
 type ServerJob = { id: string; conversationId?: string | null; kind: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE'; status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'; model: string; prompt: string; options?: Record<string, unknown>; creditCost?: number; errorMessage?: string | null; stream?: { messageId: string; content: string; model?: string | null } | null; outputs?: { asset: ServerAsset }[]; createdAt: string }
@@ -39,7 +40,7 @@ export class ChatSendError extends Error {
 }
 
 function mapConversation(item: ServerConversation): ConversationSummary {
-  return { id: item.id, title: item.title, model: item.model, projectId: item.projectId, pinnedAt: item.pinnedAt ? Date.parse(item.pinnedAt) : null, sharedAt: item.sharedAt ? Date.parse(item.sharedAt) : null, createdAt: Date.parse(item.createdAt), updatedAt: Date.parse(item.updatedAt) }
+  return { id: item.id, title: item.title, model: item.model, projectId: item.projectId, pinnedAt: item.pinnedAt ? Date.parse(item.pinnedAt) : null, sharedAt: item.sharedAt ? Date.parse(item.sharedAt) : null, createdAt: Date.parse(item.createdAt), updatedAt: Date.parse(item.updatedAt), author: item.user, deletedMessageCount: item.deletedMessageCount || 0, auditProtected: Boolean(item.auditProtected) }
 }
 
 function mapWorkflowConfig(input?: ProjectWorkflowConfig | null): ProjectWorkflowConfig {
@@ -52,7 +53,7 @@ function mapWorkflowConfig(input?: ProjectWorkflowConfig | null): ProjectWorkflo
 }
 
 function mapProject(item: ServerProject): Project {
-  return { id: item.id, name: item.name, brief: item.description || '尚未添加项目说明。', description: item.description || '', instructions: item.instructions || '', updatedAt: Date.parse(item.updatedAt), assetIds: item.assets?.map((asset) => asset.id) || [], assets: item.assets?.map(mapAsset) || [], conversations: item.conversations?.map(mapConversation) || [], assetCount: item._count?.assets ?? item.assets?.length ?? 0, conversationCount: item._count?.conversations ?? item.conversations?.length ?? 0, versionCount: item._count?.versions ?? item.revision ?? 1, archived: Boolean(item.archivedAt), workflowStatus: item.workflowStatus || 'PLANNING', workflowConfig: mapWorkflowConfig(item.workflowConfig), defaultModel: item.defaultModel || '', defaultAssistantId: item.defaultAssistantId || null, revision: item.revision || 1 }
+  return { id: item.id, name: item.name, brief: item.description || '尚未添加项目说明。', description: item.description || '', instructions: item.instructions || '', updatedAt: Date.parse(item.updatedAt), assetIds: item.assets?.map((asset) => asset.id) || [], assets: item.assets?.map(mapAsset) || [], conversations: item.conversations?.map(mapConversation) || [], assetCount: item._count?.assets ?? item.assets?.length ?? 0, conversationCount: item._count?.conversations ?? item.conversations?.length ?? 0, versionCount: item._count?.versions ?? item.revision ?? 1, archived: Boolean(item.archivedAt), workflowStatus: item.workflowStatus || 'PLANNING', workflowConfig: mapWorkflowConfig(item.workflowConfig), defaultModel: item.defaultModel || '', defaultAssistantId: item.defaultAssistantId || null, revision: item.revision || 1, accessRole: item.accessRole || 'OWNER', owner: item.user, members: (item.members || []).map((member) => ({ ...member, joinedAt: Date.parse(member.joinedAt) })) }
 }
 
 function mapVersion(item: ServerVersion): ProjectVersion {
@@ -132,6 +133,7 @@ export const useStudioStore = defineStore('studio', {
     currentConversationId: '',
     openingConversationId: '',
     temporaryChat: false,
+    conversationAuditReadOnly: false,
     currentProjectId: '',
     isGenerating: false,
     activeJobId: '',
@@ -217,6 +219,7 @@ export const useStudioStore = defineStore('studio', {
       this.currentConversationId = ''
       this.openingConversationId = ''
       this.temporaryChat = temporary
+      this.conversationAuditReadOnly = false
       this.messages = [welcomeMessage()]
       this.isGenerating = false
       this.activeJobId = ''
@@ -233,10 +236,11 @@ export const useStudioStore = defineStore('studio', {
         if (loadSequence !== conversationLoadSequence || this.openingConversationId !== conversationId) return conversation
         this.currentConversationId = conversation.id
         this.temporaryChat = Boolean(conversation.temporary)
+        this.conversationAuditReadOnly = Boolean(conversation.auditReadOnly)
         this.messages = (conversation.messages || []).filter((message) => message.role === 'USER' || message.role === 'ASSISTANT').map((message) => ({
           id: message.id, role: message.role.toLowerCase() as 'user' | 'assistant', content: message.content,
           model: message.model || undefined, createdAt: Date.parse(message.createdAt), attachmentIds: message.attachments?.map((attachment) => attachment.assetId || attachment.asset?.id || '').filter(Boolean),
-          feedback: message.metadata?.feedback || null,
+          feedback: message.metadata?.feedback || null, author: message.author, deletedAt: message.deletedAt ? Date.parse(message.deletedAt) : null, canDelete: Boolean(message.canDelete), canEdit: Boolean(message.canEdit),
         }))
         if (!this.messages.length) this.messages = [welcomeMessage()]
         this.generations = (conversation.generationJobs || []).map((generation) => mapGeneration(generation))
@@ -299,6 +303,22 @@ export const useStudioStore = defineStore('studio', {
       await api(`/conversations/${this.currentConversationId}/messages/${messageId}/feedback`, { method: 'PATCH', body: JSON.stringify({ value }) })
       const message = this.messages.find((item) => item.id === messageId)
       if (message) message.feedback = value
+    },
+    async softDeleteMessage(messageId: string) {
+      if (!this.currentConversationId || this.conversationAuditReadOnly) return
+      await api(`/conversations/${this.currentConversationId}/messages/${messageId}`, { method: 'DELETE' })
+      this.messages = this.messages.filter((message) => message.id !== messageId)
+    },
+    async addProjectMember(projectId: string, email: string) {
+      const member = await api<ServerProjectMember>(`/projects/${projectId}/members`, { method: 'POST', body: JSON.stringify({ email: email.trim() }) })
+      const project = this.projects.find((item) => item.id === projectId)
+      if (project && !project.members.some((item) => item.userId === member.userId)) project.members.push({ ...member, joinedAt: Date.parse(member.joinedAt) })
+      return member
+    },
+    async removeProjectMember(projectId: string, userId: string) {
+      await api(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' })
+      const project = this.projects.find((item) => item.id === projectId)
+      if (project) project.members = project.members.filter((member) => member.userId !== userId)
     },
     async sendMessage(content: string, input: { model: string; assetIds?: string[]; assistantId?: string; pluginId?: string }) {
       const trimmed = content.trim()

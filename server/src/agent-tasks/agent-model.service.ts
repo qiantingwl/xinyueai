@@ -28,7 +28,7 @@ export class AgentModelService {
         model: task.model,
         temporary: true,
         expiresAt: new Date(Date.now() + 24 * 60 * 60_000),
-        messages: { create: { role: 'USER', content: prompt, metadata: { agentTaskId: task.id, internal: true, purpose }, attachments: attachmentIds.length ? { create: attachmentIds.map((assetId) => ({ assetId })) } : undefined } },
+        messages: { create: { authorId: task.userId, role: 'USER', content: prompt, metadata: { agentTaskId: task.id, internal: true, purpose }, attachments: attachmentIds.length ? { create: attachmentIds.map((assetId) => ({ assetId })) } : undefined } },
       },
     })
     const job = await this.generations.create(task.userId, {

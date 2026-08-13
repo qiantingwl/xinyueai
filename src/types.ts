@@ -13,6 +13,10 @@ export interface Message {
   attachmentIds?: string[]
   model?: string
   feedback?: 'UP' | 'DOWN' | null
+  author?: { id: string; displayName: string; email?: string | null } | null
+  deletedAt?: number | null
+  canDelete?: boolean
+  canEdit?: boolean
 }
 
 export interface CodeArtifact {
@@ -30,6 +34,15 @@ export interface ConversationSummary {
   sharedAt?: number | null
   createdAt: number
   updatedAt: number
+  author?: { id: string; displayName: string; email?: string | null } | null
+  deletedMessageCount?: number
+  auditProtected?: boolean
+}
+
+export interface ProjectMember {
+  userId: string
+  joinedAt: number
+  user: { id: string; displayName: string; email: string | null; avatarUrl?: string | null }
 }
 
 export interface StudioAsset {
@@ -73,6 +86,9 @@ export interface Project {
   defaultModel: string
   defaultAssistantId?: string | null
   revision: number
+  accessRole: 'OWNER' | 'MEMBER'
+  owner?: { id: string; displayName: string; email: string | null }
+  members: ProjectMember[]
 }
 
 export type ProjectWorkflowStatus = 'PLANNING' | 'IN_PROGRESS' | 'REVIEW' | 'COMPLETED' | 'ARCHIVED'

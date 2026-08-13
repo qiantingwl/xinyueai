@@ -25,12 +25,13 @@ export class GenerationsService {
     const moderationSource = input.kind === 'CHAT' ? 'CHAT' : input.kind === 'COMMERCE' ? 'COMMERCE' : 'IMAGE'
     await this.moderation.inspect(userId, moderationSource, input.prompt, { conversationId: input.conversationId || null, projectId: input.projectId || null, kind: input.kind })
     const [project, conversation] = await Promise.all([
-      input.projectId ? this.prisma.project.findFirst({ where: { id: input.projectId, userId }, select: { id: true } }) : null,
+      input.projectId ? this.prisma.project.findFirst({ where: { id: input.projectId, OR: [{ userId }, { members: { some: { userId } } }] }, select: { id: true } }) : null,
       input.conversationId ? this.prisma.conversation.findFirst({ where: { id: input.conversationId, userId }, select: { id: true, projectId: true } }) : null,
     ])
     if (input.projectId && !project) throw new NotFoundException('项目不存在')
     if (input.conversationId && !conversation) throw new NotFoundException('对话不存在')
     if (input.projectId && conversation?.projectId !== input.projectId) throw new NotFoundException('对话不属于该项目')
+    if (input.kind === 'CHAT' && conversation?.projectId && !input.projectId) throw new BadRequestException('项目对话必须携带项目标识')
     const [subscription, privacy, freePlan, account] = await Promise.all([
       this.prisma.userSubscription.findFirst({ where: { userId, status: { in: ['ACTIVE', 'TRIALING'] }, OR: [{ currentPeriodEnd: null }, { currentPeriodEnd: { gt: new Date() } }] }, orderBy: { createdAt: 'desc' }, include: { plan: true } }),
       this.prisma.userSettings.findUnique({ where: { userId }, select: { trainingOptOut: true, shareUsageAnalytics: true } }),
@@ -78,7 +79,7 @@ export class GenerationsService {
     }
     const baseCreditCost = Math.max(0, unitCreditCost * quantity)
     const maxOutputTokens = input.kind === 'CHAT' ? Math.max(1, Math.min(32768, Number(normalizedOptions.maxOutputTokens || 4096))) : 0
-    const inputMessages = input.kind === 'CHAT' && input.conversationId ? await this.prisma.message.findMany({ where: { conversationId: input.conversationId }, orderBy: { createdAt: 'asc' }, take: 80, select: { content: true } }) : []
+    const inputMessages = input.kind === 'CHAT' && input.conversationId ? await this.prisma.message.findMany({ where: { conversationId: input.conversationId, deletedAt: null }, orderBy: { createdAt: 'asc' }, take: 80, select: { content: true } }) : []
     const estimatedInputTokens = inputMessages.reduce((total, message) => total + message.content.length, 0)
     const reservedTokenCredits = input.kind === 'CHAT' ? Math.ceil(estimatedInputTokens * resolved.inputCreditsPerMillion / 1_000_000) + Math.ceil(maxOutputTokens * resolved.outputCreditsPerMillion / 1_000_000) : 0
     const creditCost = baseCreditCost + reservedTokenCredits

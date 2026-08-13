@@ -142,6 +142,14 @@
                 <button v-for="item in chatModels" :key="item.key" type="button" :class="{ active: model === item.displayName }" @click="model = item.displayName; modelMenuOpen = false"><span><strong>{{ item.displayName }}</strong><small>{{ item.description || '办公任务模型' }}</small></span><Check v-if="model === item.displayName" :size="15" /></button>
               </div>
             </span>
+            <span class="office-control-anchor">
+              <button class="office-format-button" type="button" :aria-expanded="formatMenuOpen" title="选择交付文件格式" @click="toggleFormatMenu"><FileSpreadsheet v-if="exportFormat === 'xlsx'" :size="15" /><FileText v-else :size="15" />{{ exportFormatLabel }}<ChevronDown :size="13" /></button>
+              <div v-if="formatMenuOpen" class="office-format-menu">
+                <button type="button" :class="{ active: exportFormat === 'auto' }" @click="exportFormat = 'auto'; formatMenuOpen = false"><span><strong>自动格式</strong><small>根据办公技能选择文件类型</small></span><Check v-if="exportFormat === 'auto'" :size="15" /></button>
+                <button type="button" :class="{ active: exportFormat === 'docx' }" @click="exportFormat = 'docx'; formatMenuOpen = false"><FileText :size="16" /><span><strong>Word</strong><small>生成可编辑的 DOCX 文档</small></span><Check v-if="exportFormat === 'docx'" :size="15" /></button>
+                <button type="button" :class="{ active: exportFormat === 'xlsx' }" @click="exportFormat = 'xlsx'; formatMenuOpen = false"><FileSpreadsheet :size="16" /><span><strong>Excel</strong><small>生成可编辑的 XLSX 工作簿</small></span><Check v-if="exportFormat === 'xlsx'" :size="15" /></button>
+              </div>
+            </span>
             <button class="office-skill-button" :class="{ active: skillPanelOpen }" type="button" :aria-expanded="skillPanelOpen" @click="toggleSkillPanel"><Layers3 :size="16" />{{ selectedSkill.name }}<ChevronDown :size="13" /></button>
             <button v-if="taskMode === 'agent'" class="office-web-button" :class="{ active: webSearchEnabled }" type="button" :aria-pressed="webSearchEnabled" title="联网搜索" @click="webSearchEnabled = !webSearchEnabled"><Globe2 :size="16" />联网</button>
             <PluginSelector v-if="auth.isAuthenticated" v-model="pluginId" capability="OFFICE" compact />
@@ -149,7 +157,7 @@
           <button class="office-submit" :type="generating ? 'button' : 'submit'" :disabled="canceling || (!generating && (!prompt.trim() || (auth.isAuthenticated && !model)))" :aria-label="generating ? '停止生成' : '提交任务'" @click="generating && cancelTask()"><LoaderCircle v-if="canceling" class="office-spin" :size="16" /><Square v-else-if="generating" :size="13" fill="currentColor" /><ArrowUp v-else :size="19" /></button>
         </footer>
       </form>
-      <input ref="fileInput" type="file" accept="image/*,.txt,.md,.markdown,.csv,.json,.xml,.html,.css,.js,.jsx,.ts,.tsx,.py,.java,.go,.rs,.sql,.log,text/*,application/json" multiple hidden @change="handleFiles" />
+      <input ref="fileInput" type="file" accept="image/*,.docx,.xlsx,.xlsm,.txt,.md,.markdown,.csv,.json,.xml,.html,.css,.js,.jsx,.ts,.tsx,.py,.java,.go,.rs,.sql,.log,text/*,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden @change="handleFiles" />
       <p v-if="error" class="office-error" role="alert">{{ error }}</p>
     </section>
   </main>
@@ -174,6 +182,7 @@ import type { StudioAsset } from '../types'
 import { createClientId } from '../utils/client-id'
 
 type TaskMode = 'fast' | 'expert' | 'agent'
+type OfficeExportFormat = 'auto' | 'docx' | 'xlsx'
 type OfficeSkill = { id: string; name: string; category: string; description: string; shortDescription: string; placeholder: string; color: string; icon: LucideIcon; assistantId?: string }
 type CatalogModel = { key: string; displayName: string; description?: string; capability: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE'; enabled?: boolean; isDefault: boolean }
 type ServerConversation = { id: string }
@@ -237,11 +246,13 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const taskInput = ref<HTMLTextAreaElement | null>(null)
 const resultThread = ref<HTMLElement | null>(null)
 const taskMode = ref<TaskMode>('fast')
+const exportFormat = ref<OfficeExportFormat>('auto')
 const webSearchEnabled = ref(true)
 const selectedSkill = ref<OfficeSkill>(builtInSkills[0])
 const skillPanelOpen = ref(false)
 const modeMenuOpen = ref(false)
 const modelMenuOpen = ref(false)
+const formatMenuOpen = ref(false)
 const skillQuery = ref('')
 const selectedCategory = ref('全部')
 const model = ref('')
@@ -260,6 +271,7 @@ const filteredSkills = computed(() => allSkills.value.filter((skill) => {
   return categoryMatches && (!query || `${skill.name} ${skill.description}`.toLowerCase().includes(query))
 }))
 const modeLabel = computed(() => taskMode.value === 'fast' ? '快速' : taskMode.value === 'expert' ? '专家' : '任务')
+const exportFormatLabel = computed(() => exportFormat.value === 'docx' ? 'Word' : exportFormat.value === 'xlsx' ? 'Excel' : '自动格式')
 const deliverableFormat = computed(() => deliverable.value?.name.split('.').pop()?.toUpperCase() || 'OFFICE')
 const deliverableIcon = computed(() => deliverable.value?.name.toLowerCase().endsWith('.pptx') ? Presentation : deliverable.value?.name.toLowerCase().endsWith('.xlsx') ? FileSpreadsheet : FileText)
 const pendingToolCalls = computed(() => activeAgentTask.value?.agentRun?.toolCalls.filter((call) => call.requiresApproval && call.approvalStatus === 'PENDING') || [])
@@ -295,12 +307,21 @@ function toggleModeMenu() {
   document.dispatchEvent(new Event('xinyue:close-popovers'))
   modeMenuOpen.value = !modeMenuOpen.value
   modelMenuOpen.value = false
+  formatMenuOpen.value = false
   skillPanelOpen.value = false
 }
 function toggleModelMenu() {
   document.dispatchEvent(new Event('xinyue:close-popovers'))
   modelMenuOpen.value = !modelMenuOpen.value
   modeMenuOpen.value = false
+  formatMenuOpen.value = false
+  skillPanelOpen.value = false
+}
+function toggleFormatMenu() {
+  document.dispatchEvent(new Event('xinyue:close-popovers'))
+  formatMenuOpen.value = !formatMenuOpen.value
+  modeMenuOpen.value = false
+  modelMenuOpen.value = false
   skillPanelOpen.value = false
 }
 function toggleSkillPanel() {
@@ -308,10 +329,12 @@ function toggleSkillPanel() {
   skillPanelOpen.value = !skillPanelOpen.value
   modeMenuOpen.value = false
   modelMenuOpen.value = false
+  formatMenuOpen.value = false
 }
 function closeOfficePopovers() {
   modeMenuOpen.value = false
   modelMenuOpen.value = false
+  formatMenuOpen.value = false
   skillPanelOpen.value = false
 }
 function collapseOfficePopovers() {
@@ -540,7 +563,7 @@ async function createDeliverable() {
   if (!conversationId.value || exporting.value || deliverable.value) return
   exporting.value = true
   try {
-    deliverable.value = await api<OfficeDeliverable>('/office/exports', { method: 'POST', body: JSON.stringify({ conversationId: conversationId.value }) })
+    deliverable.value = await api<OfficeDeliverable>('/office/exports', { method: 'POST', body: JSON.stringify({ conversationId: conversationId.value, ...(exportFormat.value === 'auto' ? {} : { format: exportFormat.value }) }) })
     await studio.refreshAssets()
   } catch (reason) {
     error.value = `内容已生成，但交付文件制作失败：${reason instanceof Error ? reason.message : '请稍后重试'}`
