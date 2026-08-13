@@ -5,12 +5,15 @@ import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify
 import cookie from '@fastify/cookie'
 import helmet from '@fastify/helmet'
 import multipart from '@fastify/multipart'
-import { AppModule } from './app.module'
 import { PrismaExceptionFilter } from './common/prisma-exception.filter'
+import { installationBootstrapMode } from './install/install-bootstrap'
 
 async function bootstrap() {
+  const mode = await installationBootstrapMode()
+  process.env.APP_BOOT_MODE = mode
+  const RootModule = mode === 'application' ? (await import('./app.module')).AppModule : (await import('./install/install-app.module')).InstallAppModule
   const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule,
+    RootModule,
     new FastifyAdapter({ trustProxy: true }),
     { bufferLogs: true, rawBody: true },
   )

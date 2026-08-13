@@ -21,13 +21,18 @@ const schema = z.object({
   OTP_TTL_MINUTES: z.coerce.number().int().positive().default(10),
   GLOBAL_RATE_LIMIT: z.coerce.number().int().positive().default(600),
   UPLOAD_DIR: z.string().default('uploads'),
-  AI_PROVIDER_BASE_URL: z.string().url(),
+  AI_PROVIDER_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
   AI_PROVIDER_API_KEY: z.string().optional(),
   AI_CHAT_MODEL: z.string().default('gpt-4.1'),
   AI_IMAGE_MODEL: z.string().default('gpt-image-1'),
   CREDENTIAL_ENCRYPTION_KEY: z.string().min(32).optional(),
   WEB_SEARCH_ENDPOINT: z.string().url().optional(),
   WEB_SEARCH_API_KEY: z.string().optional(),
+  INSTALL_TOKEN: z.string().min(8).optional(),
+  INSTALL_COMPLETED: optionalBoolean,
+  INSTALL_ENV_PATH: z.string().optional(),
+  INSTALL_ENV_OVERRIDE: optionalBoolean,
+  INSTALL_AUTO_RESTART: optionalBoolean,
 })
 
 export function validateEnv(input: Record<string, unknown>) {

@@ -12,4 +12,4 @@ COPY src ./src
 COPY scripts ./scripts
 RUN npm run build
 EXPOSE 3100
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["node", "dist/main.js"]

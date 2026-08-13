@@ -12,6 +12,7 @@ import './styles/legal.css'
 import './styles/prompt-library.css'
 import './styles/office.css'
 import './styles/plugins.css'
+import './styles/install.css'
 
 const app = createApp(App)
 const pinia = createPinia()

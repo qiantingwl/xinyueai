@@ -28,6 +28,7 @@ import { WorkspaceModule } from './workspace/workspace.module'
 import { ContentModule } from './content/content.module'
 import { PluginsModule } from './plugins/plugins.module'
 import { AgentTasksModule } from './agent-tasks/agent-tasks.module'
+import { InstallModule } from './install/install.module'
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { AgentTasksModule } from './agent-tasks/agent-tasks.module'
     ContentModule,
     PluginsModule,
     AgentTasksModule,
+    InstallModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

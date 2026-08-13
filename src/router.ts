@@ -10,6 +10,7 @@ const WorkspaceLayout = () => import('./components/WorkspaceLayout.vue')
 const ApiLandingPage = () => import('./views/ApiLandingPage.vue')
 const LegalPage = () => import('./views/LegalPage.vue')
 const SharedConversationPage = () => import('./views/SharedConversationPage.vue')
+const InstallPage = () => import('./views/InstallPage.vue')
 const AdminRedirect = { render: () => null }
 
 export const router = createRouter({
@@ -17,6 +18,7 @@ export const router = createRouter({
   routes: [
     { path: '/', name: 'landing', component: LandingPage, meta: { title: 'Xinyue AI' } },
     { path: '/login', name: 'login', component: LoginPage, meta: { title: '登录' } },
+    { path: '/install', name: 'install', component: InstallPage, meta: { title: '首次安装' } },
     {
       path: '/workspace',
       component: WorkspaceLayout,
@@ -50,6 +52,13 @@ export const router = createRouter({
     { path: '/studio/:mode?', redirect: (to) => `/${to.params.mode === 'images' ? 'image' : to.params.mode || 'chat'}` },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
+})
+
+router.beforeEach(async (to) => {
+  const { installationStatus } = await import('./services/installation')
+  const status = await installationStatus()
+  if (status && (!status.installed || status.restartRequired) && to.name !== 'install') return { name: 'install' }
+  if (status?.installed && !status.restartRequired && to.name === 'install') return { name: 'landing' }
 })
 
 router.afterEach((to) => {
