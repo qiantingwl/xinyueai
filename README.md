@@ -55,8 +55,8 @@ replace `POSTGRES_PASSWORD` before starting the services:
 
 ```powershell
 Copy-Item .env.production.example .env.production
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml logs backend
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.production -f docker-compose.prod.yml logs backend
 ```
 
 Open the site `/install` path. Use
