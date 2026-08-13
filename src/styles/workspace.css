@@ -2200,6 +2200,29 @@ html[data-studio-theme="light"] .project-table-head,
 html[data-studio-theme="light"] .project-table > button { border-color: #ddd; }
 html[data-studio-theme="light"] .project-table > button:hover,
 html[data-studio-theme="light"] .project-table > button.is-active { background: #eee; }
+html[data-studio-theme="light"] .project-table-head { border-color: #e2e5e8; color: #70757c; }
+html[data-studio-theme="light"] .project-row {
+  background: #fff;
+  border-color: #e8eaed;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+html[data-studio-theme="light"] .project-row:hover { background: #f6f7f8; }
+html[data-studio-theme="light"] .project-row.is-active {
+  background: #eef3f0;
+  box-shadow: inset 3px 0 #587565;
+}
+html[data-studio-theme="light"] .project-row.is-active:hover { background: #e9f0ec; }
+html[data-studio-theme="light"] .project-row:has(> button:disabled) { background: #f7f8fa; }
+html[data-studio-theme="light"] .project-row:has(> button:disabled):hover { background: #f1f3f5; }
+html[data-studio-theme="light"] .project-row > button { color: #25272a; }
+html[data-studio-theme="light"] .project-row > button:disabled { color: #686d73; cursor: default; opacity: 1; }
+html[data-studio-theme="light"] .project-row-name small,
+html[data-studio-theme="light"] .project-row-content,
+html[data-studio-theme="light"] .project-row time { color: #747980; }
+html[data-studio-theme="light"] .project-row:has(> button:disabled) .project-row-name svg { color: #969ba1; }
+html[data-studio-theme="light"] .project-row > div button { color: #70757c; }
+html[data-studio-theme="light"] .project-row > div button:hover { background: #e7eaed; color: #25272a; }
+html[data-studio-theme="light"] .project-row > div button:last-child:hover { background: #fff0f0; color: #c83b32; }
 html[data-studio-theme="light"] .library-toolbar > div button.is-active { background: #ddd; color: #111; }
 html[data-studio-theme="light"] .studio-settings-dialog,
 html[data-studio-theme="light"] .settings-content > h2,
