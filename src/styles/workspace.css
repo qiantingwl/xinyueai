@@ -2616,6 +2616,9 @@ html[data-studio-theme="light"] .inspiration-preview__stage { background: #f1f1f
 .project-empty strong { display: block; font-size: 18px; line-height: 24px; width: calc(100% - 40px); }
 .project-empty p { color: #e1e1e1; font-size: 13px; margin: 10px 0 16px; }
 .project-empty button { background: transparent; border: 0; color: #fff; font-size: 12px; font-weight: 650; padding: 5px; }
+.project-empty .project-empty__create { align-items: center; background: #f1f1f1; border-radius: 7px; color: #171717; display: inline-flex; gap: 6px; height: 38px; justify-content: center; min-width: 112px; padding: 0 16px; transition: background 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
+.project-empty .project-empty__create:hover { background: #fff; transform: translateY(-1px); }
+.project-empty .project-empty__create:focus-visible { box-shadow: 0 0 0 3px rgba(255, 255, 255, .2); outline: 0; }
 
 .library-page .index-page-inner { padding-top: 116px; width: min(768px, calc(100% - 48px)); }
 .library-page .index-page-header { align-items: flex-start; }
@@ -3186,6 +3189,9 @@ html[data-studio-theme="light"] .inspiration-arrow:disabled:hover { background: 
 html[data-studio-theme="light"] .creation-output > p,
 html[data-studio-theme="light"] .project-empty p { color: #52525b; }
 html[data-studio-theme="light"] .project-empty button { color: #18181b; }
+html[data-studio-theme="light"] .project-empty .project-empty__create { background: #18181b; color: #fff; }
+html[data-studio-theme="light"] .project-empty .project-empty__create:hover { background: #303034; }
+html[data-studio-theme="light"] .project-empty .project-empty__create:focus-visible { box-shadow: 0 0 0 3px rgba(24, 24, 27, .18); }
 html[data-studio-theme="light"] .index-tabs button small { background: #ececec; color: #71717a; }
 html[data-studio-theme="light"] .index-tabs button.is-active small { background: #cfcfcf; color: #18181b; }
 html[data-studio-theme="light"] .project-notice { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
