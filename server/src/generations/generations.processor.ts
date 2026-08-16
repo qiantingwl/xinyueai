@@ -9,6 +9,7 @@ import { CreditsService } from '../credits/credits.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { ProvidersService, ResolvedProvider } from '../providers/providers.service'
 import { AgentToolsService } from '../agent-tasks/agent-tools.service'
+import { WebSearchService } from '../agent-tasks/web-search.service'
 import { detectImageFormat, identifyImageFormat, imageFormatMetadata, normalizeImageOptions } from './image-options'
 import { normalizeVideoOptions, videoCapabilities } from './video-options'
 
@@ -92,7 +93,7 @@ class JobCancelledError extends Error {}
 @Injectable()
 @Processor('generation', { concurrency: 20 })
 export class GenerationsProcessor extends WorkerHost {
-  constructor(private readonly prisma: PrismaService, private readonly assets: AssetsService, private readonly credits: CreditsService, private readonly providers: ProvidersService, private readonly agentTools: AgentToolsService) { super() }
+  constructor(private readonly prisma: PrismaService, private readonly assets: AssetsService, private readonly credits: CreditsService, private readonly providers: ProvidersService, private readonly agentTools: AgentToolsService, private readonly webSearch: WebSearchService) { super() }
   async process(queueJob: Job<{ jobId: string }>) {
     const started = await this.prisma.generationJob.updateMany({ where: { id: queueJob.data.jobId, status: { in: ['QUEUED', 'RUNNING'] } }, data: { status: 'RUNNING', startedAt: new Date() } })
     const task = await this.prisma.generationJob.findUniqueOrThrow({ where: { id: queueJob.data.jobId } })
@@ -270,7 +271,7 @@ export class GenerationsProcessor extends WorkerHost {
     const errors: string[] = []
     for (const query of queries) {
       try {
-        const result = await this.webSearch.search({ query, maxResults: 5 })
+        const result = await this.webSearch.search({ query, maxResults: 5, topic: '', includeDomains: [], excludeDomains: [] })
         for (const item of result.results) {
           if (seen.has(item.url) || sources.length >= 15) continue
           seen.add(item.url)
@@ -484,11 +485,6 @@ export class GenerationsProcessor extends WorkerHost {
     const officeSkill = typeof options.officeSkill === 'string' ? options.officeSkill : ''
     const officeMode = options.officeMode === 'agent' ? 'agent' : options.officeMode === 'expert' ? 'expert' : options.officeMode === 'fast' ? 'fast' : ''
     const officePrompt = officeSkillPrompts[officeSkill]
-    const projectInstructions = typeof options.projectInstructions === 'string' ? options.projectInstructions.trim() : ''
-    const projectSkill = options.projectSkill && typeof options.projectSkill === 'object' && !Array.isArray(options.projectSkill) ? options.projectSkill as Record<string, unknown> : null
-    const projectSkillPrompt = projectSkill && typeof projectSkill.content === 'string' && projectSkill.content.trim()
-      ? `当前项目启用了技能“${String(projectSkill.name || '项目技能')}”（v${Number(projectSkill.version || 1)}）。请持续遵守以下项目级规范：\n${projectSkill.content.trim()}`
-      : ''
     const pluginPrompt = await this.pluginInstruction(task, officeSkill ? PluginCapability.OFFICE : PluginCapability.CHAT)
     const projectSkill = options.projectSkill && typeof options.projectSkill === 'object' && !Array.isArray(options.projectSkill) ? options.projectSkill as Record<string, unknown> : null
     const projectSkillPrompt = projectSkill && typeof projectSkill.content === 'string' && projectSkill.content.trim()
@@ -696,7 +692,7 @@ export class GenerationsProcessor extends WorkerHost {
     const count = task.kind === 'COMMERCE' ? Math.max(1, Math.min(Number(options.modules || 8), 12)) : Math.max(1, Math.min(Number(options.count || 1), 10))
     const execution = await this.withProviderFailover(task, task.kind === 'COMMERCE' ? 'COMMERCE' : 'IMAGE', async (resolved) => {
       if (resolved.source === 'demo') throw new ProviderRequestError('图片模型未绑定可用渠道，请在管理端配置模型路由', 503)
-      if (resolved.type === ProviderType.POLLINATIONS) {
+      if ((resolved.type as string) === 'POLLINATIONS') {
         const imageOptions = normalizeImageOptions(options, resolved.imageCapabilities)
         const [widthStr, heightStr] = imageOptions.size.split('x')
         const width = Number(widthStr) || 1024
@@ -724,7 +720,7 @@ export class GenerationsProcessor extends WorkerHost {
         return { resolved, payload: { data } }
       }
       const imageOptions = normalizeImageOptions(options, resolved.imageCapabilities)
-      if (resolved.type === ProviderType.POLLINATIONS) {
+      if ((resolved.type as string) === 'POLLINATIONS') {
         if (imageOptions.referenceAssetIds.length || imageOptions.maskAssetId) throw new ProviderRequestError('Pollinations 渠道不支持参考图或蒙版编辑', 400)
         if (task.kind !== 'COMMERCE' && count > 1) throw new ProviderRequestError('Pollinations 渠道每次最多生成 1 张图片', 400)
         const [rawWidth, rawHeight] = imageOptions.size.toLowerCase().split('x').map(Number)

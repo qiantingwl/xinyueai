@@ -2,9 +2,10 @@ services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    env_file:
+      - .env.production
     environment:
       POSTGRES_USER: flux
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: flux_studio
     volumes:
       - xinyue_postgres:/var/lib/postgresql/data
@@ -33,12 +34,9 @@ services:
     env_file:
       - .env.production
     environment:
-      INSTALL_ENV_PATH: /app/config/.env
-      INSTALL_ENV_OVERRIDE: "true"
-      INSTALL_AUTO_RESTART: "true"
+      INSTALL_COMPLETED: "true"
     volumes:
       - xinyue_uploads:/app/uploads
-      - xinyue_config:/app/config
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,4 +62,3 @@ volumes:
   xinyue_postgres:
   xinyue_redis:
   xinyue_uploads:
-  xinyue_config:
