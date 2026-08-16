@@ -35,6 +35,13 @@ type SystemSettingsInput = Partial<{
   siteName: string
   siteLogoUrl: string
   supportUrl: string
+  sidebarCreationEnabled: boolean
+  sidebarCommerceEnabled: boolean
+  sidebarOfficeEnabled: boolean
+  sidebarPromptsEnabled: boolean
+  sidebarPluginsEnabled: boolean
+  sidebarProjectsEnabled: boolean
+  sidebarAssetsEnabled: boolean
   registrationEnabled: boolean
   emailLoginEnabled: boolean
   emailVerifyEnabled: boolean
@@ -138,6 +145,7 @@ const DEFAULT_PRESETS = [
   { key: 'gemini-pro', displayName: 'Gemini Pro', upstreamModel: 'gemini-2.5-pro', capability: ModelCapability.CHAT, sortOrder: 70, description: '支持 Gemini GenerateContent 或 OpenAI Compatible 渠道' },
   { key: 'deepseek-chat', displayName: 'DeepSeek', upstreamModel: 'deepseek-chat', capability: ModelCapability.CHAT, sortOrder: 80 },
   { key: 'qwen-max', displayName: 'Qwen Max', upstreamModel: 'qwen-max', capability: ModelCapability.CHAT, sortOrder: 90 },
+  { key: 'pollinations-free', displayName: 'Pollinations (免费)', upstreamModel: 'flux', capability: ModelCapability.IMAGE, sortOrder: 5, isDefault: false, flatCreditCost: 0, description: '完全免费的 AI 图片生成，无需 API Key，基于 Pollinations.ai', options: { imageCapabilities: { sizes: ['1024x1024', '1280x720', '720x1280', '1536x1024', '1024x1536'], qualities: ['medium'], outputFormats: ['png'], backgrounds: ['auto'], maxCount: 1, defaultSize: '1024x1024', defaultQuality: 'medium', supportsReference: false, supportsMask: false, resolutionPricing: { '1K': 0, '2K': 0, '4K': 0 } } } },
   { key: 'gpt-image-2', displayName: 'GPT Image 2', upstreamModel: 'gpt-image-2', capability: ModelCapability.IMAGE, sortOrder: 10, isDefault: true },
   { key: 'grok-imagine', displayName: 'Grok Imagine', upstreamModel: 'grok-imagine-image', capability: ModelCapability.IMAGE, sortOrder: 20 },
   { key: 'nano-banana-pro', displayName: 'Nano Banana Pro', upstreamModel: 'nano-banana-pro', capability: ModelCapability.IMAGE, sortOrder: 30 },
@@ -188,7 +196,8 @@ export class ProvidersService implements OnModuleInit {
     url.search = ''
     url.hash = ''
     url.pathname = url.pathname.replace(/\/(chat\/completions|responses|images\/generations|videos(?:\/[^/]+(?:\/content)?)?|models)\/?$/i, '').replace(/\/+$/, '')
-    if (!url.pathname.toLowerCase().endsWith('/v1')) url.pathname = `${url.pathname}/v1`.replace(/\/{2,}/g, '/')
+    const isPollinationsHost = url.hostname.toLowerCase().includes('pollinations.ai')
+    if (!isPollinationsHost && !url.pathname.toLowerCase().endsWith('/v1')) url.pathname = `${url.pathname}/v1`.replace(/\/{2,}/g, '/')
     return url.toString().replace(/\/$/, '')
   }
 
@@ -527,6 +536,13 @@ export class ProvidersService implements OnModuleInit {
       siteName: row.siteName,
       siteLogoUrl: row.siteLogoUrl,
       supportUrl: row.supportUrl,
+      sidebarCreationEnabled: row.sidebarCreationEnabled,
+      sidebarCommerceEnabled: row.sidebarCommerceEnabled,
+      sidebarOfficeEnabled: row.sidebarOfficeEnabled,
+      sidebarPromptsEnabled: row.sidebarPromptsEnabled,
+      sidebarPluginsEnabled: row.sidebarPluginsEnabled,
+      sidebarProjectsEnabled: row.sidebarProjectsEnabled,
+      sidebarAssetsEnabled: row.sidebarAssetsEnabled,
       registrationEnabled: row.registrationEnabled,
       emailLoginEnabled: row.emailLoginEnabled,
       emailVerifyEnabled: row.emailVerifyEnabled,

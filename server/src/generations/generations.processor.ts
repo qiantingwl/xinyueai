@@ -8,6 +8,7 @@ import { AssetsService } from '../assets/assets.service'
 import { CreditsService } from '../credits/credits.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { ProvidersService, ResolvedProvider } from '../providers/providers.service'
+import { AgentToolsService } from '../agent-tasks/agent-tools.service'
 import { detectImageFormat, imageFormatMetadata, normalizeImageOptions } from './image-options'
 import { normalizeVideoOptions, videoCapabilities } from './video-options'
 
@@ -62,7 +63,7 @@ class JobCancelledError extends Error {}
 @Injectable()
 @Processor('generation', { concurrency: 20 })
 export class GenerationsProcessor extends WorkerHost {
-  constructor(private readonly prisma: PrismaService, private readonly assets: AssetsService, private readonly credits: CreditsService, private readonly providers: ProvidersService) { super() }
+  constructor(private readonly prisma: PrismaService, private readonly assets: AssetsService, private readonly credits: CreditsService, private readonly providers: ProvidersService, private readonly agentTools: AgentToolsService) { super() }
   async process(queueJob: Job<{ jobId: string }>) {
     const started = await this.prisma.generationJob.updateMany({ where: { id: queueJob.data.jobId, status: { in: ['QUEUED', 'RUNNING'] } }, data: { status: 'RUNNING', startedAt: new Date() } })
     const task = await this.prisma.generationJob.findUniqueOrThrow({ where: { id: queueJob.data.jobId } })
@@ -359,6 +360,7 @@ export class GenerationsProcessor extends WorkerHost {
       : officeMode === 'expert' ? '先分析任务约束与缺失信息，再给出完整、专业、可复用的交付结果。' : officeMode === 'fast' ? '直接给出简洁、可用的最终结果。' : ''
     const systemParts = [assistant?.systemPrompt?.trim(), projectSkillPrompt, projectInstructions, pluginPrompt, officePrompt, officeDepth, knowledgeContext ? `以下是已授权知识库上下文，仅在相关时参考，不要臆造：\n${knowledgeContext}` : '', attachmentContext].filter(Boolean)
     const providerMessages = systemParts.length ? [{ role: 'system', content: systemParts.join('\n\n') }, ...messages.map((message) => ({ role: message.role.toLowerCase(), content: message.content }))] : messages.map((message) => ({ role: message.role.toLowerCase(), content: message.content }))
+    const agentModeEnabled = options.agentMode === true
     const approvedToolIds = assistantId ? new Set((await this.prisma.toolApprovalRequest.findMany({ where: { userId: task.userId, assistantId, status: 'APPROVED', consumedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { toolId: true } })).map((item) => item.toolId)) : new Set<string>()
     const agentTools = (assistant?.tools || []).map((binding) => binding.tool).filter((tool) => Boolean(tool.endpoint) && (!tool.requiresApproval || approvedToolIds.has(tool.id)))
     const billing = this.billingOptions(task.options)
@@ -397,6 +399,28 @@ export class GenerationsProcessor extends WorkerHost {
         const calls = await this.planAgentTools(resolved, providerMessages, maxOutputTokens, agentTools)
         const results = await this.executeAgentTools(task, assistantId, agentTools, calls)
         agentContext = results.length ? `工具调用已经完成。请基于以下真实结果回答用户，不要声称执行了未列出的工具：\n${JSON.stringify(results)}` : ''
+        agentPrepared = true
+      }
+      if (!agentPrepared && agentModeEnabled) {
+        const toolTask = { id: task.id, userId: task.userId, assistantId: assistantId || null, projectId: task.projectId || null, webSearchEnabled: true }
+        const availableTools = await this.agentTools.available(toolTask)
+        const builtinTools = availableTools.filter((t) => t.kind === 'builtin')
+        if (builtinTools.length) {
+          const builtinDefs = builtinTools.map((t) => ({ id: t.id || '', key: t.key, name: t.name, description: t.description, endpoint: '', scopes: [], requiresApproval: false }))
+          const calls = await this.planAgentTools(resolved, providerMessages, maxOutputTokens, builtinDefs)
+          const results: Array<{ tool: string; status: string; output: string }> = []
+          for (const call of calls) {
+            const toolDesc = builtinTools.find((t) => t.key === call.key)
+            if (!toolDesc) continue
+            try {
+              const output = await this.agentTools.execute(toolTask, toolDesc, call.input)
+              results.push({ tool: toolDesc.name, status: 'succeeded', output: JSON.stringify(output).slice(0, 8000) })
+            } catch (err) {
+              results.push({ tool: toolDesc.name, status: 'failed', output: err instanceof Error ? err.message : '工具调用失败' })
+            }
+          }
+          agentContext = results.length ? `工具调用已经完成。请基于以下真实结果回答用户，不要声称执行了未列出的工具：\n${JSON.stringify(results)}` : ''
+        }
         agentPrepared = true
       }
       const executionMessages = agentContext ? [{ role: 'system', content: agentContext }, ...providerMessages] : providerMessages
@@ -507,6 +531,33 @@ export class GenerationsProcessor extends WorkerHost {
     const count = task.kind === 'COMMERCE' ? Math.max(1, Math.min(Number(options.modules || 8), 12)) : Math.max(1, Math.min(Number(options.count || 1), 10))
     const execution = await this.withProviderFailover(task, task.kind === 'COMMERCE' ? 'COMMERCE' : 'IMAGE', async (resolved) => {
       if (resolved.source === 'demo') throw new ProviderRequestError('图片模型未绑定可用渠道，请在管理端配置模型路由', 503)
+      if (resolved.type === ProviderType.POLLINATIONS) {
+        const imageOptions = normalizeImageOptions(options, resolved.imageCapabilities)
+        const [widthStr, heightStr] = imageOptions.size.split('x')
+        const width = Number(widthStr) || 1024
+        const height = Number(heightStr) || 1024
+        const pollinationsRequest = async (singlePrompt: string): Promise<Uint8Array> => {
+          const encoded = encodeURIComponent(singlePrompt)
+          const seed = Math.floor(Math.random() * 2147483647)
+          const url = `https://image.pollinations.ai/prompt/${encoded}?model=${encodeURIComponent(resolved.model || 'flux')}&width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false`
+          const response = await fetch(url, { signal: AbortSignal.timeout(resolved.timeoutMs) })
+          if (!response.ok) throw new ProviderRequestError(`Pollinations 返回 ${response.status}`, response.status)
+          const buffer = await response.arrayBuffer()
+          return new Uint8Array(buffer)
+        }
+        if (task.kind !== 'COMMERCE') {
+          const bytes = await pollinationsRequest(prompt)
+          return { resolved, payload: { data: [{ _pollinationsBytes: bytes }] } }
+        }
+        const labels = this.commerceModuleLabels(String(options.creationType || '详情页'), count)
+        const data: Record<string, unknown>[] = []
+        for (const [position, label] of labels.entries()) {
+          const modulePrompt = `${prompt}\n\n请生成一张完整、可直接发布的中文电商${options.creationType || '详情页'}图片。这是整组 ${count} 张中的第 ${position + 1} 张，页面职责：${label}。目标平台：${options.platform || '自动适配'}。保持同一商品、包装、品牌信息和视觉系统一致，不要拼接多张小图，不要虚构未提供的参数、认证或功效。`
+          const bytes = await pollinationsRequest(modulePrompt)
+          data.push({ _pollinationsBytes: bytes, moduleLabel: label })
+        }
+        return { resolved, payload: { data } }
+      }
       const imageOptions = normalizeImageOptions(options, resolved.imageCapabilities)
       const request = async (prompt: string, n: number) => {
         const fields = {
@@ -546,7 +597,9 @@ export class GenerationsProcessor extends WorkerHost {
     const imageOptions = normalizeImageOptions(options, resolved.imageCapabilities)
     for (const [position, item] of (payload.data || []).entries()) {
       await this.assertNotCancelled(task.id)
-      const bytes = await this.imageBytes(item, resolved)
+      const bytes = item._pollinationsBytes instanceof Uint8Array
+        ? item._pollinationsBytes
+        : await this.imageBytes(item, resolved)
       await this.assertNotCancelled(task.id)
       const format = detectImageFormat(bytes, imageOptions.outputFormat)
       const file = imageFormatMetadata(format)

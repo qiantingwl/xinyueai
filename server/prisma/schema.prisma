@@ -96,6 +96,7 @@ enum ProviderType {
   NEW_API
   SUB2API
   OPENAI_COMPATIBLE
+  POLLINATIONS
 }
 
 enum ProviderAuthType {
@@ -1029,6 +1030,13 @@ model SystemSetting {
   siteName                     String   @default("Xinyue AI")
   siteLogoUrl                  String   @default("")
   supportUrl                   String   @default("")
+  sidebarCreationEnabled       Boolean  @default(true)
+  sidebarCommerceEnabled       Boolean  @default(true)
+  sidebarOfficeEnabled         Boolean  @default(true)
+  sidebarPromptsEnabled        Boolean  @default(true)
+  sidebarPluginsEnabled        Boolean  @default(true)
+  sidebarProjectsEnabled       Boolean  @default(true)
+  sidebarAssetsEnabled         Boolean  @default(true)
   registrationEnabled          Boolean  @default(true)
   emailLoginEnabled            Boolean  @default(true)
   emailVerifyEnabled           Boolean  @default(true)

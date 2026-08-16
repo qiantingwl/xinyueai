@@ -3,6 +3,13 @@ import { api } from '../services/api'
 
 export interface PublicCatalogSettings {
   siteName: string
+  sidebarCreationEnabled: boolean
+  sidebarCommerceEnabled: boolean
+  sidebarOfficeEnabled: boolean
+  sidebarPromptsEnabled: boolean
+  sidebarPluginsEnabled: boolean
+  sidebarProjectsEnabled: boolean
+  sidebarAssetsEnabled: boolean
   registrationEnabled: boolean
   emailLoginEnabled: boolean
   emailVerifyEnabled: boolean
@@ -21,6 +28,13 @@ export interface PublicCatalogSettings {
 
 const emptySettings: PublicCatalogSettings = {
   siteName: 'Xinyue AI',
+  sidebarCreationEnabled: true,
+  sidebarCommerceEnabled: true,
+  sidebarOfficeEnabled: true,
+  sidebarPromptsEnabled: true,
+  sidebarPluginsEnabled: true,
+  sidebarProjectsEnabled: true,
+  sidebarAssetsEnabled: true,
   registrationEnabled: false,
   emailLoginEnabled: false,
   emailVerifyEnabled: false,

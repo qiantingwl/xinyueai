@@ -47,7 +47,7 @@ export type UserGroup = {
   members: Array<{ user: { id: string; email: string | null; displayName: string; status: string } }>
   _count: { members: number; campaigns: number; modelAccess: number }
 }
-export type ProviderType = 'OPENAI' | 'NEW_API' | 'SUB2API' | 'OPENAI_COMPATIBLE'
+export type ProviderType = 'OPENAI' | 'NEW_API' | 'SUB2API' | 'OPENAI_COMPATIBLE' | 'POLLINATIONS'
 export type Provider = {
   id: string; name: string; type: ProviderType; baseUrl: string; apiKeyHint: string; authType: 'BEARER' | 'X_API_KEY' | 'BOTH'
   enabled: boolean; priority: number; weight: number; timeoutMs: number; allowUserKeys: boolean
@@ -82,6 +82,7 @@ export type ContentPage = {
 }
 export type SystemSettings = {
   siteName: string; siteLogoUrl: string; supportUrl: string
+  sidebarCreationEnabled: boolean; sidebarCommerceEnabled: boolean; sidebarOfficeEnabled: boolean; sidebarPromptsEnabled: boolean; sidebarPluginsEnabled: boolean; sidebarProjectsEnabled: boolean; sidebarAssetsEnabled: boolean
   registrationEnabled: boolean; emailLoginEnabled: boolean; emailVerifyEnabled: boolean; passwordLoginEnabled: boolean; passwordRegistrationEnabled: boolean
   linuxDoLoginEnabled: boolean; linuxDoClientId: string; linuxDoRedirectUrl: string; linuxDoScopes: string; linuxDoAuthorizeUrl: string; linuxDoTokenUrl: string; linuxDoUserInfoUrl: string; hasLinuxDoClientSecret: boolean; linuxDoClientSecretHint: string
   allowedEmailDomains: string[]; otpTtlMinutes: number; otpResendSeconds: number

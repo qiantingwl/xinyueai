@@ -98,6 +98,13 @@ class UpdateSystemDto {
   @IsOptional() @IsString() @MaxLength(100) siteName?: string
   @IsOptional() @IsString() @MaxLength(500) siteLogoUrl?: string
   @IsOptional() @IsString() @MaxLength(500) supportUrl?: string
+  @IsOptional() @IsBoolean() sidebarCreationEnabled?: boolean
+  @IsOptional() @IsBoolean() sidebarCommerceEnabled?: boolean
+  @IsOptional() @IsBoolean() sidebarOfficeEnabled?: boolean
+  @IsOptional() @IsBoolean() sidebarPromptsEnabled?: boolean
+  @IsOptional() @IsBoolean() sidebarPluginsEnabled?: boolean
+  @IsOptional() @IsBoolean() sidebarProjectsEnabled?: boolean
+  @IsOptional() @IsBoolean() sidebarAssetsEnabled?: boolean
   @IsOptional() @IsBoolean() registrationEnabled?: boolean
   @IsOptional() @IsBoolean() emailLoginEnabled?: boolean
   @IsOptional() @IsBoolean() emailVerifyEnabled?: boolean

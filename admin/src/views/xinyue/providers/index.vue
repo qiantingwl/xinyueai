@@ -3,7 +3,7 @@
     <div class="page-title"
       ><div
         ><h1>{{ xt('上游渠道') }}</h1
-        ><p>{{ xt('统一管理 OpenAI、NewAPI、Sub2API 与兼容接口') }}</p></div
+        ><p>{{ xt('统一管理 OpenAI、NewAPI、Sub2API、兼容接口与 Pollinations 免费渠道') }}</p></div
       ><ElSpace
         ><ElButton :loading="checkingAll" @click="checkAll"
           ><ArtSvgIcon icon="ri:pulse-line" />{{ xt('批量检测') }}</ElButton
@@ -92,13 +92,14 @@
                 ><ElOption
                   v-for="(label, value) in typeText"
                   :key="value"
-                   :label="xt(label)"
+                  :label="xt(label)"
                   :value="value" /></ElSelect></ElFormItem></ElCol></ElRow
         ><ElFormItem label="API Base URL"
           ><ElInput
             v-model.trim="editor.baseUrl"
-            placeholder="https://api.example.com/v1" /></ElFormItem
-        ><ElFormItem :label="xt('API 密钥')"
+            :placeholder="editor.type === 'POLLINATIONS' ? 'https://image.pollinations.ai' : 'https://api.example.com/v1'" /></ElFormItem
+        ><ElAlert v-if="editor.type === 'POLLINATIONS'" type="success" :closable="false" :title="xt('Pollinations 完全免费，无需 API Key，直接启用即可。请确保上方 Base URL 为 https://image.pollinations.ai')" style="margin-bottom:12px" />
+        <ElFormItem v-if="editor.type !== 'POLLINATIONS'" :label="xt('API 密钥')"
           ><ElInput
             v-model="editor.apiKey"
             type="password"
@@ -148,7 +149,8 @@
     OPENAI: 'OpenAI 官方',
     NEW_API: 'NewAPI',
     SUB2API: 'Sub2API',
-    OPENAI_COMPATIBLE: 'OpenAI 兼容'
+    OPENAI_COMPATIBLE: 'OpenAI 兼容',
+    POLLINATIONS: 'Pollinations (免费)'
   }
   const emptyEditor = () => ({
     id: '',

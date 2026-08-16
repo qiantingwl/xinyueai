@@ -29,6 +29,32 @@
                 :placeholder="xt('留空使用默认品牌标识')" /></ElFormItem></ElForm></ElCard
         ><ElCard v-if="settings" shadow="never"
           ><template #header
+            ><strong>{{ xt('左侧菜单') }}</strong></template
+          ><div class="toggle-grid"
+            ><ToggleRow
+              v-model="settings.sidebarCreationEnabled"
+              :title="xt('AI 创作')"
+              :note="xt('控制图片和视频创作入口')" /><ToggleRow
+              v-model="settings.sidebarCommerceEnabled"
+              :title="xt('电商中心')"
+              :note="xt('控制电商内容与商品视觉入口')" /><ToggleRow
+              v-model="settings.sidebarOfficeEnabled"
+              :title="xt('办公中心')"
+              :note="xt('控制文档和表格办公入口')" /><ToggleRow
+              v-model="settings.sidebarPromptsEnabled"
+              :title="xt('提示词库')"
+              :note="xt('控制提示词浏览入口')" /><ToggleRow
+              v-model="settings.sidebarPluginsEnabled"
+              :title="xt('插件市场')"
+              :note="xt('控制插件浏览与使用入口')" /><ToggleRow
+              v-model="settings.sidebarProjectsEnabled"
+              :title="xt('项目')"
+              :note="xt('控制协作项目入口')" /><ToggleRow
+              v-model="settings.sidebarAssetsEnabled"
+              :title="xt('文件库')"
+              :note="xt('控制用户文件管理入口')" /></div></ElCard
+        ><ElCard v-if="settings" shadow="never"
+          ><template #header
             ><strong>{{ xt('商业能力开关') }}</strong></template
           ><div class="toggle-grid"
             ><ToggleRow
@@ -347,6 +373,13 @@
     'siteName',
     'siteLogoUrl',
     'supportUrl',
+    'sidebarCreationEnabled',
+    'sidebarCommerceEnabled',
+    'sidebarOfficeEnabled',
+    'sidebarPromptsEnabled',
+    'sidebarPluginsEnabled',
+    'sidebarProjectsEnabled',
+    'sidebarAssetsEnabled',
     'registrationEnabled',
     'emailLoginEnabled',
     'emailVerifyEnabled',

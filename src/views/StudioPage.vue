@@ -111,6 +111,7 @@
               </button>
             </div>
           </div>
+          <button class="composer-agent-mode" type="button" :class="{ 'is-active': agentMode }" :aria-label="agentMode ? '关闭 Agent 模式' : '开启 Agent 模式'" :aria-pressed="agentMode" title="Agent 模式：开启后 AI 可自动调用工具" @click="agentMode = !agentMode"><Zap :size="15" /><span>Agent</span></button>
           <button class="composer-voice" :class="{ 'is-listening': voiceListening && voiceTarget === 'chat' }" type="button" :aria-label="voiceListening && voiceTarget === 'chat' ? '停止语音输入' : '开始语音输入'" :aria-pressed="voiceListening && voiceTarget === 'chat'" :title="voiceListening && voiceTarget === 'chat' ? '停止语音输入' : '语音输入'" @click="toggleVoice('chat')"><Mic :size="17" /></button>
           <button :type="store.isGenerating ? 'button' : 'submit'" :aria-label="store.isGenerating ? '停止生成' : '发送'" :title="store.isGenerating ? '停止生成' : '发送，Enter'" :disabled="!store.isGenerating && !draft.trim() && !attachments.length" @click="store.isGenerating && store.cancelActiveJob()"><Square v-if="store.isGenerating" :size="14" fill="currentColor" /><ArrowUp v-else :size="20" /></button>
         </form>
@@ -389,7 +390,7 @@ import { useI18n } from 'vue-i18n'
 import {
   Archive, ArchiveRestore, ArrowUp, BadgeCheck, Blend, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Eye, FileSpreadsheet, FileText, FileType2, Folder,
   Download, Image as ImageIcon, ImagePlus, Images, KeyRound, Layers3, LayoutGrid, LibraryBig, Lightbulb, List, ListFilter, Paperclip,
-  History, LoaderCircle, Maximize2, MessageSquare, Mic, Pencil, Play, Plus, Power, RefreshCw, RotateCcw, Save, Search, Settings2, SlidersHorizontal, Sparkles, Square, ThumbsDown, ThumbsUp, Trash2, Upload, UserPlus, Video, X,
+  History, LoaderCircle, Maximize2, MessageSquare, Mic, Pencil, Play, Plus, Power, RefreshCw, RotateCcw, Save, Search, Settings2, SlidersHorizontal, Sparkles, Square, ThumbsDown, ThumbsUp, Trash2, Upload, UserPlus, Video, X, Zap,
 } from 'lucide-vue-next'
 import AssetGrid from '../components/AssetGrid.vue'
 import CommerceGallery from '../components/CommerceGallery.vue'
@@ -458,6 +459,7 @@ const assistantMenuOpen = ref(false)
 const assistants = ref<AssistantOption[]>([])
 const assistantId = ref('')
 const chatPluginId = ref('')
+const agentMode = ref(false)
 const creationPluginId = ref('')
 const attachments = ref<StudioAsset[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -1002,7 +1004,7 @@ async function submitMessage() {
   await nextTick()
   resizeComposer()
   try {
-    await store.sendMessage(content, { model: model.value, assistantId: assistantId.value || undefined, pluginId: chatPluginId.value || undefined, assetIds: pendingAttachments.map((asset) => asset.id) })
+    await store.sendMessage(content, { model: model.value, assistantId: assistantId.value || undefined, pluginId: chatPluginId.value || undefined, assetIds: pendingAttachments.map((asset) => asset.id), agentMode: agentMode.value })
     await scrollThreadToBottom()
   } catch (reason) {
     if (reason instanceof ChatSendError && reason.restoreDraft) {

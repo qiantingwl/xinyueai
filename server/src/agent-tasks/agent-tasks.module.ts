@@ -17,5 +17,6 @@ import { AdminWebSearchController } from './admin-web-search.controller'
   imports: [BullModule.registerQueue({ name: 'agent-task' }), GenerationsModule, ProvidersModule],
   controllers: [AgentTasksController, AdminAgentTasksController, AdminWebSearchController],
   providers: [AgentTasksService, AgentSchedulesService, AgentTasksProcessor, AgentModelService, AgentToolsService, WebSearchService, AdminGuard],
+  exports: [AgentToolsService, WebSearchService],
 })
 export class AgentTasksModule {}

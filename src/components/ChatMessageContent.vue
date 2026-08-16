@@ -20,6 +20,11 @@ const tokens = computed(() => marked.lexer(props.content, { gfm: true, breaks: t
 
 function renderToken(token: Token) {
   const html = marked.parser([token], { gfm: true, breaks: true })
-  return DOMPurify.sanitize(String(html), { USE_PROFILES: { html: true } })
+  return DOMPurify.sanitize(String(html), {
+    USE_PROFILES: { html: true },
+    ADD_TAGS: ['img'],
+    ADD_ATTR: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+    ALLOW_DATA_ATTR: false,
+  })
 }
 </script>

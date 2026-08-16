@@ -326,7 +326,7 @@ export const useStudioStore = defineStore('studio', {
       const project = this.projects.find((item) => item.id === projectId)
       if (project) project.members = project.members.filter((member) => member.userId !== userId)
     },
-    async sendMessage(content: string, input: { model: string; assetIds?: string[]; assistantId?: string; pluginId?: string }) {
+    async sendMessage(content: string, input: { model: string; assetIds?: string[]; assistantId?: string; pluginId?: string; agentMode?: boolean }) {
       const trimmed = content.trim()
       if (!trimmed) return
       let messagePersisted = false
@@ -343,7 +343,7 @@ export const useStudioStore = defineStore('studio', {
         const userMessage = await api<ServerMessage>(`/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ content: trimmed, assetIds: input.assetIds || [] }) })
         messagePersisted = true
         if (this.currentConversationId === conversationId) this.messages.push({ id: userMessage.id, role: 'user', content: trimmed, createdAt: Date.parse(userMessage.createdAt), attachmentIds: input.assetIds })
-        const job = await api<ServerJob>('/generations', { method: 'POST', body: JSON.stringify({ kind: 'CHAT', prompt: trimmed, model: input.model, projectId: this.currentProjectId || undefined, conversationId, options: { ...(input.assistantId ? { assistantId: input.assistantId } : {}), ...(input.pluginId ? { pluginId: input.pluginId } : {}) }, idempotencyKey: idempotencyKey('chat') }) })
+        const job = await api<ServerJob>('/generations', { method: 'POST', body: JSON.stringify({ kind: 'CHAT', prompt: trimmed, model: input.model, projectId: this.currentProjectId || undefined, conversationId, options: { ...(input.assistantId ? { assistantId: input.assistantId } : {}), ...(input.pluginId ? { pluginId: input.pluginId } : {}), ...(input.agentMode ? { agentMode: true } : {}) }, idempotencyKey: idempotencyKey('chat') }) })
         jobId = job.id
         if (this.currentConversationId === conversationId) this.activeJobId = job.id
         const pendingId = `stream:${job.id}`

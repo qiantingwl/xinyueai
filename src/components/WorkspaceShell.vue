@@ -437,7 +437,20 @@ const apiCredentials = ref<ApiCredential[]>([])
 const credentialEditor = ref<CredentialEditor | null>(null)
 const credentialSaving = ref(false)
 const credentialError = ref('')
-const publicSettings = reactive({ userByokEnabled: true, rechargeEnabled: false, subscriptionsEnabled: true, trialEnabled: false, currency: 'CNY' })
+const publicSettings = reactive({
+  userByokEnabled: true,
+  rechargeEnabled: false,
+  subscriptionsEnabled: true,
+  trialEnabled: false,
+  currency: 'CNY',
+  sidebarCreationEnabled: true,
+  sidebarCommerceEnabled: true,
+  sidebarOfficeEnabled: true,
+  sidebarPromptsEnabled: true,
+  sidebarPluginsEnabled: true,
+  sidebarProjectsEnabled: true,
+  sidebarAssetsEnabled: true,
+})
 const rechargePackages = ref<RechargePackage[]>([])
 const rechargeOrders = ref<RechargeOrder[]>([])
 const rechargeMessage = ref('')
@@ -1161,15 +1174,27 @@ async function logout() {
 }
 
 const externalIconMap: Record<string, Component> = { code: Code2, 'book-open': BookOpen, webhook: Webhook, 'key-round': KeyRound, 'life-buoy': LifeBuoy, 'external-link': ExternalLink }
-const navItems = computed<WorkspaceNavItem[]>(() => [
-  { key: 'chat', mode: 'chat', label: t('workspace.newChat'), icon: SquarePen, to: '/chat', external: false, openNewTab: false },
-  { key: 'creation', mode: 'images', activeModes: ['images', 'videos'], label: t('workspace.creation'), icon: ImageIcon, to: '/image', external: false, openNewTab: false },
-  { key: 'commerce', mode: 'commerce', label: t('workspace.commerce'), icon: ShoppingBag, to: '/commerce', external: false, openNewTab: false },
-  { key: 'office', mode: 'office', label: t('workspace.office'), icon: BriefcaseBusiness, to: '/office', external: false, openNewTab: false },
-  { key: 'prompts', mode: 'prompts', label: t('workspace.prompts'), icon: LibraryBig, to: '/prompts', external: false, openNewTab: false },
-  { key: 'plugins', mode: 'plugins', label: t('workspace.plugins'), icon: Blocks, to: '/plugins', external: false, openNewTab: false },
-  { key: 'projects', mode: 'projects', label: t('workspace.projects'), icon: Folder, to: '/projects', external: false, openNewTab: false },
-  { key: 'assets', mode: 'assets', label: t('workspace.assets'), icon: Files, to: '/files', external: false, openNewTab: false },
-  ...externalLinks.value.map((item) => ({ key: `external-${item.key}`, mode: 'api' as const, label: item.name, icon: externalIconMap[item.icon] || ExternalLink, to: item.url, external: true, openNewTab: item.openNewTab })),
-])
+const navItems = computed<WorkspaceNavItem[]>(() => {
+  const visibility: Record<string, boolean> = {
+    creation: publicSettings.sidebarCreationEnabled,
+    commerce: publicSettings.sidebarCommerceEnabled,
+    office: publicSettings.sidebarOfficeEnabled,
+    prompts: publicSettings.sidebarPromptsEnabled,
+    plugins: publicSettings.sidebarPluginsEnabled,
+    projects: publicSettings.sidebarProjectsEnabled,
+    assets: publicSettings.sidebarAssetsEnabled,
+  }
+  const items: WorkspaceNavItem[] = [
+    { key: 'chat', mode: 'chat', label: t('workspace.newChat'), icon: SquarePen, to: '/chat', external: false, openNewTab: false },
+    { key: 'creation', mode: 'images', activeModes: ['images', 'videos'], label: t('workspace.creation'), icon: ImageIcon, to: '/image', external: false, openNewTab: false },
+    { key: 'commerce', mode: 'commerce', label: t('workspace.commerce'), icon: ShoppingBag, to: '/commerce', external: false, openNewTab: false },
+    { key: 'office', mode: 'office', label: t('workspace.office'), icon: BriefcaseBusiness, to: '/office', external: false, openNewTab: false },
+    { key: 'prompts', mode: 'prompts', label: t('workspace.prompts'), icon: LibraryBig, to: '/prompts', external: false, openNewTab: false },
+    { key: 'plugins', mode: 'plugins', label: t('workspace.plugins'), icon: Blocks, to: '/plugins', external: false, openNewTab: false },
+    { key: 'projects', mode: 'projects', label: t('workspace.projects'), icon: Folder, to: '/projects', external: false, openNewTab: false },
+    { key: 'assets', mode: 'assets', label: t('workspace.assets'), icon: Files, to: '/files', external: false, openNewTab: false },
+    ...externalLinks.value.map((item) => ({ key: `external-${item.key}`, mode: 'api' as const, label: item.name, icon: externalIconMap[item.icon] || ExternalLink, to: item.url, external: true, openNewTab: item.openNewTab })),
+  ]
+  return items.filter((item) => visibility[item.key] !== false)
+})
 </script>
