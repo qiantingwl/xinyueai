@@ -18,5 +18,6 @@ import { PublicRecommendationsController } from './public-recommendations.contro
   imports: [BullModule.registerQueue({ name: 'agent-task' }), GenerationsModule, ProvidersModule, WebSearchModule],
   controllers: [AgentTasksController, AdminAgentTasksController, AdminWebSearchController, PublicRecommendationsController],
   providers: [AgentTasksService, AgentSchedulesService, AgentTasksProcessor, AgentModelService, AgentToolsService, AdminGuard],
+  exports: [AgentToolsService],
 })
 export class AgentTasksModule {}

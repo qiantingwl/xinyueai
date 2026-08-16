@@ -24,6 +24,23 @@ npm run dev
 
 The API listens on `http://localhost:3100/v1`. The frontend proxies `/v1` to it.
 
+## Installation API
+
+When `DATABASE_URL` is missing, unreachable, or no active administrator exists,
+the server starts in restricted installation mode. Only `/v1/health` and
+`/v1/install/*` are available. Open the frontend `/install` route and use the
+installation key printed in the API log.
+
+The installer validates PostgreSQL and Redis, runs `prisma migrate deploy`,
+creates the first `SUPER_ADMIN`, and writes runtime settings to `.env`. Use
+`INSTALL_ENV_PATH` to place this file on persistent storage and
+`INSTALL_ENV_OVERRIDE=true` when the persisted values should override container
+environment defaults. `INSTALL_AUTO_RESTART=true` exits the API after a
+successful install so a process supervisor can restart it in application mode.
+After the first administrator is created, `INSTALL_COMPLETED=true` permanently
+locks configuration changes through the installer. A later database outage
+shows a maintenance state instead of reopening database setup.
+
 ## Production checklist
 
 1. Replace every development credential in `.env`.
