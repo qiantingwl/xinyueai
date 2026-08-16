@@ -10,6 +10,8 @@ export interface PublicCatalogSettings {
   sidebarPluginsEnabled: boolean
   sidebarProjectsEnabled: boolean
   sidebarAssetsEnabled: boolean
+  chatUiPreset: 'gpt' | 'doubao' | 'qianwen' | 'kimi'
+  chatHomeContent: ChatHomeContent
   registrationEnabled: boolean
   emailLoginEnabled: boolean
   emailVerifyEnabled: boolean
@@ -26,6 +28,27 @@ export interface PublicCatalogSettings {
   currency: string
 }
 
+export interface ChatHomeContent {
+  doubaoRecommendations: Array<{ title: string; prompt: string; targetUrl?: string }>
+  qianwenBanners: Array<{ title: string; description: string; buttonText: string; imageUrl: string; targetUrl: string }>
+  kimiProject: { label: string; targetUrl: string }
+}
+type RecommendationResponse = { enabled?: boolean; items?: Array<{ title: string; prompt: string; targetUrl?: string }> }
+
+const defaultChatHomeContent: ChatHomeContent = {
+  doubaoRecommendations: [
+    { title: '热点：北语教授刘宗迪称《山海经》并非怪物图鉴', prompt: '请介绍这个热点，并说明相关观点和背景。', targetUrl: '' },
+    { title: '语言模型的训练数据如何影响 AI 回答的准确性和多样性？', prompt: '语言模型的训练数据如何影响 AI 回答的准确性和多样性？', targetUrl: '' },
+    { title: '长期喝全糖饮品对身体有哪些影响？', prompt: '长期喝全糖饮品对身体有哪些影响？', targetUrl: '' },
+    { title: '有哪些训练方法能让猫听懂指令？', prompt: '有哪些训练方法能让猫听懂指令？', targetUrl: '' },
+  ],
+  qianwenBanners: [
+    { title: 'Xinyue 办公助理上线', description: '解锁本地任务能力，多格式交付', buttonText: '立即体验', imageUrl: '', targetUrl: '/office' },
+    { title: 'Xinyue 输入法 App 全新上线', description: '说话即成稿，支持多种语言', buttonText: '立即下载体验', imageUrl: '', targetUrl: '/office' },
+  ],
+  kimiProject: { label: '选择项目', targetUrl: '/projects' },
+}
+
 const emptySettings: PublicCatalogSettings = {
   siteName: 'Xinyue AI',
   sidebarCreationEnabled: true,
@@ -35,6 +58,8 @@ const emptySettings: PublicCatalogSettings = {
   sidebarPluginsEnabled: true,
   sidebarProjectsEnabled: true,
   sidebarAssetsEnabled: true,
+  chatUiPreset: 'gpt',
+  chatHomeContent: defaultChatHomeContent,
   registrationEnabled: false,
   emailLoginEnabled: false,
   emailVerifyEnabled: false,
@@ -73,7 +98,20 @@ export const useCatalogStore = defineStore('catalog', {
       try {
         pendingLoad ||= api<Partial<PublicCatalogSettings>>('/catalog/settings')
         const settings = await pendingLoad
-        this.settings = { ...emptySettings, ...settings }
+        const content: Partial<ChatHomeContent> = settings.chatHomeContent || {}
+        const rawKimiProject = content.kimiProject
+        this.settings = {
+          ...emptySettings,
+          ...settings,
+          chatHomeContent: {
+            ...defaultChatHomeContent,
+            ...content,
+            doubaoRecommendations: Array.isArray(content.doubaoRecommendations) ? content.doubaoRecommendations : defaultChatHomeContent.doubaoRecommendations,
+            qianwenBanners: Array.isArray(content.qianwenBanners) ? content.qianwenBanners : defaultChatHomeContent.qianwenBanners,
+            kimiProject: rawKimiProject && typeof rawKimiProject === 'object' ? { ...defaultChatHomeContent.kimiProject, ...rawKimiProject } : defaultChatHomeContent.kimiProject,
+          }
+        }
+        void this.refreshRecommendations()
       } catch {
         this.settings = { ...emptySettings }
       } finally {
@@ -82,6 +120,11 @@ export const useCatalogStore = defineStore('catalog', {
         this.loading = false
       }
       return this.settings
+    },
+    async refreshRecommendations() {
+      const result = await api<RecommendationResponse>('/catalog/recommendations').catch(() => ({ items: [] }))
+      const items = Array.isArray(result.items) ? result.items.filter((item) => item && typeof item.title === 'string' && item.title.trim()) : []
+      if (items.length) this.settings.chatHomeContent.doubaoRecommendations = items
     },
   },
 })

@@ -58,10 +58,10 @@
             display: -webkit-box;
             width: 100%;
             overflow: hidden;
-            font-size: 12px;
             text-overflow: ellipsis;
             -webkit-line-clamp: 1;
             line-clamp: 1;
+            font-size: 12px;
             -webkit-box-orient: vertical;
           }
 
@@ -117,8 +117,8 @@
       border: 1px solid var(--art-card-border);
       border-radius: 0 15px 15px 0;
       opacity: 0;
-      transition: opacity 0.2s;
       transform: translateY(-50%);
+      transition: opacity 0.2s;
 
       &:hover {
         .art-svg-icon {
@@ -172,8 +172,8 @@
     box-sizing: border-box;
     // 防止菜单内的滚动影响整个页面滚动
     overscroll-behavior: contain;
-    border-right: 0;
     scrollbar-width: none;
+    border-right: 0;
     -ms-scroll-chaining: contain;
 
     &::-webkit-scrollbar {

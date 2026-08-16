@@ -1,67 +1,9 @@
 .install-page { background: #f5f6f7; color: #17181a; min-height: 100dvh; }
 .install-header { align-items: center; background: #fff; border-bottom: 1px solid #e3e5e8; display: flex; height: 64px; justify-content: space-between; padding: 0 32px; }
-.install-header > span { color: #6b7078; font-size: 13px; }
-.install-brand { align-items: center; display: flex; gap: 10px; }
-.install-brand > span { align-items: center; background: #191b1f; border-radius: 6px; color: #fff; display: flex; font-weight: 800; height: 30px; justify-content: center; width: 30px; }
-.install-brand strong { font-size: 16px; }
+.install-header small { color: #70757d; }.install-brand { align-items: center; display: flex; gap: 10px; }.install-brand > span { align-items: center; background: #191b1f; border-radius: 6px; color: #fff; display: flex; font-weight: 800; height: 30px; justify-content: center; width: 30px; }
 .install-layout { display: grid; grid-template-columns: 270px minmax(0, 680px); margin: 0 auto; max-width: 1050px; min-height: calc(100dvh - 64px); padding: 70px 24px; }
-.install-progress { border-right: 1px solid #dfe2e5; display: flex; flex-direction: column; min-height: 570px; padding: 4px 38px 4px 0; }
-.install-progress > div > strong { font-size: 19px; }
-.install-progress > div > p { color: #747980; font-size: 12px; line-height: 1.6; margin: 8px 0 34px; }
-.install-progress ol { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
-.install-progress li { align-items: center; color: #858a91; display: grid; gap: 12px; grid-template-columns: 32px 1fr; min-height: 58px; }
-.install-progress li > span { align-items: center; border: 1px solid #d8dbdf; border-radius: 50%; display: flex; height: 30px; justify-content: center; width: 30px; }
-.install-progress li > div { display: grid; }
-.install-progress li strong { font-size: 13px; }
-.install-progress li small { font-size: 10px; margin-top: 3px; }
-.install-progress li.active { color: #17181a; }
-.install-progress li.active > span { background: #17181a; border-color: #17181a; color: #fff; }
-.install-progress li.done > span { background: #e0f4e8; border-color: #b7dfc6; color: #19864a; }
-.install-progress footer { align-items: center; color: #7a7f86; display: flex; font-size: 10px; gap: 7px; margin-top: auto; }
-.install-content { padding: 0 0 30px 64px; }
-.install-content > header > span { color: #737982; font-size: 11px; font-weight: 650; }
-.install-content > header h1, .install-complete h1 { font-size: 30px; letter-spacing: 0; margin: 12px 0 9px; }
-.install-content > header p, .install-complete > p { color: #686e76; font-size: 13px; line-height: 1.7; margin: 0; max-width: 570px; }
-.install-form { display: grid; gap: 17px; margin-top: 34px; }
-.install-form label:not(.install-toggle) { display: grid; gap: 7px; }
-.install-form label > span { font-size: 12px; font-weight: 650; }
-.install-form label em { color: #8b9096; font-size: 10px; font-style: normal; font-weight: 400; }
-.install-form label small { color: #858a91; font-size: 10px; }
-.install-form input:not([type="checkbox"]) { background: #fff; border: 1px solid #d8dbdf; border-radius: 6px; color: #17181a; height: 44px; outline: 0; padding: 0 12px; width: 100%; }
-.install-form input:focus { border-color: #636a74; box-shadow: 0 0 0 3px rgba(34, 38, 43, .07); }
-.install-grid { display: grid; gap: 14px; grid-template-columns: 1fr 1.35fr; }
-.install-note { align-items: center; background: #edf3f8; border: 1px solid #d4e1ea; border-radius: 6px; color: #53626f; display: flex; font-size: 11px; gap: 9px; line-height: 1.5; padding: 10px 12px; }
-.install-toggle { align-items: center; background: #fff; border: 1px solid #dfe2e5; border-radius: 6px; display: flex; gap: 11px; padding: 11px 13px; }
-.install-toggle input { accent-color: #17181a; height: 16px; width: 16px; }
-.install-toggle > span { display: grid; }
-.install-toggle small { font-weight: 400; margin-top: 3px; }
-.install-form > button, .install-actions button, .install-complete button { align-items: center; background: #191b1f; border: 0; border-radius: 6px; color: #fff; display: flex; font-size: 12px; font-weight: 650; gap: 7px; height: 42px; justify-content: center; padding: 0 17px; }
-.install-form > button { justify-self: end; min-width: 180px; }
-.install-form button:disabled { cursor: wait; opacity: .55; }
-.install-actions { display: flex; justify-content: space-between; }
-.install-actions .secondary { background: transparent; border: 1px solid #d5d8dc; color: #4c5158; }
-.install-error { background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; color: #be123c; font-size: 11px; margin: 0; padding: 9px 11px; }
-.install-summary { border: 1px solid #dfe2e5; border-radius: 6px; display: grid; grid-template-columns: 1fr 1fr; }
-.install-summary > div { align-items: center; display: grid; gap: 9px; grid-template-columns: 20px 1fr; min-width: 0; padding: 12px; }
-.install-summary > div + div { border-left: 1px solid #dfe2e5; }
-.install-summary span { display: grid; min-width: 0; }
-.install-summary strong, .install-summary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.install-summary strong { font-size: 12px; }.install-summary small { color: #858a91; font-size: 10px; margin-top: 3px; }
-.install-loading { align-items: center; color: #747980; display: flex; gap: 10px; min-height: 280px; }
-.install-loading svg, .install-spin { animation: install-spin 1s linear infinite; }
-.install-locked { align-items: flex-start; display: flex; flex-direction: column; padding-top: 32px; }
-.install-locked > span { align-items: center; background: #fff1f2; border-radius: 50%; color: #be123c; display: flex; height: 54px; justify-content: center; width: 54px; }
-.install-locked h1 { font-size: 30px; letter-spacing: 0; margin: 18px 0 9px; }
-.install-locked > p { color: #be123c; font-size: 12px; line-height: 1.6; margin: 0; }
-.install-locked > div { background: #fff; border: 1px solid #dfe2e5; border-radius: 6px; color: #626871; font-size: 12px; line-height: 1.7; margin: 26px 0 18px; max-width: 560px; padding: 13px 15px; }
-.install-locked code { color: #25282d; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
-.install-locked button { align-items: center; background: #191b1f; border: 0; border-radius: 6px; color: #fff; display: flex; font-size: 12px; font-weight: 650; gap: 7px; height: 42px; justify-content: center; min-width: 130px; padding: 0 17px; }
-.install-locked button:disabled { cursor: wait; opacity: .55; }
-.install-complete { align-items: flex-start; display: flex; flex-direction: column; padding-top: 40px; }
-.install-complete > span { align-items: center; background: #dff4e7; border-radius: 50%; color: #19864a; display: flex; height: 54px; justify-content: center; width: 54px; }
-.install-complete > div { background: #fff; border: 1px solid #dfe2e5; border-radius: 6px; display: grid; margin: 28px 0 20px; min-width: 320px; padding: 12px 14px; }
-.install-complete > div strong { font-size: 13px; }.install-complete > div small { color: #7a7f86; font-size: 11px; margin-top: 4px; }
-.install-complete > button { min-width: 190px; }.install-complete > a { color: #666c74; font-size: 11px; margin: 14px 0 0 48px; }
+.install-progress { border-right: 1px solid #dfe2e5; display: flex; flex-direction: column; min-height: 570px; padding-right: 38px; }.install-progress p { color: #747980; font-size: 12px; line-height: 1.6; }.install-progress ol { display: grid; gap: 6px; list-style: none; margin: 30px 0; padding: 0; }.install-progress li { align-items: center; color: #858a91; display: grid; gap: 12px; grid-template-columns: 32px 1fr; min-height: 58px; }.install-progress li > span { align-items: center; border: 1px solid #d8dbdf; border-radius: 50%; display: flex; height: 30px; justify-content: center; width: 30px; }.install-progress li div { display: grid; }.install-progress li small { font-size: 10px; }.install-progress li.active { color: #17181a; }.install-progress li.active > span { background: #17181a; border-color: #17181a; color: #fff; }.install-progress li.done > span { background: #e0f4e8; border-color: #b7dfc6; color: #19864a; }.install-progress footer { align-items: center; color: #7a7f86; display: flex; font-size: 10px; gap: 7px; margin-top: auto; }
+.install-content { padding: 0 0 30px 64px; }.install-content > header > span { color: #737982; font-size: 11px; font-weight: 650; }.install-content h1 { font-size: 30px; letter-spacing: 0; margin: 12px 0 9px; }.install-content header p, .install-complete > p { color: #686e76; font-size: 13px; line-height: 1.7; margin: 0; }.install-form { display: grid; gap: 17px; margin-top: 34px; }.install-form label:not(.install-toggle) { display: grid; gap: 7px; }.install-form label > span { font-size: 12px; font-weight: 650; }.install-form label small { color: #858a91; font-size: 10px; }.install-form label em { color: #8b9096; font-size: 10px; font-style: normal; font-weight: 400; }.install-form input:not([type=checkbox]) { background: #fff; border: 1px solid #d8dbdf; border-radius: 6px; color: #17181a; height: 44px; outline: 0; padding: 0 12px; width: 100%; }.install-form input:focus { border-color: #636a74; box-shadow: 0 0 0 3px rgba(34,38,43,.07); }.install-grid { display: grid; gap: 14px; grid-template-columns: 1fr 1.35fr; }.install-note { align-items: center; background: #edf3f8; border: 1px solid #d4e1ea; border-radius: 6px; color: #53626f; display: flex; font-size: 11px; gap: 9px; line-height: 1.5; padding: 10px 12px; }.install-toggle { align-items: center; background: #fff; border: 1px solid #dfe2e5; border-radius: 6px; display: flex; gap: 11px; padding: 11px 13px; }.install-toggle > span { display: grid; }.install-actions { display: flex; justify-content: space-between; }.install-form button, .install-locked button, .install-complete button { align-items: center; background: #191b1f; border: 0; border-radius: 6px; color: #fff; display: flex; font-size: 12px; font-weight: 650; gap: 7px; height: 42px; justify-content: center; padding: 0 17px; }.install-form > button { justify-self: end; min-width: 180px; }.install-actions .secondary { background: transparent; border: 1px solid #d5d8dc; color: #4c5158; }.install-error { background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; color: #be123c; font-size: 11px; margin: 0; padding: 9px 11px; }.install-loading { align-items: center; color: #747980; display: flex; gap: 10px; min-height: 280px; }.install-spin, .install-loading svg { animation: install-spin 1s linear infinite; }.install-locked, .install-complete { align-items: flex-start; display: flex; flex-direction: column; padding-top: 34px; }.install-locked > span, .install-complete > span { align-items: center; background: #fff1f2; border-radius: 50%; color: #be123c; display: flex; height: 54px; justify-content: center; width: 54px; }.install-complete > span { background: #dff4e7; color: #19864a; }.install-locked > div, .install-complete > div { background: #fff; border: 1px solid #dfe2e5; border-radius: 6px; margin: 20px 0; padding: 13px 15px; }.install-complete > div { display: grid; min-width: 320px; }.install-complete > div small { color: #7a7f86; margin-top: 3px; }.install-complete a { color: #666c74; font-size: 11px; margin: 14px 0 0 48px; }
 @keyframes install-spin { to { transform: rotate(360deg); } }
-@media (max-width: 760px) { .install-header { padding: 0 18px; }.install-layout { display: block; padding: 28px 18px; }.install-progress { border: 0; min-height: auto; padding: 0; }.install-progress > div, .install-progress footer, .install-progress li div { display: none; }.install-progress ol { display: grid; grid-template-columns: repeat(3, 1fr); margin-bottom: 30px; }.install-progress li { display: flex; justify-content: center; min-height: 32px; }.install-progress li > span { height: 28px; width: 28px; }.install-content { padding: 0; }.install-grid, .install-summary { grid-template-columns: 1fr; }.install-summary > div + div { border-left: 0; border-top: 1px solid #dfe2e5; } }
-@media (prefers-reduced-motion: reduce) { .install-loading svg, .install-form button svg, .install-complete button svg { animation: none; } }
+@media (max-width: 760px) { .install-header { padding: 0 18px; }.install-layout { display: block; padding: 28px 18px; }.install-progress { border: 0; min-height: auto; padding: 0; }.install-progress > div, .install-progress footer, .install-progress li div { display: none; }.install-progress ol { grid-template-columns: repeat(3, 1fr); margin: 0 0 30px; }.install-progress li { display: flex; justify-content: center; min-height: 32px; }.install-content { padding: 0; }.install-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .install-spin, .install-loading svg { animation: none; } }

@@ -14,27 +14,29 @@
           <div class="resource-heading">
             <span class="resource-icon"><ArtSvgIcon :icon="config.icon" /></span>
             <div>
-            <strong>{{ xt(config.title) }}</strong>
-            <p>{{ xt(config.description) }}</p>
+              <strong>{{ xt(config.title) }}</strong>
+              <p>{{ xt(config.description) }}</p>
             </div>
           </div>
         </template>
         <template #right>
           <div class="resource-actions">
-          <ElTag effect="plain">{{ filteredRows.length }}{{ xt('条记录') }}</ElTag>
-            <ElButton v-if="resourceKey === 'promptTemplates'" @click="restorePromptTemplates"
-              >{{ xt('恢复默认模板') }}</ElButton
-            >
-            <ElButton v-if="resourceKey === 'promptLibrary'" @click="openPromptSources"
-              >{{ xt('来源配置') }}</ElButton
-            >
-            <ElButton v-if="resourceKey === 'promptLibrary'" @click="refreshPromptLibrary"
-              >{{ xt('刷新提示词源') }}</ElButton
-            >
-            <ElButton v-if="resourceKey === 'moderationRules'" @click="openModerationPolicy"
-              >{{ xt('审核策略') }}</ElButton
-            >
-            <ElButton v-if="resourceKey === 'alerts'" @click="evaluateAlerts">{{ xt('立即检测') }}</ElButton>
+            <ElTag effect="plain">{{ filteredRows.length }}{{ xt('条记录') }}</ElTag>
+            <ElButton v-if="resourceKey === 'promptTemplates'" @click="restorePromptTemplates">{{
+              xt('恢复默认模板')
+            }}</ElButton>
+            <ElButton v-if="resourceKey === 'promptLibrary'" @click="openPromptSources">{{
+              xt('来源配置')
+            }}</ElButton>
+            <ElButton v-if="resourceKey === 'promptLibrary'" @click="refreshPromptLibrary">{{
+              xt('刷新提示词源')
+            }}</ElButton>
+            <ElButton v-if="resourceKey === 'moderationRules'" @click="openModerationPolicy">{{
+              xt('审核策略')
+            }}</ElButton>
+            <ElButton v-if="resourceKey === 'alerts'" @click="evaluateAlerts">{{
+              xt('立即检测')
+            }}</ElButton>
             <ElButton v-if="editorConfig?.canCreate" type="primary" @click="openEditor()">
               <ArtSvgIcon icon="ri:add-line" />
               {{ xt(editorConfig.createLabel || '新增') }}
@@ -95,12 +97,17 @@
             <span v-else>{{ displayValue(valueAt(row, column.key)) }}</span>
           </template>
         </ElTableColumn>
-        <ElTableColumn :label="xt('操作')" :width="isCompact ? 150 : 230" fixed="right" align="right">
+        <ElTableColumn
+          :label="xt('操作')"
+          :width="isCompact ? 150 : 230"
+          fixed="right"
+          align="right"
+        >
           <template #default="{ row }">
             <ElButton link type="primary" @click="showDetail(row)">{{ xt('查看') }}</ElButton>
-            <ElButton v-if="editorConfig?.canEdit" link type="primary" @click="openEditor(row)"
-              >{{ xt('编辑') }}</ElButton
-            >
+            <ElButton v-if="editorConfig?.canEdit" link type="primary" @click="openEditor(row)">{{
+              xt('编辑')
+            }}</ElButton>
             <ElButton
               v-if="resourceKey === 'projects'"
               link
@@ -122,16 +129,24 @@
               @click="reviewToolApproval(row, 'REJECTED')"
               >{{ xt('拒绝') }}</ElButton
             >
-            <ElButton v-if="resourceKey === 'support'" link type="primary" @click="openTicket(row)"
+            <ElButton
+              v-if="resourceKey === 'support'"
+              link
+              type="primary"
+              @click="openTicket(row)"
               >{{ xt('处理') }}</ElButton
             >
-            <ElButton v-if="canCancel(row)" link type="warning" @click="cancelJob(row)"
-              >{{ xt('取消') }}</ElButton
-            >
-            <ElButton v-if="canRetry(row)" link type="primary" @click="retryJob(row)"
-              >{{ xt('重试') }}</ElButton
-            >
-            <ElButton v-if="resourceKey === 'assets'" link type="danger" @click="removeAsset(row)"
+            <ElButton v-if="canCancel(row)" link type="warning" @click="cancelJob(row)">{{
+              xt('取消')
+            }}</ElButton>
+            <ElButton v-if="canRetry(row)" link type="primary" @click="retryJob(row)">{{
+              xt('重试')
+            }}</ElButton>
+            <ElButton
+              v-if="resourceKey === 'assets'"
+              link
+              type="danger"
+              @click="removeAsset(row)"
               >{{ xt('删除') }}</ElButton
             >
             <ElButton
@@ -165,7 +180,9 @@
               <template #dropdown
                 ><ElDropdownMenu
                   ><ElDropdownItem command="APPROVED">{{ xt('批准') }}</ElDropdownItem
-                  ><ElDropdownItem command="DISMISSED">{{ xt('驳回') }}</ElDropdownItem></ElDropdownMenu
+                  ><ElDropdownItem command="DISMISSED">{{
+                    xt('驳回')
+                  }}</ElDropdownItem></ElDropdownMenu
                 ></template
               >
             </ElDropdown>
@@ -200,16 +217,33 @@
       </ElDescriptions>
       <template v-if="resourceKey === 'knowledgeBases' && detailRow">
         <ElDivider content-position="left">{{ xt('绑定文档') }}</ElDivider>
-        <ElTable v-if="detailRow.assets?.length" :data="detailRow.assets" size="small" row-key="assetId">
-          <ElTableColumn :label="xt('文件名')" min-width="190"><template #default="{ row }">{{ row.asset?.name || row.assetId }}</template></ElTableColumn>
-          <ElTableColumn :label="xt('类型')" min-width="130"><template #default="{ row }">{{ row.asset?.mimeType || '-' }}</template></ElTableColumn>
+        <ElTable
+          v-if="detailRow.assets?.length"
+          :data="detailRow.assets"
+          size="small"
+          row-key="assetId"
+        >
+          <ElTableColumn :label="xt('文件名')" min-width="190"
+            ><template #default="{ row }">{{
+              row.asset?.name || row.assetId
+            }}</template></ElTableColumn
+          >
+          <ElTableColumn :label="xt('类型')" min-width="130"
+            ><template #default="{ row }">{{ row.asset?.mimeType || '-' }}</template></ElTableColumn
+          >
           <ElTableColumn :label="xt('分块')" width="80" prop="chunkCount" />
-          <ElTableColumn :label="xt('状态')" width="90"><template #default="{ row }"><ElTag :type="statusType(row.status)">{{ statusText(row.status) }}</ElTag></template></ElTableColumn>
+          <ElTableColumn :label="xt('状态')" width="90"
+            ><template #default="{ row }"
+              ><ElTag :type="statusType(row.status)">{{ statusText(row.status) }}</ElTag></template
+            ></ElTableColumn
+          >
         </ElTable>
         <ElEmpty v-else :description="xt('尚未绑定文档')" :image-size="64" />
         <ElDivider content-position="left">{{ xt('关联助手') }}</ElDivider>
         <div v-if="detailRow.assistants?.length" class="knowledge-assistant-list">
-          <ElTag v-for="item in detailRow.assistants" :key="item.assistantId" effect="plain">{{ item.assistant?.name || item.assistantId }}</ElTag>
+          <ElTag v-for="item in detailRow.assistants" :key="item.assistantId" effect="plain">{{
+            item.assistant?.name || item.assistantId
+          }}</ElTag>
         </div>
         <ElEmpty v-else :description="xt('尚未关联助手')" :image-size="64" />
       </template>
@@ -218,7 +252,9 @@
     <ElDrawer
       v-model="editorVisible"
       :title="
-        editingRow ? `${xt('编辑')}${xt(config.title)}` : xt(editorConfig?.createLabel || `新增${config.title}`)
+        editingRow
+          ? `${xt('编辑')}${xt(config.title)}`
+          : xt(editorConfig?.createLabel || `新增${config.title}`)
       "
       size="620px"
       destroy-on-close
@@ -297,6 +333,49 @@
           </ElCol>
         </ElRow>
 
+        <template v-if="resourceKey === 'tools'">
+          <ElDivider content-position="left">{{ xt('品牌图标') }}</ElDivider>
+          <div class="tool-icon-editor">
+            <div class="tool-icon-preview">
+              <img
+                v-if="
+                  toolIconPreviewUrl ||
+                  editingRow?.iconAssetId ||
+                  /^https?:\/\//.test(editingRow?.icon || '')
+                "
+                :src="toolIconPreviewUrl || adminMediaUrl(editingRow?.icon)"
+                alt=""
+              />
+              <ArtSvgIcon v-else icon="ri:tools-line" />
+            </div>
+            <div class="tool-icon-controls">
+              <div class="media-row">
+                <ElUpload
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/avif,.jpg,.jpeg,.png,.webp,.gif,.avif"
+                  :on-change="selectToolIcon"
+                >
+                  <ElButton><ArtSvgIcon icon="ri:upload-2-line" />{{ xt('上传图标') }}</ElButton>
+                </ElUpload>
+                <ElButton
+                  v-if="editingRow?.iconAssetId"
+                  type="danger"
+                  plain
+                  @click="removeToolIcon"
+                  >{{ xt('移除上传图标') }}</ElButton
+                >
+                <ElTag v-if="toolIconFile" type="success"
+                  >{{ xt('已选择') }} {{ toolIconFile.name }}</ElTag
+                >
+              </div>
+              <p class="media-help">{{
+                xt('建议使用正方形 PNG 或 WebP；保存后会自动替换上方图标地址。')
+              }}</p>
+            </div>
+          </div>
+        </template>
+
         <template v-if="resourceKey === 'inspirations' || resourceKey === 'imageTools'">
           <ElDivider content-position="left">{{ xt('演示素材') }}</ElDivider>
           <div class="media-editor">
@@ -324,7 +403,9 @@
                   @click="removeInspirationCover"
                   >{{ xt('移除封面') }}</ElButton
                 >
-                <ElTag v-if="coverFile" type="success">{{ xt('已选择') }} {{ coverFile.name }}</ElTag>
+                <ElTag v-if="coverFile" type="success"
+                  >{{ xt('已选择') }} {{ coverFile.name }}</ElTag
+                >
               </div>
             </div>
             <div v-if="editorForm.mode === 'VIDEO'">
@@ -357,7 +438,9 @@
                   {{ xt('已选择') }} {{ previewVideoFile.name }}
                 </ElTag>
               </div>
-              <p class="media-help">{{ xt('支持 MP4、WebM 或 MOV，文件最大 50 MB；上传文件优先于外部视频地址。') }}</p>
+              <p class="media-help">{{
+                xt('支持 MP4、WebM 或 MOV，文件最大 50 MB；上传文件优先于外部视频地址。')
+              }}</p>
             </div>
             <div v-else-if="resourceKey === 'inspirations'">
               <span class="field-label">{{ xt('成组预览图片（最多 30 张）') }}</span>
@@ -400,7 +483,9 @@
       </ElForm>
       <template #footer
         ><ElButton @click="editorVisible = false">{{ xt('取消') }}</ElButton
-        ><ElButton type="primary" :loading="saving" @click="saveResource">{{ xt('保存') }}</ElButton></template
+        ><ElButton type="primary" :loading="saving" @click="saveResource">{{
+          xt('保存')
+        }}</ElButton></template
       >
     </ElDrawer>
 
@@ -440,9 +525,9 @@
                     :key="agent.id"
                     :label="agent.displayName || agent.email"
                     :value="agent.id" /></ElSelect></ElFormItem></ElCol></ElRow
-          ><ElButton type="primary" plain :loading="saving" @click="updateTicket"
-            >{{ xt('更新工单') }}</ElButton
-          ></ElForm
+          ><ElButton type="primary" plain :loading="saving" @click="updateTicket">{{
+            xt('更新工单')
+          }}</ElButton></ElForm
         >
         <ElDivider content-position="left">{{ xt('沟通记录') }}</ElDivider>
         <div class="ticket-messages"
@@ -453,7 +538,8 @@
             :class="{ admin: message.authorType === 'ADMIN' }"
             ><div
               ><strong>{{
-                message.author?.displayName || (message.authorType === 'ADMIN' ? xt('管理员') : xt('用户'))
+                message.author?.displayName ||
+                (message.authorType === 'ADMIN' ? xt('管理员') : xt('用户'))
               }}</strong
               ><time>{{ formatDate(message.createdAt) }}</time></div
             ><p>{{ message.body }}</p></div
@@ -467,9 +553,9 @@
               :rows="4"
               maxlength="10000"
               show-word-limit /></ElFormItem
-          ><ElButton type="primary" :loading="saving" @click="replyTicket"
-            >{{ xt('发送回复') }}</ElButton
-          ></ElForm
+          ><ElButton type="primary" :loading="saving" @click="replyTicket">{{
+            xt('发送回复')
+          }}</ElButton></ElForm
         >
       </template>
     </ElDrawer>
@@ -478,27 +564,39 @@
       <ElForm v-if="moderationPolicy" label-position="top">
         <div class="switch-grid">
           <label
-            ><span><strong>{{ xt('启用内容审核') }}</strong><small>{{ xt('统一控制全部内容入口') }}</small></span
+            ><span
+              ><strong>{{ xt('启用内容审核') }}</strong
+              ><small>{{ xt('统一控制全部内容入口') }}</small></span
             ><ElSwitch v-model="moderationPolicy.enabled"
           /></label>
           <label
-            ><span><strong>{{ xt('扫描聊天') }}</strong><small>{{ xt('发送模型前检查消息') }}</small></span
+            ><span
+              ><strong>{{ xt('扫描聊天') }}</strong
+              ><small>{{ xt('发送模型前检查消息') }}</small></span
             ><ElSwitch v-model="moderationPolicy.scanChat"
           /></label>
           <label
-            ><span><strong>{{ xt('扫描图片提示词') }}</strong><small>{{ xt('创建图片任务前检查') }}</small></span
+            ><span
+              ><strong>{{ xt('扫描图片提示词') }}</strong
+              ><small>{{ xt('创建图片任务前检查') }}</small></span
             ><ElSwitch v-model="moderationPolicy.scanImage"
           /></label>
           <label
-            ><span><strong>{{ xt('扫描商品视觉') }}</strong><small>{{ xt('创建商品图任务前检查') }}</small></span
+            ><span
+              ><strong>{{ xt('扫描商品视觉') }}</strong
+              ><small>{{ xt('创建商品图任务前检查') }}</small></span
             ><ElSwitch v-model="moderationPolicy.scanCommerce"
           /></label>
           <label
-            ><span><strong>{{ xt('审核故障时阻断') }}</strong><small>{{ xt('安全服务异常时拒绝请求') }}</small></span
+            ><span
+              ><strong>{{ xt('审核故障时阻断') }}</strong
+              ><small>{{ xt('安全服务异常时拒绝请求') }}</small></span
             ><ElSwitch v-model="moderationPolicy.failClosed"
           /></label>
           <label
-            ><span><strong>{{ xt('保留内容摘要') }}</strong><small>{{ xt('审核事件中保存受控摘要') }}</small></span
+            ><span
+              ><strong>{{ xt('保留内容摘要') }}</strong
+              ><small>{{ xt('审核事件中保存受控摘要') }}</small></span
             ><ElSwitch v-model="moderationPolicy.retainContent"
           /></label>
         </div>
@@ -520,14 +618,28 @@
       </ElForm>
       <template #footer
         ><ElButton @click="policyVisible = false">{{ xt('取消') }}</ElButton
-        ><ElButton type="primary" :loading="saving" @click="saveModerationPolicy"
-          >{{ xt('保存策略') }}</ElButton
-        ></template
+        ><ElButton type="primary" :loading="saving" @click="saveModerationPolicy">{{
+          xt('保存策略')
+        }}</ElButton></template
       >
     </ElDrawer>
 
-    <ElDrawer v-model="sourceVisible" :title="xt('提示词库来源')" size="720px" destroy-on-close>
+    <ElDrawer
+      v-model="sourceVisible"
+      :title="xt('提示词库来源')"
+      size="min(960px, 96vw)"
+      destroy-on-close
+    >
+      <ElAlert
+        class="source-cache-notice"
+        type="info"
+        :closable="false"
+        :title="
+          xt('图片与视频提示词均从本地缓存读取，系统每 6 小时自动检查更新，也可单独手动刷新。')
+        "
+      />
       <ElTable v-loading="sourceLoading" :data="promptSources" row-key="id">
+        <ElTableColumn :label="xt('类型')" prop="promptTypeLabel" width="72" />
         <ElTableColumn :label="xt('来源')" min-width="180"
           ><template #default="{ row }"
             ><ElInput v-model.trim="row.displayName" maxlength="100" /><small class="source-meta">{{
@@ -547,23 +659,37 @@
         <ElTableColumn :label="xt('启用')" width="90"
           ><template #default="{ row }"><ElSwitch v-model="row.enabled" /></template
         ></ElTableColumn>
-        <ElTableColumn :label="xt('同步状态')" min-width="160"
+        <ElTableColumn :label="xt('缓存状态')" min-width="180"
           ><template #default="{ row }"
-            ><ElTag :type="row.lastError ? 'danger' : 'success'">{{
-              row.lastError ? xt('同步异常') : xt('正常')
+            ><ElTag :type="row.refreshing ? 'warning' : row.lastError ? 'danger' : 'success'">{{
+              row.refreshing ? xt('同步中') : row.lastError ? xt('同步异常') : xt('缓存完整')
             }}</ElTag
-            ><small v-if="row.lastError" class="source-error">{{ row.lastError }}</small></template
+            ><small v-if="row.fetchedAt" class="source-meta"
+              >{{ xt('更新于') }} {{ formatDate(row.fetchedAt) }}</small
+            ><small v-if="row.lastError && !row.refreshing" class="source-error">{{
+              row.lastError
+            }}</small></template
           ></ElTableColumn
         >
-        <ElTableColumn :label="xt('操作')" width="90" align="right"
+        <ElTableColumn :label="xt('操作')" width="138" align="right"
           ><template #default="{ row }"
-            ><ElButton link type="primary" @click="savePromptSource(row)">{{ xt('保存') }}</ElButton></template
+            ><ElButton link :loading="row._refreshing" @click="refreshPromptSource(row)">{{
+              xt('更新缓存')
+            }}</ElButton
+            ><ElButton link type="primary" @click="savePromptSource(row)">{{
+              xt('保存')
+            }}</ElButton></template
           ></ElTableColumn
         >
       </ElTable>
     </ElDrawer>
 
-    <ElDrawer v-model="projectVisible" :title="xt('项目工作流与版本')" size="760px" destroy-on-close>
+    <ElDrawer
+      v-model="projectVisible"
+      :title="xt('项目工作流与版本')"
+      size="760px"
+      destroy-on-close
+    >
       <template v-if="projectDetail">
         <div class="project-audit-head">
           <div
@@ -575,7 +701,9 @@
           }}</ElTag>
         </div>
         <ElDescriptions :column="2" border>
-          <ElDescriptionsItem :label="xt('当前修订')">v{{ projectDetail.revision }}</ElDescriptionsItem>
+          <ElDescriptionsItem :label="xt('当前修订')"
+            >v{{ projectDetail.revision }}</ElDescriptionsItem
+          >
           <ElDescriptionsItem :label="xt('默认模型')">{{
             projectDetail.defaultModel || '-'
           }}</ElDescriptionsItem>
@@ -614,26 +742,114 @@
         <ElDivider content-position="left">{{ xt('编辑工作流') }}</ElDivider>
         <ElForm label-position="top" class="admin-workflow-editor">
           <ElRow :gutter="14">
-            <ElCol :span="8"><ElFormItem :label="xt('状态')"><ElSelect v-model="projectWorkflowForm.workflowStatus" class="wide"><ElOption :label="xt('规划中')" value="PLANNING" /><ElOption :label="xt('进行中')" value="IN_PROGRESS" /><ElOption :label="xt('待审核')" value="REVIEW" /><ElOption :label="xt('已完成')" value="COMPLETED" /><ElOption :label="xt('已归档')" value="ARCHIVED" /></ElSelect></ElFormItem></ElCol>
-            <ElCol :span="8"><ElFormItem :label="xt('默认模型')"><ElSelect v-model="projectWorkflowForm.defaultModel" class="wide" filterable clearable allow-create><ElOption v-for="model in lookups.models" :key="model.id || model.key" :label="model.name || model.key" :value="model.key || model.name" /></ElSelect></ElFormItem></ElCol>
-            <ElCol :span="8"><ElFormItem :label="xt('默认助手')"><ElSelect v-model="projectWorkflowForm.defaultAssistantId" class="wide" filterable clearable><ElOption v-for="assistant in lookups.assistants" :key="assistant.id" :label="assistant.name" :value="assistant.id" /></ElSelect></ElFormItem></ElCol>
+            <ElCol :span="8"
+              ><ElFormItem :label="xt('状态')"
+                ><ElSelect v-model="projectWorkflowForm.workflowStatus" class="wide"
+                  ><ElOption :label="xt('规划中')" value="PLANNING" /><ElOption
+                    :label="xt('进行中')"
+                    value="IN_PROGRESS" /><ElOption :label="xt('待审核')" value="REVIEW" /><ElOption
+                    :label="xt('已完成')"
+                    value="COMPLETED" /><ElOption
+                    :label="xt('已归档')"
+                    value="ARCHIVED" /></ElSelect></ElFormItem
+            ></ElCol>
+            <ElCol :span="8"
+              ><ElFormItem :label="xt('默认模型')"
+                ><ElSelect
+                  v-model="projectWorkflowForm.defaultModel"
+                  class="wide"
+                  filterable
+                  clearable
+                  allow-create
+                  ><ElOption
+                    v-for="model in lookups.models"
+                    :key="model.id || model.key"
+                    :label="model.name || model.key"
+                    :value="model.key || model.name" /></ElSelect></ElFormItem
+            ></ElCol>
+            <ElCol :span="8"
+              ><ElFormItem :label="xt('默认助手')"
+                ><ElSelect
+                  v-model="projectWorkflowForm.defaultAssistantId"
+                  class="wide"
+                  filterable
+                  clearable
+                  ><ElOption
+                    v-for="assistant in lookups.assistants"
+                    :key="assistant.id"
+                    :label="assistant.name"
+                    :value="assistant.id" /></ElSelect></ElFormItem
+            ></ElCol>
           </ElRow>
-          <ElFormItem :label="xt('项目指令')"><ElInput v-model="projectWorkflowForm.instructions" type="textarea" :rows="3" maxlength="4000" show-word-limit /></ElFormItem>
-          <ElFormItem :label="xt('默认提示词')"><ElInput v-model="projectWorkflowForm.defaultPrompt" type="textarea" :rows="3" maxlength="10000" show-word-limit /></ElFormItem>
-          <ElFormItem :label="xt('输出要求')"><ElInput v-model="projectWorkflowForm.outputRequirements" type="textarea" :rows="3" maxlength="10000" show-word-limit /></ElFormItem>
-          <div class="workflow-editor-heading"><strong>{{ xt('工作步骤') }}</strong><ElButton size="small" @click="addProjectWorkflowStep"><ArtSvgIcon icon="ri:add-line" />{{ xt('新增步骤') }}</ElButton></div>
+          <ElFormItem :label="xt('项目指令')"
+            ><ElInput
+              v-model="projectWorkflowForm.instructions"
+              type="textarea"
+              :rows="3"
+              maxlength="4000"
+              show-word-limit
+          /></ElFormItem>
+          <ElFormItem :label="xt('默认提示词')"
+            ><ElInput
+              v-model="projectWorkflowForm.defaultPrompt"
+              type="textarea"
+              :rows="3"
+              maxlength="10000"
+              show-word-limit
+          /></ElFormItem>
+          <ElFormItem :label="xt('输出要求')"
+            ><ElInput
+              v-model="projectWorkflowForm.outputRequirements"
+              type="textarea"
+              :rows="3"
+              maxlength="10000"
+              show-word-limit
+          /></ElFormItem>
+          <div class="workflow-editor-heading"
+            ><strong>{{ xt('工作步骤') }}</strong
+            ><ElButton size="small" @click="addProjectWorkflowStep"
+              ><ArtSvgIcon icon="ri:add-line" />{{ xt('新增步骤') }}</ElButton
+            ></div
+          >
           <div v-if="projectWorkflowForm.steps.length" class="workflow-step-list">
-            <div v-for="(step, index) in projectWorkflowForm.steps" :key="step.id" class="workflow-step-row">
+            <div
+              v-for="(step, index) in projectWorkflowForm.steps"
+              :key="step.id"
+              class="workflow-step-row"
+            >
               <span class="workflow-step-index">{{ String(index + 1).padStart(2, '0') }}</span>
               <ElInput v-model="step.title" :placeholder="xt('步骤名称')" maxlength="120" />
-              <ElInput v-model="step.description" :placeholder="xt('目标和交付物（可选）')" maxlength="1000" />
-              <ElSelect v-model="step.status" :aria-label="xt('步骤状态')"><ElOption :label="xt('待开始')" value="TODO" /><ElOption :label="xt('进行中')" value="IN_PROGRESS" /><ElOption :label="xt('已完成')" value="DONE" /></ElSelect>
-              <ElButton circle text type="danger" :aria-label="xt('删除步骤')" @click="removeProjectWorkflowStep(index)"><ArtSvgIcon icon="ri:delete-bin-line" /></ElButton>
+              <ElInput
+                v-model="step.description"
+                :placeholder="xt('目标和交付物（可选）')"
+                maxlength="1000"
+              />
+              <ElSelect v-model="step.status" :aria-label="xt('步骤状态')"
+                ><ElOption :label="xt('待开始')" value="TODO" /><ElOption
+                  :label="xt('进行中')"
+                  value="IN_PROGRESS" /><ElOption :label="xt('已完成')" value="DONE"
+              /></ElSelect>
+              <ElButton
+                circle
+                text
+                type="danger"
+                :aria-label="xt('删除步骤')"
+                @click="removeProjectWorkflowStep(index)"
+                ><ArtSvgIcon icon="ri:delete-bin-line"
+              /></ElButton>
             </div>
           </div>
           <ElEmpty v-else :description="xt('尚未配置步骤')" :image-size="56" />
         </ElForm>
-        <div class="workflow-editor-actions"><ElButton @click="projectVisible = false">{{ xt('关闭') }}</ElButton><ElButton type="primary" :loading="projectWorkflowSaving" @click="saveProjectWorkflowAdmin">{{ xt('保存工作流') }}</ElButton></div>
+        <div class="workflow-editor-actions"
+          ><ElButton @click="projectVisible = false">{{ xt('关闭') }}</ElButton
+          ><ElButton
+            type="primary"
+            :loading="projectWorkflowSaving"
+            @click="saveProjectWorkflowAdmin"
+            >{{ xt('保存工作流') }}</ElButton
+          ></div
+        >
         <ElDivider content-position="left">{{ xt('版本历史') }}</ElDivider>
         <ElCollapse accordion>
           <ElCollapseItem
@@ -869,10 +1085,46 @@
           allowCreate: true
         },
         { key: 'coverUrl', label: '外部封面地址', placeholder: 'https://...', maxlength: 1000 },
-        { key: 'externalVideoUrl', label: '外部视频地址', placeholder: 'https://.../demo.mp4', maxlength: 2000, when: { key: 'mode', value: 'VIDEO' } },
-        { key: 'videoResolution', label: '视频分辨率', type: 'select', span: 8, when: { key: 'mode', value: 'VIDEO' }, options: [{ label: '720p', value: '720p' }, { label: '1080p', value: '1080p' }, { label: '4K', value: '2160p' }] },
-        { key: 'videoDuration', label: '视频时长（秒）', type: 'number', span: 8, min: 1, max: 300, when: { key: 'mode', value: 'VIDEO' } },
-        { key: 'videoAspectRatio', label: '画面比例', type: 'select', span: 8, when: { key: 'mode', value: 'VIDEO' }, options: [{ label: '16:9', value: '16:9' }, { label: '9:16', value: '9:16' }, { label: '1:1', value: '1:1' }] },
+        {
+          key: 'externalVideoUrl',
+          label: '外部视频地址',
+          placeholder: 'https://.../demo.mp4',
+          maxlength: 2000,
+          when: { key: 'mode', value: 'VIDEO' }
+        },
+        {
+          key: 'videoResolution',
+          label: '视频分辨率',
+          type: 'select',
+          span: 8,
+          when: { key: 'mode', value: 'VIDEO' },
+          options: [
+            { label: '720p', value: '720p' },
+            { label: '1080p', value: '1080p' },
+            { label: '4K', value: '2160p' }
+          ]
+        },
+        {
+          key: 'videoDuration',
+          label: '视频时长（秒）',
+          type: 'number',
+          span: 8,
+          min: 1,
+          max: 300,
+          when: { key: 'mode', value: 'VIDEO' }
+        },
+        {
+          key: 'videoAspectRatio',
+          label: '画面比例',
+          type: 'select',
+          span: 8,
+          when: { key: 'mode', value: 'VIDEO' },
+          options: [
+            { label: '16:9', value: '16:9' },
+            { label: '9:16', value: '9:16' },
+            { label: '1:1', value: '1:1' }
+          ]
+        },
         { key: 'sortOrder', label: '排序', type: 'number', span: 12, min: 0 },
         { key: 'enabled', label: '前台展示', type: 'switch', span: 12 }
       ]
@@ -898,10 +1150,35 @@
       },
       fields: [
         { key: 'title', label: '工具名称', required: true, span: 12, maxlength: 80 },
-        { key: 'inputMode', label: '素材方式', type: 'select', required: true, span: 12, options: [{ label: '参考图', value: 'REFERENCE' }, { label: '参考图与蒙版', value: 'MASK' }] },
-        { key: 'prompt', label: '执行指令', type: 'textarea', required: true, rows: 7, maxlength: 5000 },
+        {
+          key: 'inputMode',
+          label: '素材方式',
+          type: 'select',
+          required: true,
+          span: 12,
+          options: [
+            { label: '参考图', value: 'REFERENCE' },
+            { label: '参考图与蒙版', value: 'MASK' }
+          ]
+        },
+        {
+          key: 'prompt',
+          label: '执行指令',
+          type: 'textarea',
+          required: true,
+          rows: 7,
+          maxlength: 5000
+        },
         { key: 'placeholder', label: '输入提示', maxlength: 160 },
-        { key: 'model', label: '指定模型', type: 'select', span: 12, optionsFrom: 'models', filterable: true, allowCreate: true },
+        {
+          key: 'model',
+          label: '指定模型',
+          type: 'select',
+          span: 12,
+          optionsFrom: 'models',
+          filterable: true,
+          allowCreate: true
+        },
         { key: 'coverUrl', label: '外部封面地址', placeholder: 'https://...', maxlength: 1000 },
         { key: 'sortOrder', label: '排序', type: 'number', span: 12, min: 0 },
         { key: 'enabled', label: '前台展示', type: 'switch', span: 12 }
@@ -975,6 +1252,12 @@
           allowCreate: true
         },
         { key: 'coverUrl', label: '展示图片地址', maxlength: 2000 },
+        {
+          key: 'previewVideoUrl',
+          label: '视频预览地址',
+          maxlength: 2000,
+          placeholder: '视频提示词可填写 MP4 或 WebM 地址'
+        },
         { key: 'enabled', label: '前台展示', type: 'switch' }
       ]
     },
@@ -986,21 +1269,102 @@
       createUrl: '/v1/admin/plugins',
       updateUrl: (row) => `/v1/admin/plugins/${row.id}`,
       deleteUrl: (row) => `/v1/admin/plugins/${row.id}`,
-      defaults: { name: '', slug: '', description: '', instruction: '', icon: 'blocks', version: '1.0.0', capabilities: ['CHAT'], recommendedModel: '', outputRequirements: '', categoryId: '', status: 'DRAFT', featured: false, priceCredits: 0, sortOrder: 0 },
+      defaults: {
+        name: '',
+        slug: '',
+        description: '',
+        instruction: '',
+        icon: 'blocks',
+        version: '1.0.0',
+        capabilities: ['CHAT'],
+        recommendedModel: '',
+        outputRequirements: '',
+        categoryId: '',
+        status: 'DRAFT',
+        featured: false,
+        priceCredits: 0,
+        sortOrder: 0
+      },
       fields: [
         { key: 'name', label: '插件名称', required: true, span: 12, maxlength: 80 },
-        { key: 'slug', label: '唯一标识', required: true, span: 12, maxlength: 100, placeholder: 'lowercase-plugin-name' },
-        { key: 'categoryId', label: '插件分类', type: 'select', optionsFrom: 'pluginCategories', span: 12 },
+        {
+          key: 'slug',
+          label: '唯一标识',
+          required: true,
+          span: 12,
+          maxlength: 100,
+          placeholder: 'lowercase-plugin-name'
+        },
+        {
+          key: 'categoryId',
+          label: '插件分类',
+          type: 'select',
+          optionsFrom: 'pluginCategories',
+          span: 12
+        },
         { key: 'icon', label: '图标名称', span: 12, maxlength: 80 },
         { key: 'description', label: '插件简介', type: 'textarea', rows: 2, maxlength: 500 },
-        { key: 'instruction', label: '系统指令', type: 'textarea', required: true, rows: 9, maxlength: 20000 },
-        { key: 'capabilities', label: '支持能力', type: 'select', required: true, multiple: true, span: 12, options: [{ label: '对话', value: 'CHAT' }, { label: '图片生成', value: 'IMAGE' }, { label: '视频生成', value: 'VIDEO' }, { label: '商品视觉', value: 'COMMERCE' }, { label: '办公中心', value: 'OFFICE' }] },
-        { key: 'recommendedModel', label: '推荐模型', type: 'select', optionsFrom: 'models', filterable: true, allowCreate: true, span: 12 },
-        { key: 'outputRequirements', label: '输出要求', type: 'textarea', rows: 3, maxlength: 4000 },
+        {
+          key: 'instruction',
+          label: '系统指令',
+          type: 'textarea',
+          required: true,
+          rows: 9,
+          maxlength: 20000
+        },
+        {
+          key: 'capabilities',
+          label: '支持能力',
+          type: 'select',
+          required: true,
+          multiple: true,
+          span: 12,
+          options: [
+            { label: '对话', value: 'CHAT' },
+            { label: '图片生成', value: 'IMAGE' },
+            { label: '视频生成', value: 'VIDEO' },
+            { label: '商品视觉', value: 'COMMERCE' },
+            { label: '办公中心', value: 'OFFICE' }
+          ]
+        },
+        {
+          key: 'recommendedModel',
+          label: '推荐模型',
+          type: 'select',
+          optionsFrom: 'models',
+          filterable: true,
+          allowCreate: true,
+          span: 12
+        },
+        {
+          key: 'outputRequirements',
+          label: '输出要求',
+          type: 'textarea',
+          rows: 3,
+          maxlength: 4000
+        },
         { key: 'version', label: '版本', required: true, span: 8, maxlength: 40 },
-        { key: 'priceCredits', label: '安装价格（创作点）', type: 'number', span: 8, min: 0, max: 10000000 },
+        {
+          key: 'priceCredits',
+          label: '安装价格（创作点）',
+          type: 'number',
+          span: 8,
+          min: 0,
+          max: 10000000
+        },
         { key: 'sortOrder', label: '排序', type: 'number', span: 8, min: -10000, max: 10000 },
-        { key: 'status', label: '发布状态', type: 'select', required: true, span: 12, options: [{ label: '草稿', value: 'DRAFT' }, { label: '已发布', value: 'PUBLISHED' }, { label: '已停用', value: 'DISABLED' }] },
+        {
+          key: 'status',
+          label: '发布状态',
+          type: 'select',
+          required: true,
+          span: 12,
+          options: [
+            { label: '草稿', value: 'DRAFT' },
+            { label: '已发布', value: 'PUBLISHED' },
+            { label: '已停用', value: 'DISABLED' }
+          ]
+        },
         { key: 'featured', label: '精选推荐', type: 'switch', span: 12 }
       ]
     },
@@ -1012,10 +1376,24 @@
       createUrl: '/v1/admin/plugin-categories',
       updateUrl: (row) => `/v1/admin/plugin-categories/${row.id}`,
       deleteUrl: (row) => `/v1/admin/plugin-categories/${row.id}`,
-      defaults: { name: '', slug: '', description: '', icon: 'blocks', sortOrder: 0, enabled: true },
+      defaults: {
+        name: '',
+        slug: '',
+        description: '',
+        icon: 'blocks',
+        sortOrder: 0,
+        enabled: true
+      },
       fields: [
         { key: 'name', label: '分类名称', required: true, span: 12, maxlength: 60 },
-        { key: 'slug', label: '唯一标识', required: true, span: 12, maxlength: 80, placeholder: 'category-name' },
+        {
+          key: 'slug',
+          label: '唯一标识',
+          required: true,
+          span: 12,
+          maxlength: 80,
+          placeholder: 'category-name'
+        },
         { key: 'description', label: '分类说明', type: 'textarea', rows: 3, maxlength: 500 },
         { key: 'icon', label: '图标名称', span: 12, maxlength: 80 },
         { key: 'sortOrder', label: '排序', type: 'number', span: 12, min: -10000, max: 10000 },
@@ -1094,6 +1472,11 @@
         key: '',
         name: '',
         description: '',
+        icon: 'wrench',
+        kind: 'BUILT_IN',
+        authType: 'NONE',
+        documentationUrl: '',
+        credentialFieldsText: '[]',
         endpoint: '',
         httpMethod: 'POST',
         timeoutMs: 45000,
@@ -1109,13 +1492,79 @@
         { key: 'key', label: '工具标识', required: true, span: 12, maxlength: 80 },
         { key: 'name', label: '工具名称', required: true, span: 12, maxlength: 100 },
         { key: 'description', label: '说明', type: 'textarea', rows: 3, maxlength: 2000 },
+        { key: 'icon', label: '图标地址 / 内置标识', span: 12, maxlength: 80 },
+        {
+          key: 'kind',
+          label: '能力类型',
+          type: 'select',
+          span: 12,
+          options: [
+            { label: '内置工具', value: 'BUILT_IN' },
+            { label: '用户连接器', value: 'CONNECTOR' }
+          ]
+        },
+        {
+          key: 'authType',
+          label: '用户授权方式',
+          type: 'select',
+          span: 12,
+          options: [
+            { label: '无需授权', value: 'NONE' },
+            { label: '用户 API Key', value: 'API_KEY' }
+          ]
+        },
+        {
+          key: 'documentationUrl',
+          label: '官方说明地址',
+          placeholder: 'https://...',
+          maxlength: 2000
+        },
+        {
+          key: 'credentialFieldsText',
+          label: '用户授权字段（JSON）',
+          type: 'textarea',
+          rows: 4,
+          placeholder: '[{"key":"apiKey","label":"API Key","type":"password","required":true}]',
+          when: { key: 'authType', value: 'API_KEY' }
+        },
         { key: 'endpoint', label: '调用地址', placeholder: 'https://...', maxlength: 500 },
-        { key: 'httpMethod', label: '请求方法', type: 'select', span: 12, options: [{ label: 'POST', value: 'POST' }, { label: 'GET', value: 'GET' }, { label: 'PUT', value: 'PUT' }, { label: 'PATCH', value: 'PATCH' }, { label: 'DELETE', value: 'DELETE' }] },
+        {
+          key: 'httpMethod',
+          label: '请求方法',
+          type: 'select',
+          span: 12,
+          options: [
+            { label: 'POST', value: 'POST' },
+            { label: 'GET', value: 'GET' },
+            { label: 'PUT', value: 'PUT' },
+            { label: 'PATCH', value: 'PATCH' },
+            { label: 'DELETE', value: 'DELETE' }
+          ]
+        },
         { key: 'timeoutMs', label: '超时毫秒', type: 'number', span: 12, min: 1000, max: 120000 },
-        { key: 'headersText', label: '公共请求头（JSON）', type: 'textarea', rows: 3, placeholder: '{"X-App":"xinyue"}' },
-        { key: 'secretHeadersText', label: '敏感请求头（JSON，留空保留）', type: 'textarea', rows: 3, placeholder: '{"Authorization":"Bearer ..."}', omitEmpty: true },
+        {
+          key: 'headersText',
+          label: '公共请求头（JSON）',
+          type: 'textarea',
+          rows: 3,
+          placeholder: '{"X-App":"xinyue"}'
+        },
+        {
+          key: 'secretHeadersText',
+          label: '敏感请求头（JSON，留空保留）',
+          type: 'textarea',
+          rows: 3,
+          placeholder: '{"Authorization":"Bearer ..."}',
+          omitEmpty: true
+        },
         { key: 'clearSecretHeaders', label: '清除已保存敏感请求头', type: 'switch' },
-        { key: 'inputSchemaText', label: '输入 Schema（JSON）', type: 'textarea', rows: 4, placeholder: '{"type":"object","properties":{}}' },
+        {
+          key: 'inputSchemaText',
+          label: '输入 Schema（JSON）',
+          type: 'textarea',
+          rows: 4,
+          placeholder: '{"type":"object","properties":{}}'
+        },
         {
           key: 'scopes',
           label: '权限范围',
@@ -1399,11 +1848,12 @@
     },
     promptLibrary: {
       title: '提示词库',
-      description: '集中管理外部来源、分类和提示词内容',
+      description: '集中管理图片与视频提示词来源和展示内容',
       icon: 'ri:book-open-line',
       endpoint: '/v1/admin/prompt-library/items?page=1&pageSize=5000',
       columns: [
         { key: 'coverUrl', label: '预览', width: 118, type: 'image' },
+        { key: 'promptTypeLabel', label: '类型', width: 82 },
         { key: 'title', label: '名称', minWidth: 220 },
         { key: 'sourceName', label: '来源', minWidth: 150 },
         { key: 'tags', label: '标签', minWidth: 170 },
@@ -1673,6 +2123,8 @@
   const editorForm = reactive<Row>({})
   const editingRow = ref<Row | null>(null)
   const saving = ref(false)
+  const toolIconFile = ref<File | null>(null)
+  const toolIconPreviewUrl = ref('')
   const coverFile = ref<File | null>(null)
   const previewVideoFile = ref<File | null>(null)
   const previewFiles = ref<File[]>([])
@@ -1720,11 +2172,14 @@
   const resourceKey = computed(() => String(route.meta.resource || 'jobs'))
   const config = computed(() => resources[resourceKey.value] || resources.jobs)
   const editorConfig = computed(() => editorConfigs[resourceKey.value])
-  const visibleEditorFields = computed(() => (editorConfig.value?.fields || []).filter((item) =>
-    (!item.createOnly || !editingRow.value) &&
-    (!item.editOnly || editingRow.value) &&
-    (!item.when || editorForm[item.when.key] === item.when.value)
-  ))
+  const visibleEditorFields = computed(() =>
+    (editorConfig.value?.fields || []).filter(
+      (item) =>
+        (!item.createOnly || !editingRow.value) &&
+        (!item.editOnly || editingRow.value) &&
+        (!item.when || editorForm[item.when.key] === item.when.value)
+    )
+  )
   const searchItems = computed(() => [
     {
       label: xt('关键词'),
@@ -1772,9 +2227,7 @@
     loading.value = true
     try {
       if (!pending) {
-        pending = request
-          .get<any>({ url: endpoint })
-          .then((payload) => unwrap(payload))
+        pending = request.get<any>({ url: endpoint }).then((payload) => unwrap(payload))
         pendingLoads.set(endpoint, pending)
       }
       const nextRows = await pending
@@ -1811,6 +2264,7 @@
     return [
       row.coverUrl,
       row.imageUrl,
+      typeof row.icon === 'string' && /^(?:https?:\/\/|\/)/.test(row.icon) ? row.icon : '',
       ...(Array.isArray(row.uploadedPreviewImages)
         ? row.uploadedPreviewImages.map((item: Row) => item.url || item.contentUrl)
         : []),
@@ -1839,7 +2293,9 @@
     const date = new Date(String(value))
     return Number.isNaN(date.getTime())
       ? String(value)
-      : new Intl.DateTimeFormat(xinyueLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(date)
+      : new Intl.DateTimeFormat(xinyueLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(
+          date
+        )
   }
   function formatBytes(value: number) {
     if (!value) return '0 B'
@@ -1958,6 +2414,9 @@
   async function openEditor(row?: Row) {
     if (!editorConfig.value) return
     editingRow.value = row ? { ...row } : null
+    if (toolIconPreviewUrl.value) URL.revokeObjectURL(toolIconPreviewUrl.value)
+    toolIconFile.value = null
+    toolIconPreviewUrl.value = ''
     coverFile.value = null
     previewVideoFile.value = null
     previewFiles.value = []
@@ -1965,12 +2424,18 @@
     const source: Row = row || editorConfig.value.defaults
     for (const field of editorConfig.value.fields) {
       let value = source[field.key] ?? editorConfig.value.defaults[field.key]
-      if (row && resourceKey.value === 'inspirations' && field.key === 'videoResolution') value = row.options?.resolution || '720p'
-      if (row && resourceKey.value === 'inspirations' && field.key === 'videoDuration') value = row.options?.duration || 5
-      if (row && resourceKey.value === 'inspirations' && field.key === 'videoAspectRatio') value = row.options?.aspectRatio || '16:9'
-      if (row && resourceKey.value === 'inspirations' && field.key === 'externalVideoUrl') value = row.options?.previewVideoUrl || ''
-      if (row && resourceKey.value === 'imageTools' && field.key === 'inputMode') value = row.options?.inputMode || 'REFERENCE'
-      if (row && resourceKey.value === 'imageTools' && field.key === 'placeholder') value = row.options?.placeholder || ''
+      if (row && resourceKey.value === 'inspirations' && field.key === 'videoResolution')
+        value = row.options?.resolution || '720p'
+      if (row && resourceKey.value === 'inspirations' && field.key === 'videoDuration')
+        value = row.options?.duration || 5
+      if (row && resourceKey.value === 'inspirations' && field.key === 'videoAspectRatio')
+        value = row.options?.aspectRatio || '16:9'
+      if (row && resourceKey.value === 'inspirations' && field.key === 'externalVideoUrl')
+        value = row.options?.previewVideoUrl || ''
+      if (row && resourceKey.value === 'imageTools' && field.key === 'inputMode')
+        value = row.options?.inputMode || 'REFERENCE'
+      if (row && resourceKey.value === 'imageTools' && field.key === 'placeholder')
+        value = row.options?.placeholder || ''
       if (row && resourceKey.value === 'assistants') {
         if (field.key === 'toolIds') value = (row.tools || []).map((item: Row) => item.toolId)
         if (field.key === 'knowledgeBaseIds')
@@ -1980,6 +2445,8 @@
         if (field.key === 'headersText') value = JSON.stringify(row.headers || {}, null, 2)
         if (field.key === 'secretHeadersText') value = ''
         if (field.key === 'inputSchemaText') value = JSON.stringify(row.inputSchema || {}, null, 2)
+        if (field.key === 'credentialFieldsText')
+          value = JSON.stringify(row.credentialFields || [], null, 2)
       }
       editorForm[field.key] = Array.isArray(value) ? [...value] : value
     }
@@ -2013,18 +2480,31 @@
       payload.options = options
     }
     if (resourceKey.value === 'imageTools') {
-      const options = { ...(editingRow.value?.options || {}), inputMode: payload.inputMode || 'REFERENCE', placeholder: String(payload.placeholder || '').trim() }
+      const options = {
+        ...(editingRow.value?.options || {}),
+        inputMode: payload.inputMode || 'REFERENCE',
+        placeholder: String(payload.placeholder || '').trim()
+      }
       delete payload.inputMode
       delete payload.placeholder
       payload.mode = 'IMAGE_TOOL'
       payload.options = options
     }
     if (resourceKey.value === 'tools') {
-      for (const [textKey, targetKey] of [['headersText', 'headers'], ['secretHeadersText', 'secretHeaders'], ['inputSchemaText', 'inputSchema']] as const) {
+      for (const [textKey, targetKey] of [
+        ['headersText', 'headers'],
+        ['secretHeadersText', 'secretHeaders'],
+        ['inputSchemaText', 'inputSchema'],
+        ['credentialFieldsText', 'credentialFields']
+      ] as const) {
         const raw = String(payload[textKey] || '').trim()
         delete payload[textKey]
         if (!raw && textKey === 'secretHeadersText') continue
-        try { payload[targetKey] = raw ? JSON.parse(raw) : {} } catch { throw new Error(`${textKey} 不是有效 JSON`) }
+        try {
+          payload[targetKey] = raw ? JSON.parse(raw) : {}
+        } catch {
+          throw new Error(`${textKey} 不是有效 JSON`)
+        }
       }
     }
     return payload
@@ -2044,6 +2524,7 @@
       })
       if (resourceKey.value === 'inspirations' || resourceKey.value === 'imageTools')
         await uploadInspirationMedia(saved.id || editingRow.value?.id)
+      if (resourceKey.value === 'tools') await uploadToolIcon(saved.id || editingRow.value?.id)
       editorVisible.value = false
       await load()
     } finally {
@@ -2065,21 +2546,62 @@
   async function reviewToolApproval(row: Row, status: 'APPROVED' | 'REJECTED') {
     let adminNote = ''
     if (status === 'REJECTED') {
-      const result = await ElMessageBox.prompt('请输入拒绝原因（可选）', '拒绝审批申请', { inputPlaceholder: '例如：该工具尚未完成安全配置', inputValidator: (value) => value.length <= 2000 || '最多 2000 个字符' }).catch(() => null)
+      const result = await ElMessageBox.prompt('请输入拒绝原因（可选）', '拒绝审批申请', {
+        inputPlaceholder: '例如：该工具尚未完成安全配置',
+        inputValidator: (value) => value.length <= 2000 || '最多 2000 个字符'
+      }).catch(() => null)
       if (!result) return
       adminNote = result.value
     } else {
-      const result = await ElMessageBox.prompt('设置本次批准的有效期（分钟）', '批准审批申请', { inputValue: '1440', inputPlaceholder: '5 - 10080', inputValidator: (value) => /^(?:[5-9]|[1-9][0-9]{1,3}|10080)$/.test(value) || '请输入 5 至 10080 的分钟数' }).catch(() => null)
+      const result = await ElMessageBox.prompt('设置本次批准的有效期（分钟）', '批准审批申请', {
+        inputValue: '1440',
+        inputPlaceholder: '5 - 10080',
+        inputValidator: (value) =>
+          /^(?:[5-9]|[1-9][0-9]{1,3}|10080)$/.test(value) || '请输入 5 至 10080 的分钟数'
+      }).catch(() => null)
       if (!result) return
-      await request.request({ url: `/v1/admin/tool-approval-requests/${row.id}`, method: 'PATCH', data: { status, expiresInMinutes: Number(result.value) }, showSuccessMessage: true })
+      await request.request({
+        url: `/v1/admin/tool-approval-requests/${row.id}`,
+        method: 'PATCH',
+        data: { status, expiresInMinutes: Number(result.value) },
+        showSuccessMessage: true
+      })
       await load()
       return
     }
-    await request.request({ url: `/v1/admin/tool-approval-requests/${row.id}`, method: 'PATCH', data: { status, adminNote }, showSuccessMessage: true })
+    await request.request({
+      url: `/v1/admin/tool-approval-requests/${row.id}`,
+      method: 'PATCH',
+      data: { status, adminNote },
+      showSuccessMessage: true
+    })
     await load()
   }
   function selectCover(file: UploadFile) {
     coverFile.value = file.raw || null
+  }
+  function selectToolIcon(file: UploadFile) {
+    if (!file.raw) return
+    if (toolIconPreviewUrl.value) URL.revokeObjectURL(toolIconPreviewUrl.value)
+    toolIconFile.value = file.raw
+    toolIconPreviewUrl.value = URL.createObjectURL(file.raw)
+  }
+  async function uploadToolIcon(id?: string) {
+    if (!id || !toolIconFile.value) return
+    const data = new FormData()
+    data.append('file', toolIconFile.value)
+    await request.post({ url: `/v1/admin/tools/${id}/icon`, data, showSuccessMessage: true })
+  }
+  async function removeToolIcon() {
+    if (!editingRow.value) return
+    await ElMessageBox.confirm('确认移除当前上传图标？', '移除图标', { type: 'warning' })
+    await request.del({
+      url: `/v1/admin/tools/${editingRow.value.id}/icon`,
+      showSuccessMessage: true
+    })
+    editingRow.value.iconAssetId = null
+    editingRow.value.icon = 'wrench'
+    editorForm.icon = 'wrench'
   }
   function selectPreviewVideo(file: UploadFile) {
     previewVideoFile.value = file.raw || null
@@ -2131,7 +2653,9 @@
   }
   async function removeInspirationVideo() {
     if (!editingRow.value) return
-    await ElMessageBox.confirm(xt('确认移除当前演示视频？'), xt('移除演示视频'), { type: 'warning' })
+    await ElMessageBox.confirm(xt('确认移除当前演示视频？'), xt('移除演示视频'), {
+      type: 'warning'
+    })
     await request.del({
       url: `/v1/admin/inspirations/${editingRow.value.id}/preview-video`,
       showSuccessMessage: true
@@ -2197,7 +2721,7 @@
     await request.post({
       url: '/v1/admin/prompt-library/refresh',
       params: {},
-      timeout: 120000,
+      timeout: 600000,
       showSuccessMessage: true
     })
     await load()
@@ -2220,6 +2744,21 @@
     })
     await openPromptSources()
     await load()
+  }
+  async function refreshPromptSource(row: Row) {
+    row._refreshing = true
+    try {
+      await request.post({
+        url: `/v1/admin/prompt-library/sources/${row.id}/refresh`,
+        params: {},
+        timeout: 600000,
+        showSuccessMessage: true
+      })
+      await openPromptSources()
+      await load()
+    } finally {
+      row._refreshing = false
+    }
   }
   async function openModerationPolicy() {
     policyVisible.value = true
@@ -2372,7 +2911,9 @@
         showSuccessMessage: true
       })
       await load()
-      projectDetail.value = await request.get<Row>({ url: `/v1/admin/projects/${projectDetail.value.id}` })
+      projectDetail.value = await request.get<Row>({
+        url: `/v1/admin/projects/${projectDetail.value.id}`
+      })
     } finally {
       projectWorkflowSaving.value = false
     }
@@ -2440,378 +2981,481 @@
 <style scoped>
   .operation-page {
     display: flex;
-    min-height: 0;
     flex-direction: column;
     gap: 12px;
+    min-height: 0;
   }
+
   .art-table-card {
     display: flex;
-    width: 100%;
-    max-width: 100%;
-    min-height: 0;
-    min-width: 0;
     flex: 1;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 0;
     overflow: hidden;
   }
+
   .art-table-card :deep(.el-card__body) {
     display: flex;
-    width: 100%;
-    max-width: 100%;
-    min-height: 0;
-    min-width: 0;
     flex: 1;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 0;
     overflow: hidden;
   }
+
   .art-table-card :deep(.el-table) {
     width: 100%;
-    max-width: 100%;
     min-width: 0 !important;
+    max-width: 100%;
   }
+
   .art-table-card :deep(.el-table__inner-wrapper),
   .art-table-card :deep(.el-table__body-wrapper),
   .art-table-card :deep(.el-scrollbar__wrap) {
     max-width: 100%;
   }
+
   .resource-heading {
     display: flex;
-    align-items: center;
     gap: 12px;
+    align-items: center;
   }
+
   .resource-heading p {
     margin: 3px 0 0;
-    color: var(--art-gray-500);
     font-size: 12px;
     font-weight: 400;
+    color: var(--art-gray-500);
   }
+
   .resource-actions {
     display: flex;
-    align-items: center;
-    justify-content: flex-end;
     flex-wrap: wrap;
     gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
     max-width: 100%;
   }
+
   .resource-actions :deep(.el-button) {
     height: 32px;
     padding: 0 12px;
   }
+
   .resource-icon {
     display: grid;
+    place-items: center;
     width: 36px;
     height: 36px;
-    place-items: center;
-    border-radius: 6px;
+    font-size: 18px;
     color: var(--main-color);
     background: var(--art-gray-100);
-    font-size: 18px;
+    border-radius: 6px;
   }
+
   .table-footer {
     display: flex;
     justify-content: flex-end;
     max-width: 100%;
-    overflow-x: auto;
     padding-top: 16px;
+    overflow-x: auto;
   }
+
   .table-image-cell {
     display: flex;
-    align-items: center;
     gap: 7px;
+    align-items: center;
     min-width: 0;
   }
+
   .table-image-cell small {
-    color: var(--art-gray-500);
     font-size: 11px;
+    color: var(--art-gray-500);
     white-space: nowrap;
   }
+
   .table-cover,
   .image-placeholder {
+    flex: 0 0 58px;
     width: 58px;
     height: 44px;
-    flex: 0 0 58px;
     overflow: hidden;
     border: 1px solid var(--art-gray-200);
     border-radius: 6px;
   }
+
   .table-cover {
     cursor: zoom-in;
   }
+
   .table-image-cell :deep(.el-image__inner) {
     display: block;
   }
+
   .image-placeholder {
     display: grid;
     place-items: center;
+    font-size: 18px;
     color: var(--art-gray-400);
     background: var(--art-gray-100);
-    font-size: 18px;
   }
+
   .wide {
     width: 100%;
   }
+
   .media-editor {
     display: grid;
     gap: 22px;
   }
+
+  .tool-icon-editor {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .tool-icon-preview {
+    display: grid;
+    flex: 0 0 64px;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    overflow: hidden;
+    font-size: 24px;
+    color: var(--art-gray-500);
+    background: var(--art-gray-100);
+    border: 1px solid var(--art-gray-200);
+    border-radius: 12px;
+  }
+
+  .tool-icon-preview img {
+    width: 100%;
+    height: 100%;
+    padding: 8px;
+    object-fit: contain;
+  }
+
+  .tool-icon-controls {
+    min-width: 0;
+  }
+
   .field-label {
     display: block;
     margin-bottom: 10px;
-    color: var(--art-gray-800);
     font-size: 14px;
     font-weight: 500;
+    color: var(--art-gray-800);
   }
+
   .media-row {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
     gap: 10px;
+    align-items: center;
   }
+
   .cover-preview {
     width: 112px;
     height: 84px;
     border: 1px solid var(--art-gray-200);
     border-radius: 6px;
   }
+
   .video-preview {
     display: block;
     width: min(100%, 520px);
     aspect-ratio: 16 / 9;
     margin-bottom: 12px;
+    object-fit: contain;
+    background: #111;
     border: 1px solid var(--art-gray-200);
     border-radius: 6px;
-    background: #111;
-    object-fit: contain;
   }
+
   .media-help {
     margin: 9px 0 0;
-    color: var(--art-gray-500);
     font-size: 12px;
     line-height: 1.6;
+    color: var(--art-gray-500);
   }
+
   .preview-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
     gap: 10px;
     margin-bottom: 12px;
   }
+
   .preview-item {
     position: relative;
-    overflow: hidden;
     aspect-ratio: 1;
+    overflow: hidden;
     border: 1px solid var(--art-gray-200);
     border-radius: 6px;
   }
+
   .preview-item :deep(.el-image) {
     width: 100%;
     height: 100%;
   }
+
   .preview-item .el-button {
     position: absolute;
     top: 5px;
     right: 5px;
   }
+
   .ticket-header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     padding-bottom: 16px;
   }
+
   .ticket-header strong {
     font-size: 17px;
   }
+
   .ticket-header p {
     margin: 6px 0 0;
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .ticket-settings,
   .ticket-reply {
     padding: 16px;
+    background: var(--default-bg-color);
     border: 1px solid var(--art-gray-200);
     border-radius: 6px;
-    background: var(--default-bg-color);
   }
+
   .ticket-messages {
     display: grid;
-    max-height: 360px;
     gap: 10px;
+    max-height: 360px;
     margin-bottom: 18px;
     overflow: auto;
   }
+
   .ticket-message {
     max-width: 88%;
     padding: 12px 14px;
+    background: var(--default-box-color);
     border: 1px solid var(--art-gray-200);
     border-radius: 6px;
-    background: var(--default-box-color);
   }
+
   .ticket-message.admin {
     margin-left: auto;
-    border-color: color-mix(in srgb, var(--main-color) 28%, transparent);
     background: color-mix(in srgb, var(--main-color) 7%, var(--default-box-color));
+    border-color: color-mix(in srgb, var(--main-color) 28%, transparent);
   }
+
   .ticket-message > div {
     display: flex;
-    justify-content: space-between;
     gap: 18px;
+    justify-content: space-between;
     font-size: 12px;
   }
+
   .ticket-message time {
     color: var(--art-gray-500);
   }
+
   .ticket-message p {
     margin: 7px 0 0;
     line-height: 1.65;
     white-space: pre-wrap;
   }
+
   .switch-grid {
     display: grid;
     gap: 1px;
     margin-bottom: 22px;
     overflow: hidden;
+    background: var(--art-gray-200);
     border: 1px solid var(--art-gray-200);
     border-radius: 6px;
-    background: var(--art-gray-200);
   }
+
   .switch-grid label {
     display: flex;
+    gap: 20px;
     align-items: center;
     justify-content: space-between;
-    gap: 20px;
     padding: 14px 16px;
     background: var(--default-box-color);
   }
+
   .switch-grid label span {
     display: grid;
     gap: 3px;
   }
+
   .switch-grid small,
   .source-meta,
   .source-error {
     display: block;
-    color: var(--art-gray-500);
     font-size: 11px;
     line-height: 1.5;
+    color: var(--art-gray-500);
   }
+
+  .source-cache-notice {
+    margin-bottom: 16px;
+  }
+
   .source-meta {
     margin-top: 5px;
   }
+
   .source-error {
     margin-top: 4px;
     color: var(--el-color-danger);
   }
+
   .project-audit-head {
     display: flex;
+    gap: 20px;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 20px;
     margin-bottom: 18px;
   }
+
   .project-audit-head strong {
     font-size: 18px;
   }
+
   .project-audit-head p {
     margin: 5px 0 0;
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .project-audit-head + :deep(.el-descriptions) {
     margin-bottom: 20px;
   }
+
   .admin-workflow-editor {
     padding: 2px 0 8px;
   }
+
   .workflow-editor-heading,
   .workflow-editor-actions {
     display: flex;
+    gap: 12px;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
   }
+
   .workflow-editor-heading {
     margin: 4px 0 10px;
   }
+
   .workflow-editor-actions {
     justify-content: flex-end;
     margin-top: 14px;
   }
+
   .workflow-step-list {
     display: grid;
     gap: 8px;
   }
+
   .workflow-step-row {
     display: grid;
     grid-template-columns: 28px minmax(120px, 1fr) minmax(160px, 1.4fr) 120px 32px;
-    align-items: center;
     gap: 8px;
+    align-items: center;
   }
+
   .workflow-step-index {
-    color: var(--art-gray-500);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
+    color: var(--art-gray-500);
     text-align: center;
   }
+
   .knowledge-assistant-list {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
   }
+
   :deep(.el-timeline-item__content) > strong {
     margin-right: 8px;
   }
+
   :deep(.el-timeline-item__content) > p {
     margin: 5px 0 0;
-    color: var(--art-gray-500);
     line-height: 1.6;
+    color: var(--art-gray-500);
   }
+
   .version-title {
     display: grid;
+    grid-template-columns: minmax(150px, auto) minmax(140px, 1fr) auto;
+    gap: 12px;
+    align-items: center;
     width: 100%;
     min-width: 0;
-    grid-template-columns: minmax(150px, auto) minmax(140px, 1fr) auto;
-    align-items: center;
-    gap: 12px;
     padding-right: 12px;
   }
+
   .version-title span {
     overflow: hidden;
-    color: var(--art-gray-500);
     text-overflow: ellipsis;
+    color: var(--art-gray-500);
     white-space: nowrap;
   }
+
   .version-title time {
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   pre {
     max-width: 100%;
     margin: 0;
     overflow: auto;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
     font:
       12px/1.6 Consolas,
       monospace;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   }
-  @media (max-width: 768px) {
+
+  @media (width <= 768px) {
     .resource-heading p {
       display: none;
     }
+
     .table-footer :deep(.el-pagination__sizes),
     .table-footer :deep(.el-pagination__jump) {
       display: none;
     }
+
     .version-title {
       grid-template-columns: 1fr;
       gap: 2px;
     }
+
     .version-title time {
       display: none;
     }
+
     .workflow-step-row {
       grid-template-columns: 24px minmax(0, 1fr) 32px;
     }
+
     .workflow-step-row .el-select,
     .workflow-step-row .el-input:nth-child(3) {
       grid-column: 2 / -1;

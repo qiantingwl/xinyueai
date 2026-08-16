@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { AssetKind } from '@prisma/client'
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx'
 import ExcelJS = require('exceljs')
+import AdmZip = require('adm-zip')
 import { PassThrough } from 'node:stream'
 import { AssetsService } from '../assets/assets.service'
 import { PrismaService } from '../prisma/prisma.service'
@@ -40,6 +41,7 @@ const officegen = require('officegen') as OfficegenFactory
 
 type OfficeFormat = 'pptx' | 'xlsx' | 'docx' | 'md'
 type MarkdownSection = { title: string; lines: string[] }
+type OfficeExportInput = { conversationId?: string; agentTaskId?: string; messageId?: string; format?: OfficeFormat }
 
 const skillFormats: Record<string, OfficeFormat> = {
   ppt: 'pptx',
@@ -69,6 +71,22 @@ function cleanMarkdown(value: string) {
 
 function safeBaseName(value: string) {
   return cleanMarkdown(value).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 72) || '办公任务'
+}
+
+function inferSkillFromIntent(value: string) {
+  const normalized = value.toLowerCase()
+  if (/\b(pptx?|powerpoint)\b|演示文稿|幻灯片/.test(normalized)) return 'ppt'
+  if (/\b(excel|xlsx|spreadsheet)\b|电子表格|数据表|数据分析/.test(normalized)) return 'excel'
+  if (/\b(code|markdown)\b|代码|程序/.test(normalized)) return 'development'
+  const prefix = value.split('·')[0]?.trim() || ''
+  const titleSkills: Record<string, string> = {
+    'PPT 大纲': 'ppt',
+    '数据分析': 'analysis',
+    '多维表格': 'spreadsheet',
+    'Excel 助手': 'excel',
+    '代码开发': 'development',
+  }
+  return titleSkills[prefix] || 'daily'
 }
 
 function parseSections(content: string, fallbackTitle: string): MarkdownSection[] {
@@ -119,12 +137,26 @@ function parseMarkdownTables(content: string) {
 export class OfficeExportService {
   constructor(private readonly prisma: PrismaService, private readonly assets: AssetsService) {}
 
-  async create(userId: string, conversationId: string, requestedFormat?: OfficeFormat, messageId?: string) {
-    const conversation = await this.prisma.conversation.findFirst({ where: { id: conversationId, userId }, select: { id: true, title: true } })
-    if (!conversation) throw new NotFoundException('对话不存在')
-    const requestedMessage = messageId ? await this.prisma.message.findFirst({ where: { id: messageId, conversationId, role: 'ASSISTANT', deletedAt: null }, select: { id: true, content: true } }) : null
-    if (messageId && !requestedMessage) throw new NotFoundException('要导出的回答不存在')
-    const agentTask = await this.prisma.agentTask.findFirst({
+  async create(userId: string, input: OfficeExportInput) {
+    if (!input.conversationId && !input.agentTaskId) throw new BadRequestException('缺少办公任务标识')
+    const requestedAgentTask = input.agentTaskId ? await this.prisma.agentTask.findFirst({
+      where: { id: input.agentTaskId, userId, status: 'SUCCEEDED' },
+      include: { runs: { where: { status: 'SUCCEEDED' }, orderBy: { completedAt: 'desc' }, take: 1 } },
+    }) : null
+    if (input.agentTaskId && !requestedAgentTask) throw new BadRequestException('办公任务尚未完成或不存在')
+    const conversationId = requestedAgentTask?.conversationId || input.conversationId
+    if (!conversationId) throw new BadRequestException('办公任务尚未建立可导出的会话')
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, userId },
+      select: { id: true, title: true, messages: { where: { role: 'ASSISTANT', deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { content: true } } },
+    })
+    if (!conversation) throw new NotFoundException('办公任务不存在')
+    const requestedMessage = input.messageId ? await this.prisma.message.findFirst({
+      where: { id: input.messageId, conversationId, role: 'ASSISTANT', deletedAt: null },
+      select: { id: true, content: true },
+    }) : null
+    if (input.messageId && !requestedMessage) throw new NotFoundException('要导出的回答不存在')
+    const agentTask = requestedAgentTask || await this.prisma.agentTask.findFirst({
       where: { userId, conversationId, status: 'SUCCEEDED' },
       include: { runs: { where: { status: 'SUCCEEDED' }, orderBy: { completedAt: 'desc' }, take: 1 } },
     })
@@ -132,35 +164,49 @@ export class OfficeExportService {
       where: { userId, conversationId, kind: 'CHAT', status: 'SUCCEEDED' },
       orderBy: { completedAt: 'desc' },
       take: 20,
-      select: { id: true, options: true },
+      select: { id: true, prompt: true, options: true },
     })
-    const job = jobs.find((item) => {
+    const officeJob = jobs.find((item) => {
       const options = item.options && typeof item.options === 'object' && !Array.isArray(item.options) ? item.options as Record<string, unknown> : {}
-      return typeof options.officeSkill === 'string'
+      return typeof options.officeSkill === 'string' || typeof options.agentTaskId === 'string'
     })
-    if (!requestedMessage && !job && !agentTask?.runs[0]) throw new BadRequestException('该对话不是可导出的办公任务')
-    const sourceId = requestedMessage?.id || agentTask?.runs[0]?.id || job!.id
+    const job = officeJob || jobs[0]
+    const message = job ? await this.prisma.message.findFirst({ where: { conversationId, deletedAt: null, metadata: { path: ['jobId'], equals: job.id } }, select: { content: true } }) : null
+    const content = requestedMessage?.content || agentTask?.runs[0]?.finalAnswer || message?.content || conversation.messages[0]?.content || ''
+    if (!content.trim()) throw new BadRequestException('办公任务尚未生成可导出的内容')
     const options = job?.options && typeof job.options === 'object' && !Array.isArray(job.options) ? job.options as Record<string, unknown> : {}
-    const skillId = agentTask?.skillId || String(options.officeSkill || '')
-    const format = requestedFormat || (skillId.startsWith('assistant:') ? 'docx' : skillFormats[skillId] || 'docx')
-    const sourceMetadata = requestedMessage ? { path: ['officeMessageId'], equals: sourceId } : agentTask?.runs[0] ? { path: ['agentRunId'], equals: sourceId } : { path: ['officeJobId'], equals: sourceId }
-    const existing = await this.prisma.asset.findFirst({ where: { userId, deletedAt: null, AND: [{ metadata: sourceMetadata }, { metadata: { path: ['officeFormat'], equals: format } }] } })
+    const configuredSkill = agentTask?.skillId || String(options.officeSkill || '')
+    const intent = agentTask?.goal || job?.prompt || conversation.title
+    const skillId = configuredSkill && configuredSkill !== 'daily' ? configuredSkill : inferSkillFromIntent(`${conversation.title}\n${intent}`)
+    const format = input.format || (skillId.startsWith('assistant:') ? 'docx' : skillFormats[skillId] || 'docx')
+    const sourceId = requestedMessage?.id || agentTask?.runs[0]?.id || job?.id || conversation.id
+    const matchesFormat = { metadata: { path: ['officeFormat'], equals: format } }
+    const existing = await this.prisma.asset.findFirst({
+      where: {
+        userId,
+        deletedAt: null,
+        OR: [
+          { AND: [{ metadata: { path: ['officeConversationId'], equals: conversation.id } }, matchesFormat] },
+          ...(requestedMessage ? [{ AND: [{ metadata: { path: ['officeMessageId'], equals: sourceId } }, matchesFormat] }] : []),
+          { AND: [{ metadata: { path: ['officeJobId'], equals: sourceId } }, matchesFormat] },
+          { AND: [{ metadata: { path: ['agentRunId'], equals: sourceId } }, matchesFormat] },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    })
     if (existing) {
       if (agentTask?.runs[0]) await this.attachArtifact(agentTask.runs[0].id, agentTask.runs[0].artifactIds, existing.id)
       return this.publicAsset(existing)
     }
-
-    const message = !requestedMessage && job ? await this.prisma.message.findFirst({ where: { conversationId, metadata: { path: ['jobId'], equals: job.id } }, select: { content: true } }) : null
-    const content = requestedMessage?.content || agentTask?.runs[0]?.finalAnswer || message?.content || ''
-    if (!content.trim()) throw new BadRequestException('办公任务尚未生成可导出的内容')
     const title = safeBaseName(conversation.title.replace(/^[^·]+·\s*/, ''))
     const bytes = await this.render(format, title, content)
+    this.assertOfficeFile(format, bytes)
     const name = `${title}.${format}`
     const asset = await this.assets.storeGenerated(userId, bytes, {
       name,
       mimeType: mimeTypes[format],
       kind: AssetKind.FILE,
-      metadata: { purpose: 'generated', ...(requestedMessage ? { officeMessageId: sourceId } : agentTask?.runs[0] ? { agentRunId: sourceId } : { officeJobId: sourceId }), officeConversationId: conversationId, officeSkill: skillId, officeFormat: format },
+      metadata: { purpose: 'generated', ...(requestedMessage ? { officeMessageId: sourceId } : agentTask?.runs[0] ? { agentRunId: sourceId } : job ? { officeJobId: sourceId } : {}), officeSourceId: sourceId, officeConversationId: conversation.id, officeSkill: skillId, officeFormat: format },
     })
     if (agentTask?.runs[0]) {
       await this.attachArtifact(agentTask.runs[0].id, agentTask.runs[0].artifactIds, asset.id)
@@ -182,6 +228,17 @@ export class OfficeExportService {
     if (format === 'xlsx') return this.renderWorkbook(title, content)
     if (format === 'docx') return this.renderDocument(title, content)
     return Promise.resolve(Buffer.from(content, 'utf8'))
+  }
+
+  private assertOfficeFile(format: OfficeFormat, bytes: Buffer) {
+    if (!bytes.length) throw new BadRequestException('办公文件生成失败：文件内容为空')
+    if (format === 'md') return
+    if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new BadRequestException(`办公文件生成失败：${format} 文件签名无效`)
+    let entries: Set<string>
+    try { entries = new Set(new AdmZip(bytes).getEntries().map((entry) => entry.entryName)) }
+    catch { throw new BadRequestException(`办公文件生成失败：${format} 文件结构损坏`) }
+    const required = format === 'pptx' ? ['[Content_Types].xml', 'ppt/presentation.xml'] : format === 'xlsx' ? ['[Content_Types].xml', 'xl/workbook.xml'] : ['[Content_Types].xml', 'word/document.xml']
+    if (required.some((entry) => !entries.has(entry))) throw new BadRequestException(`办公文件生成失败：${format} 缺少必要结构`)
   }
 
   private async renderPresentation(title: string, content: string) {

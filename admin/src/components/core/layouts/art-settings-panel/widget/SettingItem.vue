@@ -49,8 +49,7 @@
     style?: Record<string, string>
     controlsPosition?: '' | 'right'
     options?:
-      | Array<{ value: any; label: string }>
-      | ComputedRef<Array<{ value: any; label: string }>>
+      Array<{ value: any; label: string }> | ComputedRef<Array<{ value: any; label: string }>>
   }
 
   interface Props {

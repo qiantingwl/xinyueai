@@ -28,6 +28,12 @@ export class GenerationsController {
   @Get(':id') get(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) { return this.generations.get(user.id, id) }
   @Post(':id/cancel') cancel(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) { return this.generations.cancel(user.id, id) }
   @Sse(':id/events') events(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string): Observable<MessageEvent> {
-    return interval(200).pipe(startWith(0), switchMap(() => from(this.generations.get(user.id, id))), distinctUntilChanged((a, b) => a.updatedAt.getTime() === b.updatedAt.getTime()), map((job) => ({ type: 'job', id: job.id, data: job })), takeWhile((event) => !['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(event.data.status), true))
+    return interval(200).pipe(
+      startWith(0),
+      switchMap(() => from(this.generations.get(user.id, id))),
+      distinctUntilChanged((a, b) => a.status === b.status && a.stream?.content === b.stream?.content),
+      map((job) => ({ type: 'job', id: job.id, data: job })),
+      takeWhile((event) => !['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(event.data.status), true),
+    )
   }
 }

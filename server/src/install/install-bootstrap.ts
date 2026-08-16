@@ -13,7 +13,7 @@ export async function withDatabase<T>(databaseUrl: string, operation: (client: P
   }
 }
 
-export async function testDatabase(databaseUrl: string) {
+export function testDatabase(databaseUrl: string) {
   return withDatabase(databaseUrl, async (client) => {
     await client.$queryRawUnsafe('SELECT 1')
     return true
@@ -46,16 +46,12 @@ export async function installationBootstrapMode() {
     const adminCount = await withDatabase(databaseUrl, (client) => client.user.count({ where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] }, status: 'ACTIVE' } }))
     if (adminCount > 0) {
       process.env.INSTALL_COMPLETED = 'true'
-      try {
-        writeRuntimeEnv({ INSTALL_COMPLETED: 'true' })
-      } catch {
-        // Read-only deployments can set INSTALL_COMPLETED in their environment.
-      }
+      try { writeRuntimeEnv({ INSTALL_COMPLETED: 'true' }) } catch { /* Read-only deployments configure this externally. */ }
       return 'application' as const
     }
     return process.env.INSTALL_COMPLETED === 'true' ? 'maintenance' as const : 'install' as const
   } catch (error) {
     console.warn(`[install] ${error instanceof Error ? error.message : '数据库尚未准备完成'}`)
-    return 'install' as const
+    return process.env.INSTALL_COMPLETED === 'true' ? 'maintenance' as const : 'install' as const
   }
 }

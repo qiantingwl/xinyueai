@@ -105,7 +105,9 @@
             ><div v-for="row in report?.providers || []" :key="row.key" class="provider-row"
               ><div class="provider-line"
                 ><strong>{{ row.label }}</strong
-                ><span>{{ row.jobs }} {{ xt('个任务') }} · {{ moneyMicros(row.costMicros) }}</span></div
+                ><span
+                  >{{ row.jobs }} {{ xt('个任务') }} · {{ moneyMicros(row.costMicros) }}</span
+                ></div
               ><ElProgress
                 :percentage="providerPercent(row.jobs)"
                 :show-text="false"
@@ -170,7 +172,6 @@
     }
   ])
   const moneyMicros = (value: number) => `¥${(value / 1_000_000).toFixed(2)}`
-  const moneyCents = (value: number) => `¥${(value / 100).toFixed(2)}`
   const percent = (value: number | null) => (value === null ? '-' : `${value.toFixed(1)}%`)
   const providerPercent = (value: number) => {
     const max = Math.max(...(report.value?.providers || []).map((row) => row.jobs), 1)
@@ -247,45 +248,53 @@
   .dashboard-page {
     min-height: calc(100vh - 130px);
   }
+
   .dashboard-heading,
   .card-heading {
     display: flex;
+    gap: 16px;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 16px;
   }
+
   .dashboard-heading {
     margin-bottom: 22px;
   }
+
   .dashboard-heading h1 {
     margin: 0;
     font-size: 24px;
     font-weight: 600;
     color: var(--art-gray-900);
   }
+
   .dashboard-heading p,
   .card-heading p {
     margin: 6px 0 0;
     font-size: 13px;
     color: var(--art-gray-600);
   }
+
   .heading-actions {
     display: grid;
     grid-template-columns: minmax(150px, 210px) auto auto;
-    align-items: center;
     gap: 10px;
+    align-items: center;
     white-space: nowrap;
   }
+
   .heading-actions :deep(.el-button) {
     height: 32px;
     padding: 0 12px;
   }
+
   .metric-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px;
     margin-bottom: 20px;
   }
+
   .metric-card {
     display: flex;
     gap: 13px;
@@ -296,92 +305,111 @@
     border: 1px solid var(--art-card-border);
     border-radius: 8px;
   }
+
   .metric-icon {
     display: flex;
+    flex: 0 0 44px;
     align-items: center;
     justify-content: center;
     width: 44px;
     height: 44px;
-    flex: 0 0 44px;
     font-size: 21px;
     border-radius: 8px;
   }
+
   .metric-icon.green {
     color: #16845a;
     background: #e5f6ef;
   }
+
   .metric-icon.blue {
     color: #2563eb;
     background: #e8efff;
   }
+
   .metric-icon.orange {
     color: #c36c0c;
     background: #fff1dc;
   }
+
   .metric-icon.purple {
     color: #7c3aed;
     background: #f1eaff;
   }
+
   .metric-card span,
   .metric-card small {
     display: block;
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .metric-card strong {
     display: block;
     margin: 5px 0 3px;
-    color: var(--art-gray-900);
     font-size: 23px;
     font-weight: 650;
+    color: var(--art-gray-900);
   }
+
   .art-card {
     padding: 20px;
     margin-bottom: 20px;
     border: 1px solid var(--art-card-border);
     border-radius: 8px;
   }
+
   .chart-card {
     min-height: 365px;
   }
+
   .card-heading h2 {
     margin: 0;
-    color: var(--art-gray-900);
     font-size: 16px;
     font-weight: 600;
+    color: var(--art-gray-900);
   }
+
   .table-card {
     min-height: 350px;
   }
+
   .table-card :deep(.el-table) {
     margin-top: 18px;
   }
+
   .provider-list {
     margin-top: 24px;
   }
+
   .provider-row + .provider-row {
     margin-top: 22px;
   }
+
   .provider-line {
     display: flex;
-    justify-content: space-between;
     gap: 14px;
+    justify-content: space-between;
     margin-bottom: 8px;
     font-size: 13px;
   }
+
   .provider-line span {
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .recent-card {
     margin-bottom: 0;
   }
+
   .notice-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
     margin-top: 20px;
   }
+
   .notice-grid > div {
     display: grid;
     grid-template-columns: 22px 1fr auto;
@@ -391,36 +419,45 @@
     background: var(--art-gray-100);
     border-radius: 6px;
   }
+
   .notice-grid svg {
     color: var(--el-color-primary);
   }
+
   .notice-grid span {
-    color: var(--art-gray-600);
     font-size: 13px;
+    color: var(--art-gray-600);
   }
+
   .notice-grid strong {
     color: var(--art-gray-900);
   }
-  @media (max-width: 900px) {
+
+  @media (width <= 900px) {
     .metric-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
     .notice-grid {
       grid-template-columns: repeat(2, 1fr);
     }
   }
-  @media (max-width: 600px) {
+
+  @media (width <= 600px) {
     .dashboard-heading {
       flex-direction: column;
     }
+
     .heading-actions {
-      width: 100%;
       grid-template-columns: minmax(0, 1fr) auto auto;
       gap: 6px;
+      width: 100%;
     }
+
     .heading-actions .el-select {
       min-width: 0;
     }
+
     .metric-grid,
     .notice-grid {
       grid-template-columns: 1fr;

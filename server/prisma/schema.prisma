@@ -213,68 +213,62 @@ enum WebSearchProviderType {
   CUSTOM
 }
 
-enum ProjectSkillChangeType {
-  MANUAL
-  SUMMARY
-  RESTORE
-  DISABLE
-}
-
 model User {
-  id                  String                 @id @default(cuid())
-  email               String?                @unique
-  username            String?                @unique
-  displayName         String
-  avatarUrl           String?
-  passwordHash        String?
-  company             String                 @default("")
-  phone               String                 @default("")
-  tags                String[]               @default([])
-  adminNote           String                 @default("") @db.Text
-  role                UserRole               @default(USER)
-  status              UserStatus             @default(ACTIVE)
-  emailVerifiedAt     DateTime?
-  lastLoginAt         DateTime?
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
-  sessions            Session[]
-  externalIdentities  ExternalIdentity[]
-  settings            UserSettings?
-  creditAccount       CreditAccount?
-  projects            Project[]
-  projectMemberships  ProjectMember[]
-  conversations       Conversation[]
-  authoredMessages    Message[]               @relation("MessageAuthor")
-  deletedMessages     Message[]               @relation("MessageDeletedBy")
-  assets              Asset[]
-  jobs                GenerationJob[]
-  notifications       Notification[]
-  auditLogs           AuditLog[]             @relation("ActorAuditLogs")
-  invitations         Invitation[]           @relation("Inviter")
-  invitedBy           Invitation?            @relation("Invitee")
-  groupMemberships    UserGroupMember[]
-  apiCredentials      UserApiCredential[]
-  rechargeOrders      RechargeOrder[]
-  subscriptions       UserSubscription[]
-  subscriptionOrders  SubscriptionOrder[]
-  paymentTransactions PaymentTransaction[]
-  paymentRefunds      PaymentRefund[]
-  moderationEvents    ModerationEvent[]
-  supportTickets      SupportTicket[]        @relation("SupportTicketRequester")
-  assignedTickets     SupportTicket[]        @relation("SupportTicketAssignee")
-  supportMessages     SupportTicketMessage[] @relation("SupportMessageAuthor")
-  knowledgeBases      KnowledgeBase[]        @relation("KnowledgeBaseCreator")
-  ownedTeams          Team[]                 @relation("TeamOwner")
-  teamMemberships     TeamMember[]
-  toolCallAudits      ToolCallAudit[]
-  toolApprovalRequests ToolApprovalRequest[] @relation("ToolApprovalRequester")
-  reviewedToolApprovals ToolApprovalRequest[] @relation("ToolApprovalReviewer")
-  privatePlugins       Plugin[]               @relation("PluginOwner")
-  pluginInstallations  PluginInstallation[]
-  pluginUsages         PluginUsage[]
-  agentTasks           AgentTask[]
-  agentSchedules       AgentSchedule[]
-  projectSkillVersions ProjectSkillVersion[]
+  id                    String                 @id @default(cuid())
+  email                 String?                @unique
+  username              String?                @unique
+  displayName           String
+  avatarUrl             String?
+  passwordHash          String?
+  company               String                 @default("")
+  phone                 String                 @default("")
+  tags                  String[]               @default([])
+  adminNote             String                 @default("") @db.Text
+  role                  UserRole               @default(USER)
+  status                UserStatus             @default(ACTIVE)
+  emailVerifiedAt       DateTime?
+  lastLoginAt           DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  sessions              Session[]
+  externalIdentities    ExternalIdentity[]
+  settings              UserSettings?
+  creditAccount         CreditAccount?
+  projects              Project[]
+  projectMemberships    ProjectMember[]
+  projectSkillVersions  ProjectSkillVersion[]
+  conversations         Conversation[]
+  authoredMessages      Message[]              @relation("MessageAuthor")
+  deletedMessages       Message[]              @relation("MessageDeletedBy")
+  assets                Asset[]
+  jobs                  GenerationJob[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]             @relation("ActorAuditLogs")
+  invitations           Invitation[]           @relation("Inviter")
+  invitedBy             Invitation?            @relation("Invitee")
+  groupMemberships      UserGroupMember[]
+  apiCredentials        UserApiCredential[]
+  rechargeOrders        RechargeOrder[]
+  subscriptions         UserSubscription[]
+  subscriptionOrders    SubscriptionOrder[]
+  paymentTransactions   PaymentTransaction[]
+  paymentRefunds        PaymentRefund[]
+  moderationEvents      ModerationEvent[]
+  supportTickets        SupportTicket[]        @relation("SupportTicketRequester")
+  assignedTickets       SupportTicket[]        @relation("SupportTicketAssignee")
+  supportMessages       SupportTicketMessage[] @relation("SupportMessageAuthor")
+  knowledgeBases        KnowledgeBase[]        @relation("KnowledgeBaseCreator")
+  ownedTeams            Team[]                 @relation("TeamOwner")
+  teamMemberships       TeamMember[]
+  toolCallAudits        ToolCallAudit[]
+  toolApprovalRequests  ToolApprovalRequest[]  @relation("ToolApprovalRequester")
+  reviewedToolApprovals ToolApprovalRequest[]  @relation("ToolApprovalReviewer")
+  privatePlugins        Plugin[]               @relation("PluginOwner")
+  pluginInstallations   PluginInstallation[]
+  pluginUsages          PluginUsage[]
+  agentTasks            AgentTask[]
+  agentSchedules        AgentSchedule[]
+  connectorCredentials  ConnectorCredential[]
 }
 
 model ExternalIdentity {
@@ -418,34 +412,53 @@ model CreditLedger {
 }
 
 model Project {
-  id                 String           @id @default(cuid())
-  userId             String
-  name               String
-  description        String           @default("") @db.Text
-  instructions       String           @default("") @db.Text
-  workflowStatus     String           @default("PLANNING")
-  workflowConfig     Json?
-  defaultModel       String           @default("")
-  defaultAssistantId String?
-  revision           Int              @default(1)
-  skillRevision      Int              @default(0)
-  activeSkillVersionId String?         @unique
-  archivedAt         DateTime?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  defaultAssistant   Assistant?       @relation(fields: [defaultAssistantId], references: [id], onDelete: SetNull)
-  conversations      Conversation[]
-  assets             Asset[]
-  jobs               GenerationJob[]
-  versions           ProjectVersion[]
-  agentTasks         AgentTask[]
-  members            ProjectMember[]
-  activeSkillVersion ProjectSkillVersion? @relation("ProjectActiveSkill", fields: [activeSkillVersionId], references: [id], onDelete: SetNull)
-  skillVersions      ProjectSkillVersion[] @relation("ProjectSkillVersions")
+  id                   String                @id @default(cuid())
+  userId               String
+  name                 String
+  description          String                @default("") @db.Text
+  instructions         String                @default("") @db.Text
+  workflowStatus       String                @default("PLANNING")
+  workflowConfig       Json?
+  defaultModel         String                @default("")
+  defaultAssistantId   String?
+  revision             Int                   @default(1)
+  skillRevision        Int                   @default(0)
+  activeSkillVersionId String?               @unique
+  archivedAt           DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultAssistant     Assistant?            @relation(fields: [defaultAssistantId], references: [id], onDelete: SetNull)
+  conversations        Conversation[]
+  assets               Asset[]
+  jobs                 GenerationJob[]
+  versions             ProjectVersion[]
+  agentTasks           AgentTask[]
+  members              ProjectMember[]
+  activeSkillVersion   ProjectSkillVersion?  @relation("ProjectActiveSkill", fields: [activeSkillVersionId], references: [id], onDelete: SetNull)
+  skillVersions        ProjectSkillVersion[] @relation("ProjectSkillVersions")
 
   @@index([userId, updatedAt])
   @@index([defaultAssistantId])
+}
+
+model ProjectMember {
+  projectId String
+  userId    String
+  role      String   @default("MEMBER")
+  joinedAt  DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId, joinedAt])
+}
+
+enum ProjectSkillChangeType {
+  MANUAL
+  SUMMARY
+  RESTORE
+  DISABLE
 }
 
 model ProjectSkillVersion {
@@ -474,17 +487,6 @@ model ProjectSkillVersion {
   @@index([sourceConversationId])
 }
 
-model ProjectMember {
-  projectId String
-  userId    String
-  joinedAt  DateTime @default(now())
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([projectId, userId])
-  @@index([userId, joinedAt])
-}
-
 model ProjectVersion {
   id            String   @id @default(cuid())
   projectId     String
@@ -500,24 +502,24 @@ model ProjectVersion {
 }
 
 model Conversation {
-  id         String          @id @default(cuid())
-  userId     String
-  projectId  String?
-  title      String          @default("新对话")
-  model      String
-  archivedAt DateTime?
-  pinnedAt   DateTime?
-  shareToken String?         @unique
-  sharedAt   DateTime?
-  temporary  Boolean         @default(false)
-  expiresAt  DateTime?
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project    Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  messages   Message[]
-  jobs       GenerationJob[]
-  agentTask  AgentTask?
+  id                  String                @id @default(cuid())
+  userId              String
+  projectId           String?
+  title               String                @default("新对话")
+  model               String
+  archivedAt          DateTime?
+  pinnedAt            DateTime?
+  shareToken          String?               @unique
+  sharedAt            DateTime?
+  temporary           Boolean               @default(false)
+  expiresAt           DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project             Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  messages            Message[]
+  jobs                GenerationJob[]
+  agentTask           AgentTask?
   skillSourceVersions ProjectSkillVersion[]
 
   @@index([userId, updatedAt])
@@ -702,36 +704,37 @@ model PromptLibrarySourceConfig {
 }
 
 model PromptLibraryItemOverride {
-  itemId      String   @id
-  sourceId    String
-  title       String?
-  prompt      String?  @db.Text
-  description String?  @db.Text
-  tags        String[] @default([])
-  coverUrl    String?  @db.Text
-  enabled     Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  itemId          String   @id
+  sourceId        String
+  title           String?
+  prompt          String?  @db.Text
+  description     String?  @db.Text
+  tags            String[] @default([])
+  coverUrl        String?  @db.Text
+  previewVideoUrl String?  @db.Text
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([sourceId, enabled])
 }
 
 model Assistant {
-  id              String                   @id @default(cuid())
-  name            String
-  description     String                   @default("") @db.Text
-  systemPrompt    String                   @default("") @db.Text
-  defaultModel    String                   @default("")
-  templateIds     Json?
-  enabled         Boolean                  @default(true)
-  visibility      String                   @default("PUBLIC")
-  sortOrder       Int                      @default(0)
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
-  knowledgeBases  AssistantKnowledgeBase[]
-  tools           AssistantTool[]
-  toolCallAudits  ToolCallAudit[]
-  defaultProjects Project[]
+  id               String                   @id @default(cuid())
+  name             String
+  description      String                   @default("") @db.Text
+  systemPrompt     String                   @default("") @db.Text
+  defaultModel     String                   @default("")
+  templateIds      Json?
+  enabled          Boolean                  @default(true)
+  visibility       String                   @default("PUBLIC")
+  sortOrder        Int                      @default(0)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  knowledgeBases   AssistantKnowledgeBase[]
+  tools            AssistantTool[]
+  toolCallAudits   ToolCallAudit[]
+  defaultProjects  Project[]
   approvalRequests ToolApprovalRequest[]
   agentTasks       AgentTask[]
 
@@ -779,26 +782,48 @@ model AssistantKnowledgeBase {
 }
 
 model ToolDefinition {
-  id               String          @id @default(cuid())
-  key              String          @unique
-  name             String
-  description      String          @default("") @db.Text
-  endpoint         String          @default("")
-  httpMethod       String          @default("POST")
-  timeoutMs        Int             @default(45000)
-  headers          Json?
-  encryptedHeaders String          @default("") @db.Text
+  id                String                @id @default(cuid())
+  key               String                @unique
+  name              String
+  description       String                @default("") @db.Text
+  icon              String                @default("wrench")
+  iconAssetId       String?
+  kind              String                @default("BUILT_IN")
+  authType          String                @default("NONE")
+  documentationUrl  String                @default("") @db.Text
+  credentialFields  Json?
+  endpoint          String                @default("")
+  httpMethod        String                @default("POST")
+  timeoutMs         Int                   @default(45000)
+  headers           Json?
+  encryptedHeaders  String                @default("") @db.Text
   secretHeaderHints Json?
-  inputSchema      Json?
-  scopes           Json?
-  enabled          Boolean         @default(false)
-  requiresApproval Boolean         @default(true)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  assistants       AssistantTool[]
-  calls            ToolCallAudit[]
-  approvalRequests ToolApprovalRequest[]
+  inputSchema       Json?
+  scopes            Json?
+  enabled           Boolean               @default(false)
+  requiresApproval  Boolean               @default(true)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  assistants        AssistantTool[]
+  calls             ToolCallAudit[]
+  approvalRequests  ToolApprovalRequest[]
   agentToolCalls    AgentToolCall[]
+  credentials       ConnectorCredential[]
+}
+
+model ConnectorCredential {
+  userId               String
+  toolId               String
+  encryptedCredentials String         @db.Text
+  credentialHints      Json?
+  status               String         @default("CONNECTED")
+  connectedAt          DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tool                 ToolDefinition @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@id([userId, toolId])
+  @@index([toolId, status])
 }
 
 model WebSearchChannel {
@@ -884,23 +909,23 @@ model ToolCallAudit {
 }
 
 model ToolApprovalRequest {
-  id          String        @id @default(cuid())
-  userId      String
-  toolId      String
-  assistantId String?
-  status      String        @default("PENDING")
-  reason      String        @default("") @db.Text
-  adminNote   String        @default("") @db.Text
+  id           String         @id @default(cuid())
+  userId       String
+  toolId       String
+  assistantId  String?
+  status       String         @default("PENDING")
+  reason       String         @default("") @db.Text
+  adminNote    String         @default("") @db.Text
   reviewedById String?
-  reviewedAt  DateTime?
-  expiresAt   DateTime?
-  consumedAt  DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  user        User          @relation("ToolApprovalRequester", fields: [userId], references: [id], onDelete: Cascade)
-  tool        ToolDefinition @relation(fields: [toolId], references: [id], onDelete: Cascade)
-  assistant   Assistant?    @relation(fields: [assistantId], references: [id], onDelete: SetNull)
-  reviewedBy  User?         @relation("ToolApprovalReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  expiresAt    DateTime?
+  consumedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  user         User           @relation("ToolApprovalRequester", fields: [userId], references: [id], onDelete: Cascade)
+  tool         ToolDefinition @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  assistant    Assistant?     @relation(fields: [assistantId], references: [id], onDelete: SetNull)
+  reviewedBy   User?          @relation("ToolApprovalReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([userId, status, createdAt])
   @@index([status, createdAt])
@@ -1067,6 +1092,8 @@ model SystemSetting {
   defaultUserCredits           Int      @default(8)
   defaultTheme                 String   @default("dark")
   defaultLanguage              String   @default("zh-CN")
+  chatUiPreset                 String   @default("gpt")
+  chatHomeContent              Json     @default("{}")
   defaultChatModelKey          String   @default("")
   defaultImageModelKey         String   @default("")
   userByokEnabled              Boolean  @default(true)
@@ -1429,75 +1456,75 @@ model GenerationJob {
 }
 
 model AgentTask {
-  id              String          @id @default(cuid())
-  userId          String
-  projectId       String?
-  assistantId     String?
-  conversationId  String?         @unique
-  generationJobId String?         @unique
-  title           String
-  goal            String          @db.Text
-  instructions    String          @default("") @db.Text
-  model           String
-  skillId         String          @default("daily")
-  pluginId        String?
-  attachmentIds   Json?
-  webSearchEnabled Boolean        @default(true)
-  sourceTaskId    String?
-  scheduleId      String?
-  scheduledFor    DateTime?
-  status          AgentTaskStatus @default(DRAFT)
-  errorMessage    String?         @db.Text
-  startedAt       DateTime?
-  completedAt     DateTime?
-  archivedAt      DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project         Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  assistant       Assistant?      @relation(fields: [assistantId], references: [id], onDelete: SetNull)
-  conversation    Conversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  generationJob   GenerationJob?  @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
-  steps           AgentTaskStep[]
-  runs            AgentRun[]
-  events          AgentEvent[]
-  toolCalls       AgentToolCall[]
-  schedule        AgentSchedule?  @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  id               String          @id @default(cuid())
+  userId           String
+  projectId        String?
+  assistantId      String?
+  conversationId   String?         @unique
+  generationJobId  String?         @unique
+  title            String
+  goal             String          @db.Text
+  instructions     String          @default("") @db.Text
+  model            String
+  skillId          String          @default("daily")
+  pluginId         String?
+  attachmentIds    Json?
+  webSearchEnabled Boolean         @default(true)
+  sourceTaskId     String?
+  scheduleId       String?
+  scheduledFor     DateTime?
+  status           AgentTaskStatus @default(DRAFT)
+  errorMessage     String?         @db.Text
+  startedAt        DateTime?
+  completedAt      DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project          Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  assistant        Assistant?      @relation(fields: [assistantId], references: [id], onDelete: SetNull)
+  conversation     Conversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  generationJob    GenerationJob?  @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+  steps            AgentTaskStep[]
+  runs             AgentRun[]
+  events           AgentEvent[]
+  toolCalls        AgentToolCall[]
+  schedule         AgentSchedule?  @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
 
+  @@unique([scheduleId, scheduledFor])
   @@index([userId, updatedAt])
   @@index([userId, status])
   @@index([projectId])
   @@index([assistantId])
   @@index([userId, archivedAt, updatedAt])
   @@index([scheduleId, scheduledFor])
-  @@unique([scheduleId, scheduledFor])
 }
 
 model AgentSchedule {
-  id              String    @id @default(cuid())
-  userId          String
-  title           String
-  goal            String    @db.Text
-  instructions    String    @default("") @db.Text
-  model           String
-  skillId         String    @default("daily")
-  assistantId     String?
-  projectId       String?
-  pluginId        String?
-  attachmentIds   Json?
-  webSearchEnabled Boolean   @default(true)
-  cronExpression  String
-  timezone        String    @default("Asia/Shanghai")
-  enabled         Boolean   @default(true)
-  lastTaskId      String?
-  lastRunAt       DateTime?
-  nextRunAt       DateTime?
-  consecutiveFailures Int   @default(0)
-  lastError       String    @default("") @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tasks           AgentTask[]
+  id                  String      @id @default(cuid())
+  userId              String
+  title               String
+  goal                String      @db.Text
+  instructions        String      @default("") @db.Text
+  model               String
+  skillId             String      @default("daily")
+  assistantId         String?
+  projectId           String?
+  pluginId            String?
+  attachmentIds       Json?
+  webSearchEnabled    Boolean     @default(true)
+  cronExpression      String
+  timezone            String      @default("Asia/Shanghai")
+  enabled             Boolean     @default(true)
+  lastTaskId          String?
+  lastRunAt           DateTime?
+  nextRunAt           DateTime?
+  consecutiveFailures Int         @default(0)
+  lastError           String      @default("") @db.Text
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks               AgentTask[]
 
   @@index([userId, enabled, updatedAt])
   @@index([enabled, nextRunAt])
@@ -1763,19 +1790,19 @@ model SupportTicketMessage {
 }
 
 model ContentPage {
-  id          String   @id @default(cuid())
-  slug        String   @unique
+  id          String    @id @default(cuid())
+  slug        String    @unique
   title       String
-  category    String   @default("关于我们")
-  summary     String   @default("") @db.Text
-  contentHtml String   @db.Text
-  coverUrl    String   @default("")
-  published   Boolean  @default(false)
-  sortOrder   Int      @default(0)
-  views       Int      @default(0)
+  category    String    @default("关于我们")
+  summary     String    @default("") @db.Text
+  contentHtml String    @db.Text
+  coverUrl    String    @default("")
+  published   Boolean   @default(false)
+  sortOrder   Int       @default(0)
+  views       Int       @default(0)
   publishedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([published, sortOrder, updatedAt])
   @@index([category, published])

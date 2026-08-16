@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { PluginCapability } from '@prisma/client'
+import type { FastifyRequest } from 'fastify'
 import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedUser, CurrentUser } from '../common/request-user'
 import { PrivatePluginDto } from './plugin.dto'
@@ -22,6 +23,14 @@ export class PluginsController {
   @Post(':id/install') install(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) { return this.plugins.install(user.id, id) }
   @Delete(':id/install') uninstall(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) { return this.plugins.uninstall(user.id, id) }
   @Post('mine') create(@CurrentUser() user: AuthenticatedUser, @Body() body: PrivatePluginDto) { return this.plugins.createPrivate(user.id, body) }
+  @Post('mine/import')
+  async importSkill(@CurrentUser() user: AuthenticatedUser, @Req() request: FastifyRequest) {
+    const part = await request.file()
+    if (!part) throw new BadRequestException('请选择技能文件')
+    const chunks: Buffer[] = []; let size = 0
+    for await (const chunk of part.file) { size += chunk.length; if (size > 5 * 1024 * 1024) throw new BadRequestException('技能包大小必须在 5MB 以内'); chunks.push(Buffer.from(chunk)) }
+    return this.plugins.importPrivate(user.id, part.filename, Buffer.concat(chunks))
+  }
   @Patch('mine/:id') update(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() body: PrivatePluginDto) { return this.plugins.updatePrivate(user.id, id, body) }
   @Delete('mine/:id') remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) { return this.plugins.deletePrivate(user.id, id) }
 }

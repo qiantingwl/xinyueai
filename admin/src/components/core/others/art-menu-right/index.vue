@@ -146,40 +146,32 @@
   let eventListenersAdded = false
 
   // 计算菜单样式
-  const menuStyle = computed(
-    (): CSSProperties => ({
-      position: 'fixed' as const,
-      left: `${position.value.x}px`,
-      top: `${position.value.y}px`,
-      zIndex: 2000,
-      width: `${props.menuWidth}px`
-    })
-  )
+  const menuStyle = computed((): CSSProperties => ({
+    position: 'fixed' as const,
+    left: `${position.value.x}px`,
+    top: `${position.value.y}px`,
+    zIndex: 2000,
+    width: `${props.menuWidth}px`
+  }))
 
   // 计算菜单列表样式
-  const menuListStyle = computed(
-    (): CSSProperties => ({
-      padding: `${props.menuPadding}px`
-    })
-  )
+  const menuListStyle = computed((): CSSProperties => ({
+    padding: `${props.menuPadding}px`
+  }))
 
   // 计算菜单项样式
-  const menuItemStyle = computed(
-    (): CSSProperties => ({
-      height: `${props.itemHeight}px`,
-      padding: `0 ${props.itemPaddingX}px`,
-      borderRadius: '4px'
-    })
-  )
+  const menuItemStyle = computed((): CSSProperties => ({
+    height: `${props.itemHeight}px`,
+    padding: `0 ${props.itemPaddingX}px`,
+    borderRadius: '4px'
+  }))
 
   // 计算子菜单列表样式
-  const submenuListStyle = computed(
-    (): CSSProperties => ({
-      minWidth: `${props.submenuWidth}px`,
-      padding: `${props.menuPadding}px 0`,
-      borderRadius: `${props.borderRadius}px`
-    })
-  )
+  const submenuListStyle = computed((): CSSProperties => ({
+    minWidth: `${props.submenuWidth}px`,
+    padding: `${props.menuPadding}px 0`,
+    borderRadius: `${props.borderRadius}px`
+  }))
 
   // 计算菜单高度（用于边界检测）
   const calculateMenuHeight = (): number => {

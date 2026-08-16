@@ -128,7 +128,10 @@ export function handleError(error: AxiosError<ErrorResponse>): never {
 
   const statusCode = error.response?.status
   const responseMessage = error.response?.data?.message
-  const errorMessage = (Array.isArray(responseMessage) ? responseMessage.join('，') : responseMessage) || error.response?.data?.msg || error.message
+  const errorMessage =
+    (Array.isArray(responseMessage) ? responseMessage.join('，') : responseMessage) ||
+    error.response?.data?.msg ||
+    error.message
   const requestConfig = error.config
 
   // 处理网络错误
@@ -140,7 +143,8 @@ export function handleError(error: AxiosError<ErrorResponse>): never {
   }
 
   // 处理 HTTP 状态码错误
-  const message = errorMessage || (statusCode ? getErrorMessage(statusCode) : $t('httpMsg.requestFailed'))
+  const message =
+    errorMessage || (statusCode ? getErrorMessage(statusCode) : $t('httpMsg.requestFailed'))
   throw new HttpError(message, statusCode || ApiStatus.error, {
     data: error.response.data,
     url: requestConfig?.url,

@@ -7,9 +7,5 @@ import { ProvidersModule } from "../providers/providers.module";
 import { ProjectSkillsController } from "./project-skills.controller";
 import { ProjectSkillsService } from "./project-skills.service";
 
-@Module({
-  imports: [ProvidersModule],
-  controllers: [ProjectsController, ProjectSkillsController, AdminProjectsController],
-  providers: [ProjectSkillsService],
-})
+@Module({ imports: [ProvidersModule], controllers: [ProjectsController, AdminProjectsController, ProjectSkillsController], providers: [ProjectSkillsService] })
 export class ProjectsModule {}

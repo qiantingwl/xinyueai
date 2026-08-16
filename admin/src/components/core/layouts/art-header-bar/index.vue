@@ -340,7 +340,6 @@
   const visibleNotice = (): void => {
     showNotice.value = !showNotice.value
   }
-
 </script>
 
 <style lang="scss" scoped>
@@ -443,7 +442,6 @@
   .notice-button:hover :deep(.art-svg-icon) {
     animation: shake 0.5s ease-in-out;
   }
-
 
   /* iPad breakpoint adjustments */
   @media screen and (width <= 768px) {

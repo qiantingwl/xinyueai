@@ -5,7 +5,7 @@ const LoginPage = () => import('./views/LoginPage.vue')
 const StudioPage = () => import('./views/StudioPage.vue')
 const OfficeCenterPage = () => import('./views/OfficeCenterPage.vue')
 const PromptLibraryPage = () => import('./views/PromptLibraryPage.vue')
-const PluginMarketPage = () => import('./views/PluginMarketPage.vue')
+const CapabilityCenterPage = () => import('./views/CapabilityCenterPage.vue')
 const WorkspaceLayout = () => import('./components/WorkspaceLayout.vue')
 const ApiLandingPage = () => import('./views/ApiLandingPage.vue')
 const LegalPage = () => import('./views/LegalPage.vue')
@@ -30,7 +30,8 @@ export const router = createRouter({
         { path: '/office', name: 'office', component: OfficeCenterPage, meta: { title: '办公中心' } },
         { path: '/agents', redirect: '/office' },
         { path: '/prompts', name: 'prompts', component: PromptLibraryPage, meta: { title: '提示词库' } },
-        { path: '/plugins', name: 'plugins', component: PluginMarketPage, meta: { title: '插件市场' } },
+        { path: '/capabilities', name: 'plugins', component: CapabilityCenterPage, meta: { title: '能力中心' } },
+        { path: '/plugins', redirect: '/capabilities' },
         { path: '/projects', name: 'projects', component: StudioPage, meta: { title: '项目' } },
         { path: '/files', name: 'assets', component: StudioPage, meta: { title: '文件库' } },
       ],

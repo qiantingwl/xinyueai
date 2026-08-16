@@ -44,6 +44,9 @@ jobs:
       - name: Generate Prisma client
         run: npm --prefix server run prisma:generate
 
+      - name: Audit UI actions
+        run: npm run audit:ui-actions
+
       - name: Build user application
         run: npm run build
 

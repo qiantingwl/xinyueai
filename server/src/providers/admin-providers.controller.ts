@@ -1,9 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards } from '@nestjs/common'
 import { Type } from 'class-transformer'
-import { IsArray, IsBoolean, IsEmail, IsEnum, IsInt, IsObject, IsOptional, IsString, IsUrl, Matches, Max, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator'
-import { ModelCapability, Prisma, ProviderAuthType, ProviderType } from '@prisma/client'
+import { IsArray, IsBoolean, IsEmail, IsEnum, IsIn, IsInt, IsObject, IsOptional, IsString, IsUrl, Matches, Max, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator'
+import { AssetKind, ModelCapability, Prisma, ProviderAuthType, ProviderType } from '@prisma/client'
+import type { FastifyRequest } from 'fastify'
+import { AssetsService, resolveRasterImageMime } from '../assets/assets.service'
 import { AdminGuard } from '../admin/admin.guard'
 import { AuthGuard } from '../auth/auth.guard'
+import { CurrentUser, AuthenticatedUser } from '../common/request-user'
 import { ProvidersService } from './providers.service'
 
 class CreateProviderDto {
@@ -124,6 +127,8 @@ class UpdateSystemDto {
   @IsOptional() @IsInt() @Min(0) @Max(1000000) defaultUserCredits?: number
   @IsOptional() @IsString() @MaxLength(20) defaultTheme?: string
   @IsOptional() @IsString() @MaxLength(20) defaultLanguage?: string
+  @IsOptional() @IsIn(['gpt', 'doubao', 'qianwen', 'kimi']) chatUiPreset?: string
+  @IsOptional() @IsObject() chatHomeContent?: Record<string, unknown>
   @IsOptional() @IsString() @MaxLength(100) defaultChatModelKey?: string
   @IsOptional() @IsString() @MaxLength(100) defaultImageModelKey?: string
   @IsOptional() @IsBoolean() userByokEnabled?: boolean
@@ -198,7 +203,7 @@ class UpdateExternalLinkDto {
 @Controller('admin')
 @UseGuards(AuthGuard, AdminGuard)
 export class AdminProvidersController {
-  constructor(private readonly providers: ProvidersService) {}
+  constructor(private readonly providers: ProvidersService, private readonly assets: AssetsService) {}
 
   @Get('providers') providersList() { return this.providers.listProviders() }
   @Post('providers') providerCreate(@Body() body: CreateProviderDto) { return this.providers.createProvider(body) }
@@ -216,6 +221,19 @@ export class AdminProvidersController {
 
   @Get('system-settings') settings() { return this.providers.getSystemSettings(true) }
   @Patch('system-settings') settingsUpdate(@Body() body: UpdateSystemDto) { return this.providers.updateSystemSettings(body) }
+
+  @Post('system-settings/chat-home-image')
+  async chatHomeImage(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest) {
+    const part = await request.file()
+    if (!part) throw new BadRequestException('请选择轮播封面图片')
+    const mimeType = resolveRasterImageMime(part.filename, part.mimetype)
+    if (!mimeType) {
+      part.file.resume()
+      throw new BadRequestException('轮播封面仅支持 JPG、PNG、WebP、GIF 或 AVIF')
+    }
+    const asset = await this.assets.storeUpload(admin.id, { stream: part.file, name: part.filename, mimeType, kind: AssetKind.IMAGE, metadata: { purpose: 'chat-home-banner' } })
+    return { assetId: asset.id, imageUrl: `/v1/catalog/chat-home-images/${asset.id}` }
+  }
 
   @Get('external-links') externalLinks() { return this.providers.listExternalLinks(true) }
   @Post('external-links') externalLinkCreate(@Body() body: CreateExternalLinkDto) { return this.providers.createExternalLink(body as Prisma.ExternalNavLinkUncheckedCreateInput) }

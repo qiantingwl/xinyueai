@@ -66,7 +66,14 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function streamApiEvents<T>(path: string, onEvent?: (value: T) => void): Promise<T> {
-  const response = await fetch(apiUrl(path), { credentials: 'include', headers: { Accept: 'text/event-stream' } })
+  const controller = new AbortController()
+  const idleTimeoutMs = 30_000
+  let idleTimer = window.setTimeout(() => controller.abort(), idleTimeoutMs)
+  const resetIdleTimer = () => {
+    window.clearTimeout(idleTimer)
+    idleTimer = window.setTimeout(() => controller.abort(), idleTimeoutMs)
+  }
+  const response = await fetch(apiUrl(path), { credentials: 'include', headers: { Accept: 'text/event-stream' }, signal: controller.signal })
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { message?: string | string[] } | null
     const message = Array.isArray(payload?.message) ? payload.message.join('，') : payload?.message
@@ -83,13 +90,18 @@ export async function streamApiEvents<T>(path: string, onEvent?: (value: T) => v
     latest = JSON.parse(data) as T
     onEvent?.(latest)
   }
-  while (true) {
-    const { done, value } = await reader.read()
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
-    const blocks = buffer.split(/\r?\n\r?\n/)
-    buffer = blocks.pop() || ''
-    for (const block of blocks) consume(block)
-    if (done) break
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (value?.length) resetIdleTimer()
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
+      const blocks = buffer.split(/\r?\n\r?\n/)
+      buffer = blocks.pop() || ''
+      for (const block of blocks) consume(block)
+      if (done) break
+    }
+  } finally {
+    window.clearTimeout(idleTimer)
   }
   if (buffer.trim()) consume(buffer)
   if (!latest) throw new ApiError(502, '流式响应中没有任务状态')

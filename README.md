@@ -1,104 +1,54 @@
 # Xinyue AI
 
-Xinyue AI is a private commercial AI workspace containing a user application,
-an administration console, and a NestJS API service.
+Xinyue AI 是面向团队和商业运营的 AI 工作平台，包含用户工作区、企业管理后台和统一 API 服务。
 
-## Stack
+![Xinyue AI 对话工作区](docs/images/xinyue-chat.png)
 
-- User application: Vue 3, TypeScript, Vite, Pinia
-- Administration: Art Design Pro, Vue 3, Element Plus
-- API: NestJS, Fastify, Prisma, PostgreSQL, Redis, BullMQ
+## 主要能力
 
-## Requirements
+- 多模型对话、流式输出、临时聊天、历史会话和附件上传
+- 图片、视频与商品视觉生成，支持模型路由、失败切换和任务取消
+- Agent 办公任务、联网搜索、审批中断、知识库与 Office 文件导出
+- 提示词灵感库、技能市场、助手、工具授权、项目和团队协作
+- 套餐、充值、兑换码、额度流水、用户分组和支付渠道
+- 企业管理后台、内容审核、审计日志、运营告警和系统健康检查
+- 首次安装向导、Docker Compose 部署和数据库自动迁移
 
-- Node.js 20.19 or newer
-- npm
-- pnpm 8.8 or newer
-- Docker Desktop or local PostgreSQL 17 and Redis 7 services
+## 技术架构
 
-## First-time installation wizard
+```text
+Browser
+  -> Nginx :80
+     -> Vue 3 user application /
+     -> Art Design Pro admin /admin/
+     -> NestJS API /v1/*
+        -> PostgreSQL 17
+        -> Redis 7 / BullMQ
+        -> persistent uploads
+```
 
-The application includes a browser-based installation wizard for a new
-deployment. It tests PostgreSQL and Redis, applies Prisma migrations, saves the
-site identity, and creates the first super administrator.
+- 用户端：Vue 3、TypeScript、Vite、Pinia
+- 管理端：Art Design Pro、Vue 3、Element Plus
+- 服务端：NestJS、Fastify、Prisma、PostgreSQL、Redis、BullMQ、LangGraph.js
 
-1. Install dependencies and start PostgreSQL/Redis:
+更多界面见 [演示图](docs/images/README.md)，完整生产部署见 [部署与运维指南](docs/DEPLOYMENT.md)。
+
+## 本地开发
+
+要求 Node.js 20.19+（推荐 22）、npm、pnpm 和 Docker Desktop。
 
 ```powershell
 npm ci
 npm --prefix server ci
 pnpm --dir admin install --frozen-lockfile
 docker compose up -d
-```
-
-2. Start the API and frontend without creating `server/.env`:
-
-```powershell
-npm run server:dev
-npm run dev
-```
-
-3. Open `http://localhost:5173/install`. Read the one-time installation key
-   from the API terminal, then complete the three wizard steps.
-
-4. Restart the API when the wizard finishes. The installer is locked as soon
-   as an active administrator exists.
-
-The wizard writes secrets only to `server/.env`, which is ignored by Git. In
-Docker production deployments, `docker-compose.prod.yml` stores the generated
-runtime configuration in the `xinyue_config` volume. Back up that volume with
-the PostgreSQL data and uploads. Set `INSTALL_TOKEN` in the deployment
-environment when a fixed installation key is preferred over the generated key.
-
-For a production Docker deployment, create the Compose environment file and
-replace `POSTGRES_PASSWORD` before starting the services:
-
-```powershell
-Copy-Item .env.production.example .env.production
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
-docker compose --env-file .env.production -f docker-compose.prod.yml logs backend
-```
-
-Open the site `/install` path. Use
-`postgresql://flux:<POSTGRES_PASSWORD>@postgres:5432/flux_studio` for
-PostgreSQL and `redis://redis:6379` for Redis. The generated runtime
-configuration is stored in the `xinyue_config` volume and takes precedence
-over blank example values.
-
-## Manual local setup
-
-1. Install dependencies:
-
-```powershell
-npm ci
-npm --prefix server ci
-pnpm --dir admin install --frozen-lockfile
-```
-
-2. Start PostgreSQL and Redis:
-
-```powershell
-docker compose up -d
-```
-
-3. Create the backend environment file (skip this step when using the wizard):
-
-```powershell
 Copy-Item server/.env.example server/.env
-```
-
-Replace `SESSION_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`, `ADMIN_EMAIL`, and
-`ADMIN_PASSWORD` before sharing or deploying an environment.
-
-4. Prepare the database manually:
-
-```powershell
 npm --prefix server run prisma:generate
 npm --prefix server run prisma:deploy
 npm --prefix server run admin:seed
 ```
 
-5. Start the three applications in separate terminals:
+在三个终端分别运行：
 
 ```powershell
 npm run dev
@@ -106,30 +56,34 @@ npm run server:dev
 npm run admin:dev
 ```
 
-Local addresses:
+- 用户端：`http://localhost:5173`
+- 管理端：`http://localhost:5174/admin/`
+- API：`http://localhost:3100/v1`
 
-- User application: `http://localhost:5173`
-- Administration: `http://localhost:5174/admin/`
-- API: `http://localhost:3100/v1`
+请在启动前替换 `server/.env` 中的默认管理员密码、会话密钥和凭据加密密钥。
 
-## Build
+## 生产部署
 
 ```powershell
-npm run build
-npm run server:build
-npm run admin:build
+Copy-Item .env.production.example .env.production
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f backend
 ```
 
-## Collaboration
+首次部署访问 `http://服务器地址/install` 完成数据库、站点和超级管理员配置。生产环境必须配置域名、HTTPS、`WEB_ORIGIN=https://你的域名` 和 `COOKIE_SECURE=true`。具体参数及升级、备份、回滚步骤见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
-Do not commit directly to `main`. Create a feature branch and open a pull
-request. See [CONTRIBUTING.md](CONTRIBUTING.md) for the expected workflow.
+## 质量验证
 
-Runtime `.env` files, generated output, logs, databases, and user uploads are
-excluded from source control. Never add credentials to commits or pull request
-descriptions.
+```powershell
+npm run audit:ui-actions
+npm run verify
+npm run test:e2e
+```
 
-## Third-party software
+`audit:ui-actions` 会扫描 Vue 页面中的按钮和链接；`verify` 会构建用户端、管理端和服务端；Playwright 覆盖登录、支付、生成、项目、文件库、知识库和主要后台页面。
 
-Third-party notices and retained licenses are listed in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## 协作和第三方软件
+
+功能开发请使用分支和 Pull Request，约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。第三方声明和保留的许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+运行时 `.env`、日志、数据库、构建产物和用户上传文件不会提交到 Git。禁止在提交、Issue 或 Pull Request 中写入真实密钥。

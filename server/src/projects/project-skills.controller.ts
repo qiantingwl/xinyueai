@@ -22,32 +22,20 @@ export class ProjectSkillsController {
   constructor(private readonly skills: ProjectSkillsService) {}
 
   @Get()
-  status(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string) {
-    return this.skills.status(user.id, projectId)
-  }
+  status(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string) { return this.skills.status(user.id, projectId) }
 
   @Post('manual')
-  manual(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string, @Body() body: SkillContentDto) {
-    return this.skills.activate(user.id, projectId, body, true)
-  }
+  manual(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string, @Body() body: SkillContentDto) { return this.skills.activate(user.id, projectId, body) }
 
   @Post('summarize')
-  summarize(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string, @Body() body: SkillSummaryDto) {
-    return this.skills.summarize(user.id, projectId, body.conversationId, body.request)
-  }
+  summarize(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string, @Body() body: SkillSummaryDto) { return this.skills.summarize(user.id, projectId, body.conversationId, body.request) }
 
   @Post('activate-summary')
-  activateSummary(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string, @Body() body: SkillContentDto) {
-    return this.skills.activate(user.id, projectId, { ...body, changeType: 'SUMMARY' })
-  }
+  activateSummary(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string, @Body() body: SkillContentDto) { return this.skills.activate(user.id, projectId, { ...body, changeType: 'SUMMARY' }) }
 
   @Post('versions/:version/restore')
-  restore(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string, @Param('version') version: string) {
-    return this.skills.restore(user.id, projectId, Number.parseInt(version, 10))
-  }
+  restore(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string, @Param('version') version: string) { return this.skills.restore(user.id, projectId, Number.parseInt(version, 10)) }
 
   @Delete()
-  disable(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string) {
-    return this.skills.disable(user.id, projectId)
-  }
+  disable(@CurrentUser() user: AuthenticatedUser, @Param('projectId') projectId: string) { return this.skills.disable(user.id, projectId) }
 }

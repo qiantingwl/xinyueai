@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common'
 import { PluginCapability, PluginStatus, PluginVisibility, Prisma, UserRole } from '@prisma/client'
 import { randomBytes } from 'crypto'
+import AdmZip = require('adm-zip')
+import { load as loadYaml } from 'js-yaml'
 import { PrismaService } from '../prisma/prisma.service'
 import { AdminPluginDto, PluginCategoryDto, PrivatePluginDto } from './plugin.dto'
 
@@ -53,6 +55,42 @@ export class PluginsService {
       version: body.version?.trim() || '1.0.0', capabilities: [...new Set(body.capabilities)], recommendedModel: body.recommendedModel?.trim() || '',
       outputRequirements: body.outputRequirements?.trim() || '', config: this.safeConfig(body.config), categoryId: body.categoryId || null,
     }
+  }
+
+  async importPrivate(userId: string, fileName: string, bytes: Buffer) {
+    if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new BadRequestException('技能包大小必须在 5MB 以内')
+    let markdown = ''
+    if (/\.zip$/i.test(fileName)) {
+      let archive: AdmZip
+      try { archive = new AdmZip(bytes) } catch { throw new BadRequestException('技能 ZIP 无法解析') }
+      const entries = archive.getEntries()
+      if (!entries.length || entries.length > 100) throw new BadRequestException('技能包文件数量无效')
+      let expandedSize = 0
+      for (const entry of entries) {
+        const normalized = entry.entryName.replaceAll('\\', '/')
+        if (normalized.startsWith('/') || normalized.split('/').includes('..')) throw new BadRequestException('技能包包含不安全路径')
+        expandedSize += entry.header.size
+        if (expandedSize > 10 * 1024 * 1024) throw new BadRequestException('技能包解压后大小超过限制')
+        if (/\.(?:exe|dll|so|dylib|bat|cmd|ps1|sh|msi|apk|jar)$/i.test(normalized)) throw new BadRequestException('技能包不能包含可执行文件')
+      }
+      const skillEntry = entries.find((entry) => /(^|\/)SKILL\.md$/i.test(entry.entryName) && !entry.isDirectory)
+      if (!skillEntry) throw new BadRequestException('技能包中缺少 SKILL.md')
+      markdown = skillEntry.getData().toString('utf8')
+    } else if (/^(?:SKILL\.md|.+\.skill)$/i.test(fileName)) markdown = bytes.toString('utf8')
+    else throw new BadRequestException('请选择 SKILL.md、.skill 或 ZIP 技能包')
+    if (!markdown.trim() || markdown.length > 100_000) throw new BadRequestException('SKILL.md 内容大小无效')
+    const match = markdown.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/)
+    if (!match) throw new BadRequestException('SKILL.md 顶部必须包含 YAML 元数据')
+    let metadata: Record<string, unknown>
+    try { const parsed = loadYaml(match[1]); metadata = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {} } catch { throw new BadRequestException('SKILL.md YAML 元数据格式错误') }
+    const name = typeof metadata.name === 'string' ? metadata.name.trim() : ''
+    const description = typeof metadata.description === 'string' ? metadata.description.trim() : ''
+    const version = typeof metadata.version === 'string' && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(metadata.version) ? metadata.version : '1.0.0'
+    const requested = Array.isArray(metadata.capabilities) ? metadata.capabilities : ['CHAT']
+    const capabilities = requested.map((item) => String(item).toUpperCase()).filter((item): item is PluginCapability => Object.values(PluginCapability).includes(item as PluginCapability))
+    if (!name || name.length > 80) throw new BadRequestException('技能名称不能为空且不能超过 80 个字符')
+    if (!match[2].trim()) throw new BadRequestException('SKILL.md 缺少技能执行说明')
+    return this.createPrivate(userId, { name, description: description.slice(0, 500), instruction: match[2].trim().slice(0, 20_000), icon: 'blocks', version, capabilities: capabilities.length ? [...new Set(capabilities)] : [PluginCapability.CHAT], recommendedModel: typeof metadata.recommendedModel === 'string' ? metadata.recommendedModel.slice(0, 160) : '', outputRequirements: typeof metadata.outputRequirements === 'string' ? metadata.outputRequirements.slice(0, 4_000) : '', config: { importedFrom: fileName } })
   }
 
   private async validateCategory(categoryId?: string, requireEnabled = true) {

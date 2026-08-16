@@ -75,8 +75,8 @@ export function normalizeImageOptions(options: Record<string, unknown>, configur
   if (!capabilities.sizes.includes(size)) throw new BadRequestException('当前图片模型不支持该尺寸')
   if (!capabilities.qualities.includes(quality)) throw new BadRequestException('当前图片模型不支持该质量')
   if (count > capabilities.maxCount) throw new BadRequestException(`当前图片模型最多一次生成 ${capabilities.maxCount} 张`)
-  const rawFormat = String(options.outputFormat || 'png').toLowerCase().replace('jpg', 'jpeg') as ImageOutputFormat
-  const rawBackground = String(options.background || 'auto').toLowerCase() as ImageBackground
+  const rawFormat = String(options.outputFormat || capabilities.outputFormats[0] || 'png').toLowerCase().replace('jpg', 'jpeg') as ImageOutputFormat
+  const rawBackground = String(options.background || capabilities.backgrounds[0] || 'auto').toLowerCase() as ImageBackground
   const referenceAssetIds = Array.isArray(options.referenceAssetIds) ? [...new Set(options.referenceAssetIds.map(String).filter((item) => /^[a-zA-Z0-9_-]{1,100}$/.test(item)))].slice(0, 4) : []
   const maskAssetId = typeof options.maskAssetId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(options.maskAssetId) ? options.maskAssetId : undefined
   if (referenceAssetIds.length && !capabilities.supportsReference) throw new BadRequestException('当前图片模型不支持参考图')
@@ -104,11 +104,15 @@ export function normalizeImageOptions(options: Record<string, unknown>, configur
   }
 }
 
-export function detectImageFormat(bytes: Uint8Array, fallback: ImageOutputFormat): ImageOutputFormat {
+export function identifyImageFormat(bytes: Uint8Array): ImageOutputFormat | undefined {
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png'
   if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8) return 'jpeg'
   if (bytes.length >= 12 && Buffer.from(bytes.subarray(0, 4)).toString('ascii') === 'RIFF' && Buffer.from(bytes.subarray(8, 12)).toString('ascii') === 'WEBP') return 'webp'
-  return fallback
+  return undefined
+}
+
+export function detectImageFormat(bytes: Uint8Array, fallback: ImageOutputFormat): ImageOutputFormat {
+  return identifyImageFormat(bytes) || fallback
 }
 
 export function imageFormatMetadata(format: ImageOutputFormat) {

@@ -2,7 +2,8 @@
   <div class="xinyue-page groups-page">
     <header class="page-title">
       <div
-        ><span class="page-eyebrow">{{ xt('权限与计费') }}</span><h1>{{ xt('用户分组与权限') }}</h1
+        ><span class="page-eyebrow">{{ xt('权限与计费') }}</span
+        ><h1>{{ xt('用户分组与权限') }}</h1
         ><p>{{ xt('统一配置新用户归属、模型白名单、计费倍率和 BYOK 权限') }}</p></div
       >
       <ElButton type="primary" @click="openCreate"
@@ -13,7 +14,8 @@
     <div class="default-group-bar">
       <div
         ><ArtSvgIcon icon="ri:user-star-line" /><div
-          ><span class="bar-kicker">{{ xt('默认归属') }}</span><strong>{{ xt('新用户默认分组') }}</strong
+          ><span class="bar-kicker">{{ xt('默认归属') }}</span
+          ><strong>{{ xt('新用户默认分组') }}</strong
           ><small>{{ xt('未指定分组的新注册用户会自动加入，可随时切换。') }}</small></div
         ></div
       >
@@ -42,7 +44,8 @@
       <ArtTableHeader :loading="loading" @refresh="load"
         ><template #left
           ><div class="table-heading"
-            ><strong>{{ xt('分组列表') }}</strong><span>{{ xt('策略、成员与可用能力') }}</span></div
+            ><strong>{{ xt('分组列表') }}</strong
+            ><span>{{ xt('策略、成员与可用能力') }}</span></div
           ></template
         ></ArtTableHeader
       >
@@ -95,8 +98,9 @@
           >
           <ElTableColumn :label="xt('操作')" :width="isCompact ? 150 : 230" fixed="right"
             ><template #default="{ row }"
-              ><ElButton v-if="!row.isDefault" link type="success" @click="setDefault(row)"
-                >{{ xt('默认') }}</ElButton
+              ><ElButton v-if="!row.isDefault" link type="success" @click="setDefault(row)">{{
+                xt('默认')
+              }}</ElButton
               ><ElButton link type="primary" @click="openPolicy(row)">{{ xt('策略') }}</ElButton
               ><ElButton link @click="openEdit(row)">{{ xt('编辑') }}</ElButton
               ><ElDropdown @command="(command: string) => commandGroup(command, row)"
@@ -105,9 +109,9 @@
                 ><template #dropdown
                   ><ElDropdownMenu
                     ><ElDropdownItem command="members">{{ xt('管理成员') }}</ElDropdownItem
-                    ><ElDropdownItem v-if="!row.isDefault" command="delete" divided
-                      >{{ xt('删除分组') }}</ElDropdownItem
-                    ></ElDropdownMenu
+                    ><ElDropdownItem v-if="!row.isDefault" command="delete" divided>{{
+                      xt('删除分组')
+                    }}</ElDropdownItem></ElDropdownMenu
                   ></template
                 ></ElDropdown
               ></template
@@ -149,7 +153,9 @@
       >
       <template #footer
         ><ElButton @click="editDialog = false">{{ xt('取消') }}</ElButton
-        ><ElButton type="primary" :loading="saving" @click="saveGroup">{{ xt('保存分组') }}</ElButton></template
+        ><ElButton type="primary" :loading="saving" @click="saveGroup">{{
+          xt('保存分组')
+        }}</ElButton></template
       >
     </ElDialog>
 
@@ -181,7 +187,8 @@
               ><ElCheckbox v-for="model in enabledModels" :key="model.id" :value="model.id"
                 ><span>{{ model.displayName }}</span
                 ><small
-                  >{{ xt(capabilityText[model.capability]) }} · {{ model.flatCreditCost }} {{ xt('点 / 次') }}</small
+                  >{{ xt(capabilityText[model.capability]) }} · {{ model.flatCreditCost }}
+                  {{ xt('点 / 次') }}</small
                 ></ElCheckbox
               ></ElCheckboxGroup
             ></ElFormItem
@@ -190,13 +197,17 @@
       >
       <template #footer
         ><ElButton @click="policyDrawer = false">{{ xt('取消') }}</ElButton
-        ><ElButton type="primary" :loading="saving" @click="savePolicy"
-          >{{ xt('保存策略') }}</ElButton
-        ></template
+        ><ElButton type="primary" :loading="saving" @click="savePolicy">{{
+          xt('保存策略')
+        }}</ElButton></template
       >
     </ElDrawer>
 
-    <ElDrawer v-model="memberDrawer" :title="`${memberGroup?.name || ''} · ${xt('成员管理')}`" size="620px">
+    <ElDrawer
+      v-model="memberDrawer"
+      :title="`${memberGroup?.name || ''} · ${xt('成员管理')}`"
+      size="620px"
+    >
       <div class="member-toolbar"
         ><ElSelect
           v-model="selectedUsers"
@@ -209,9 +220,9 @@
             :key="user.id"
             :label="`${user.displayName} · ${user.email || xt('无邮箱')}`"
             :value="user.id" /></ElSelect
-        ><ElButton type="primary" :disabled="!selectedUsers.length" @click="addMembers"
-          >{{ xt('添加') }}</ElButton
-        ></div
+        ><ElButton type="primary" :disabled="!selectedUsers.length" @click="addMembers">{{
+          xt('添加')
+        }}</ElButton></div
       >
       <ElTable v-loading="memberLoading" :data="members" row-key="user.id"
         ><ElTableColumn :label="xt('用户')"
@@ -227,9 +238,9 @@
           ></ElTableColumn
         ><ElTableColumn :label="xt('操作')" width="80"
           ><template #default="{ row }"
-            ><ElButton link type="danger" @click="removeMember(row.user.id)"
-              >{{ xt('移出') }}</ElButton
-            ></template
+            ><ElButton link type="danger" @click="removeMember(row.user.id)">{{
+              xt('移出')
+            }}</ElButton></template
           ></ElTableColumn
         ></ElTable
       >
@@ -271,7 +282,12 @@
     const ids = new Set(members.value.map((item) => item.user.id))
     return users.value.filter((item) => !ids.has(item.id))
   })
-  const capabilityText = { CHAT: '对话', IMAGE: '图片', VIDEO: '视频', COMMERCE: '商品视觉' } as const
+  const capabilityText = {
+    CHAT: '对话',
+    IMAGE: '图片',
+    VIDEO: '视频',
+    COMMERCE: '商品视觉'
+  } as const
   async function load() {
     loading.value = true
     try {
@@ -305,7 +321,10 @@
     saving.value = true
     try {
       const { id, ...body } = groupForm
-      const saved = await xinyueApi.saveGroup(body, id || undefined)
+      const payload = id
+        ? body
+        : { name: body.name, description: body.description, color: body.color }
+      const saved = await xinyueApi.saveGroup(payload, id || undefined)
       if (makeDefault.value && !saved.isDefault) await xinyueApi.setDefaultGroup(saved.id)
       editDialog.value = false
       await load()
@@ -397,209 +416,248 @@
     min-width: 0;
     max-width: 100%;
   }
+
   .page-title {
     display: flex;
+    gap: 16px;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
   }
+
   .page-title > div {
     min-width: 0;
   }
+
   .page-eyebrow {
     display: block;
     margin-bottom: 5px;
-    color: var(--theme-color);
     font-size: 12px;
     font-weight: 600;
     line-height: 1;
+    color: var(--theme-color);
   }
+
   .page-title h1 {
     margin: 0 0 4px;
     font-size: 24px;
   }
+
   .page-title p,
   .note {
     display: block;
     margin: 3px 0 0;
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .default-group-bar {
     display: flex;
+    gap: 20px;
     align-items: center;
     justify-content: space-between;
-    gap: 20px;
     padding: 16px 18px;
+    background: color-mix(in srgb, var(--el-color-success) 5%, var(--default-box-color));
     border: 1px solid color-mix(in srgb, var(--el-color-success) 28%, var(--art-card-border));
     border-radius: 8px;
-    background: color-mix(in srgb, var(--el-color-success) 5%, var(--default-box-color));
   }
+
   .default-group-bar > div {
     display: flex;
-    align-items: center;
     gap: 12px;
+    align-items: center;
     min-width: 0;
   }
+
   .default-group-bar > div > svg {
     flex: 0 0 auto;
-    color: var(--el-color-success);
     font-size: 25px;
+    color: var(--el-color-success);
   }
+
   .bar-kicker {
     display: block;
     margin-bottom: 3px;
-    color: var(--el-color-success);
     font-size: 12px;
     font-weight: 600;
+    color: var(--el-color-success);
   }
+
   .default-group-bar strong,
   .default-group-bar small {
     display: block;
   }
+
   .default-group-bar small {
     margin-top: 3px;
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .default-group-select {
-    width: 280px;
     flex: 0 0 280px;
+    width: 280px;
   }
+
   .default-group-select :deep(.el-select__wrapper),
   .default-group-select :deep(.el-input__wrapper) {
     width: 100%;
     min-height: 44px;
     padding: 0 14px;
+    background: var(--default-box-color);
     border: 1px solid color-mix(in srgb, var(--el-color-success) 45%, var(--art-card-border));
     border-radius: 8px;
     box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
-    background: var(--default-box-color);
   }
+
   .default-group-select :deep(.el-input__wrapper:hover),
   .default-group-select :deep(.is-focus) {
     border-color: var(--el-color-success);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-color-success) 12%, transparent);
   }
+
   .default-group-select :deep(.el-select__prefix) {
     color: var(--el-color-success);
   }
+
   .default-option {
     display: flex;
+    gap: 12px;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
   }
+
   .default-option small {
     color: var(--art-gray-500);
   }
+
   .compact-table-card {
     flex: 0 0 auto;
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
   }
+
   .compact-table-card :deep(.el-card__body) {
-    height: auto;
     min-width: 0;
     max-width: 100%;
+    height: auto;
     overflow: hidden;
   }
+
   .table-heading {
     display: grid;
     gap: 3px;
   }
+
   .table-heading strong {
-    color: var(--art-gray-900);
     font-size: 16px;
+    color: var(--art-gray-900);
   }
+
   .table-heading span {
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .table-scroll {
     width: 100%;
     min-width: 0;
     overflow: hidden;
   }
+
   .data-table {
     width: 100%;
     min-width: 0 !important;
   }
+
   .group-name {
     display: flex;
-    align-items: center;
     gap: 10px;
+    align-items: center;
     min-width: 0;
   }
+
   .group-name > i {
+    flex: 0 0 10px;
     width: 10px;
     height: 38px;
-    flex: 0 0 10px;
     border-radius: 3px;
   }
+
   .group-name > div {
     display: grid;
-    min-width: 0;
     grid-template-columns: auto 1fr;
-    align-items: center;
     gap: 3px 7px;
+    align-items: center;
+    min-width: 0;
   }
+
   .group-name strong,
   .group-name small {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
   .group-name small {
     grid-column: 1/-1;
     color: var(--art-gray-500);
   }
+
   .drawer-form {
     margin-top: 20px;
   }
+
   .rate {
     display: grid;
     grid-template-columns: 1fr 130px auto;
+    gap: 14px;
     align-items: center;
     width: 100%;
-    gap: 14px;
   }
+
   .model-list {
     display: grid;
-    width: 100%;
     gap: 8px;
+    width: 100%;
   }
+
   .model-list :deep(.el-checkbox) {
     height: auto;
-    margin: 0;
     padding: 10px;
+    margin: 0;
     border: 1px solid var(--art-gray-200);
     border-radius: 6px;
   }
+
   .model-list small {
     display: block;
     color: var(--art-gray-500);
   }
+
   .member-toolbar {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px;
     margin-bottom: 16px;
   }
-  @media (max-width: 700px) {
+
+  @media (width <= 700px) {
     .page-title,
     .default-group-bar {
-      align-items: flex-start;
       flex-direction: column;
+      align-items: flex-start;
     }
+
     .page-title h1 {
       font-size: 21px;
     }
+
     .default-group-select {
-      width: 100%;
       flex-basis: auto;
+      width: 100%;
     }
+
     .rate {
       grid-template-columns: 1fr 110px auto;
     }

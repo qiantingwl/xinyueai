@@ -3,7 +3,9 @@
     <div>
       <h2 class="text-2xl font-medium">{{ xt('Xinyue AI 企业控制台') }}</h2>
       <p class="text-g-700 mt-1">{{ xt('统一管理客户、AI 渠道、模型定价、支付订阅与运营安全') }}</p>
-      <p class="text-g-700 mt-1">{{ xt('当前控制台基于 Art Design Pro，业务数据由 Xinyue API 实时提供') }}</p>
+      <p class="text-g-700 mt-1">{{
+        xt('当前控制台基于 Art Design Pro，业务数据由 Xinyue API 实时提供')
+      }}</p>
 
       <div class="flex flex-wrap gap-3.5 max-w-150 mt-9">
         <div
@@ -38,5 +40,7 @@
    * 在新标签页中打开指定 URL
    * @param url 要打开的网页地址
    */
-  const goPage = (route: string): void => { router.push(route) }
+  const goPage = (route: string): void => {
+    router.push(route)
+  }
 </script>

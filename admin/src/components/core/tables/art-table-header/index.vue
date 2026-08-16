@@ -348,6 +348,7 @@
     hover:bg-g-300 
     md:ml-0 
     md:mr-2.5;
+
     border: 0;
   }
 </style>

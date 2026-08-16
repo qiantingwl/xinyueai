@@ -12,4 +12,4 @@ COPY src ./src
 COPY scripts ./scripts
 RUN npm run build
 EXPOSE 3100
-CMD ["node", "dist/main.js"]
+CMD ["node", "scripts/start-production.cjs"]

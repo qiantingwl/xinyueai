@@ -61,6 +61,8 @@ type SystemSettingsInput = Partial<{
   defaultUserCredits: number
   defaultTheme: string
   defaultLanguage: string
+  chatUiPreset: string
+  chatHomeContent: Record<string, unknown>
   defaultChatModelKey: string
   defaultImageModelKey: string
   userByokEnabled: boolean
@@ -132,7 +134,22 @@ type VideoCapabilities = {
 
 type VideoCapabilityRoute = {
   options: Prisma.JsonValue | null
-  provider: { enabled: boolean; encryptedApiKey: string }
+  provider: { type: ProviderType; enabled: boolean; encryptedApiKey: string }
+}
+
+const DEFAULT_CHAT_HOME_CONTENT = {
+  doubaoRecommendations: [
+    { title: '热点：北语教授刘宗迪称《山海经》并非怪物图鉴', prompt: '请介绍这个热点，并说明相关观点和背景。', targetUrl: '' },
+    { title: '语言模型的训练数据如何影响 AI 回答的准确性和多样性？', prompt: '语言模型的训练数据如何影响 AI 回答的准确性和多样性？', targetUrl: '' },
+    { title: '长期喝全糖饮品对身体有哪些影响？', prompt: '长期喝全糖饮品对身体有哪些影响？', targetUrl: '' },
+    { title: '有哪些训练方法能让猫听懂指令？', prompt: '有哪些训练方法能让猫听懂指令？', targetUrl: '' },
+  ],
+  qianwenBanners: [
+    { title: 'Xinyue 办公助理上线', description: '解锁本地任务能力，多格式交付', buttonText: '立即体验', imageUrl: '', targetUrl: '/office' },
+    { title: 'Xinyue 输入法 App 全新上线', description: '说话即成稿，支持多种语言', buttonText: '立即下载体验', imageUrl: '', targetUrl: '/office' },
+    { title: '一键生成录音纪要', description: '纪要自动整理，重要内容清晰呈现', buttonText: '立即体验', imageUrl: '', targetUrl: '/office' },
+  ],
+  kimiProject: { label: '选择项目', targetUrl: '/projects' },
 }
 
 const DEFAULT_PRESETS = [
@@ -145,7 +162,31 @@ const DEFAULT_PRESETS = [
   { key: 'gemini-pro', displayName: 'Gemini Pro', upstreamModel: 'gemini-2.5-pro', capability: ModelCapability.CHAT, sortOrder: 70, description: '支持 Gemini GenerateContent 或 OpenAI Compatible 渠道' },
   { key: 'deepseek-chat', displayName: 'DeepSeek', upstreamModel: 'deepseek-chat', capability: ModelCapability.CHAT, sortOrder: 80 },
   { key: 'qwen-max', displayName: 'Qwen Max', upstreamModel: 'qwen-max', capability: ModelCapability.CHAT, sortOrder: 90 },
-  { key: 'pollinations-free', displayName: 'Pollinations (免费)', upstreamModel: 'flux', capability: ModelCapability.IMAGE, sortOrder: 5, isDefault: false, flatCreditCost: 0, description: '完全免费的 AI 图片生成，无需 API Key，基于 Pollinations.ai', options: { imageCapabilities: { sizes: ['1024x1024', '1280x720', '720x1280', '1536x1024', '1024x1536'], qualities: ['medium'], outputFormats: ['png'], backgrounds: ['auto'], maxCount: 1, defaultSize: '1024x1024', defaultQuality: 'medium', supportsReference: false, supportsMask: false, resolutionPricing: { '1K': 0, '2K': 0, '4K': 0 } } } },
+  {
+    key: 'pollinations-free',
+    displayName: 'Pollinations',
+    upstreamModel: 'flux',
+    capability: ModelCapability.IMAGE,
+    sortOrder: 5,
+    enabled: false,
+    flatCreditCost: 0,
+    imageCostMicros: 0,
+    description: '可选的无密钥图片生成渠道，启用前请确认服务条款与可用性',
+    options: {
+      imageCapabilities: {
+        sizes: ['1024x1024', '1280x720', '720x1280', '1536x1024', '1024x1536'],
+        qualities: ['medium'],
+        outputFormats: ['jpeg'],
+        backgrounds: ['opaque'],
+        maxCount: 1,
+        defaultSize: '1024x1024',
+        defaultQuality: 'medium',
+        supportsReference: false,
+        supportsMask: false,
+        resolutionPricing: { '1K': 0 },
+      },
+    },
+  },
   { key: 'gpt-image-2', displayName: 'GPT Image 2', upstreamModel: 'gpt-image-2', capability: ModelCapability.IMAGE, sortOrder: 10, isDefault: true },
   { key: 'grok-imagine', displayName: 'Grok Imagine', upstreamModel: 'grok-imagine-image', capability: ModelCapability.IMAGE, sortOrder: 20 },
   { key: 'nano-banana-pro', displayName: 'Nano Banana Pro', upstreamModel: 'nano-banana-pro', capability: ModelCapability.IMAGE, sortOrder: 30 },
@@ -189,16 +230,34 @@ export class ProvidersService implements OnModuleInit {
     await this.prisma.modelPreset.createMany({ data: DEFAULT_PRESETS, skipDuplicates: true })
   }
 
-  normalizeBaseUrl(input: string) {
+  normalizeBaseUrl(input: string, type?: ProviderType) {
     let url: URL
     try { url = new URL(input.trim()) } catch { throw new BadRequestException('API 地址格式不正确') }
     if (!['http:', 'https:'].includes(url.protocol)) throw new BadRequestException('API 地址只支持 HTTP 或 HTTPS')
     url.search = ''
     url.hash = ''
     url.pathname = url.pathname.replace(/\/(chat\/completions|responses|images\/generations|videos(?:\/[^/]+(?:\/content)?)?|models)\/?$/i, '').replace(/\/+$/, '')
-    const isPollinationsHost = url.hostname.toLowerCase().includes('pollinations.ai')
-    if (!isPollinationsHost && !url.pathname.toLowerCase().endsWith('/v1')) url.pathname = `${url.pathname}/v1`.replace(/\/{2,}/g, '/')
+    const pollinations = type === ProviderType.POLLINATIONS || url.hostname.toLowerCase().endsWith('pollinations.ai')
+    if (pollinations) url.pathname = url.pathname.replace(/\/v1$/i, '') || '/'
+    else if (!url.pathname.toLowerCase().endsWith('/v1')) url.pathname = `${url.pathname}/v1`.replace(/\/{2,}/g, '/')
     return url.toString().replace(/\/$/, '')
+  }
+
+  private providerReady(provider: { type: ProviderType; encryptedApiKey: string }) {
+    return provider.type === ProviderType.POLLINATIONS || Boolean(provider.encryptedApiKey)
+  }
+
+  buildPollinationsImageUrl(baseUrl: string, prompt: string, options: { model: string; width: number; height: number; seed: number }) {
+    const url = new URL(this.normalizeBaseUrl(baseUrl, ProviderType.POLLINATIONS))
+    const basePath = url.pathname.replace(/\/+$/, '')
+    url.pathname = `${basePath}/prompt/${encodeURIComponent(prompt)}`.replace(/\/{2,}/g, '/')
+    url.searchParams.set('model', options.model || 'flux')
+    url.searchParams.set('width', String(options.width))
+    url.searchParams.set('height', String(options.height))
+    url.searchParams.set('seed', String(options.seed))
+    url.searchParams.set('nologo', 'true')
+    url.searchParams.set('enhance', 'false')
+    return url
   }
 
   assertUserProviderUrl(input: string) {
@@ -249,7 +308,7 @@ export class ProvidersService implements OnModuleInit {
   private effectiveVideoOptions(
     value: Prisma.JsonValue | null,
     routes: VideoCapabilityRoute[],
-    fallbackProvider?: { enabled: boolean; encryptedApiKey: string } | null,
+    fallbackProvider?: { type: ProviderType; enabled: boolean; encryptedApiKey: string } | null,
   ) {
     const options = value && typeof value === 'object' && !Array.isArray(value)
       ? structuredClone(value) as Record<string, unknown>
@@ -257,12 +316,12 @@ export class ProvidersService implements OnModuleInit {
     const rawGlobal = this.videoRouteCapabilities(options as Prisma.JsonObject)
     if (!rawGlobal) return options
     const global = this.normalizeVideoCapabilities(rawGlobal)
-    const activeRoutes = routes.filter((route) => route.provider.enabled && Boolean(route.provider.encryptedApiKey))
+    const activeRoutes = routes.filter((route) => route.provider.enabled && this.providerReady(route.provider))
     const routeCapabilities = activeRoutes.map((route) => {
       const configured = this.videoRouteCapabilities(route.options)
       return configured ? this.normalizeVideoCapabilities(configured) : global
     })
-    if (!activeRoutes.length && fallbackProvider?.enabled && fallbackProvider.encryptedApiKey) routeCapabilities.push(global)
+    if (!activeRoutes.length && fallbackProvider?.enabled && this.providerReady(fallbackProvider)) routeCapabilities.push(global)
     if (!routeCapabilities.length) routeCapabilities.push(global)
 
     const available = routeCapabilities.reduce<VideoCapabilities>((union, route) => ({
@@ -339,7 +398,7 @@ export class ProvidersService implements OnModuleInit {
 
   async createProvider(input: ProviderInput) {
     const row = await this.prisma.providerChannel.create({ data: {
-      name: input.name.trim(), type: input.type, baseUrl: this.normalizeBaseUrl(input.baseUrl), encryptedApiKey: this.crypto.encrypt(input.apiKey || ''), apiKeyHint: this.crypto.hint(input.apiKey || ''), authType: input.authType, enabled: input.enabled, priority: input.priority, weight: input.weight, timeoutMs: input.timeoutMs, allowUserKeys: input.allowUserKeys, customHeaders: input.customHeaders as Prisma.InputJsonValue, metadata: input.metadata as Prisma.InputJsonValue,
+      name: input.name.trim(), type: input.type, baseUrl: this.normalizeBaseUrl(input.baseUrl, input.type), encryptedApiKey: this.crypto.encrypt(input.apiKey || ''), apiKeyHint: this.crypto.hint(input.apiKey || ''), authType: input.authType, enabled: input.enabled, priority: input.priority, weight: input.weight, timeoutMs: input.timeoutMs, allowUserKeys: input.type === ProviderType.POLLINATIONS ? false : input.allowUserKeys, customHeaders: input.customHeaders as Prisma.InputJsonValue, metadata: input.metadata as Prisma.InputJsonValue,
     } })
     return this.publicProvider(row)
   }
@@ -347,10 +406,11 @@ export class ProvidersService implements OnModuleInit {
   async updateProvider(id: string, input: Partial<ProviderInput>) {
     const existing = await this.prisma.providerChannel.findUnique({ where: { id } })
     if (!existing) throw new NotFoundException('上游渠道不存在')
+    const nextType = input.type ?? existing.type
     const row = await this.prisma.providerChannel.update({ where: { id }, data: {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.type !== undefined ? { type: input.type } : {}),
-      ...(input.baseUrl !== undefined ? { baseUrl: this.normalizeBaseUrl(input.baseUrl) } : {}),
+      ...(input.baseUrl !== undefined || input.type !== undefined ? { baseUrl: this.normalizeBaseUrl(input.baseUrl ?? existing.baseUrl, nextType) } : {}),
       ...(input.apiKey ? { encryptedApiKey: this.crypto.encrypt(input.apiKey), apiKeyHint: this.crypto.hint(input.apiKey) } : {}),
       ...(input.apiKey === '' ? { encryptedApiKey: '', apiKeyHint: '' } : {}),
       ...(input.authType !== undefined ? { authType: input.authType } : {}),
@@ -358,7 +418,7 @@ export class ProvidersService implements OnModuleInit {
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
       ...(input.weight !== undefined ? { weight: input.weight } : {}),
       ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
-      ...(input.allowUserKeys !== undefined ? { allowUserKeys: input.allowUserKeys } : {}),
+      ...(nextType === ProviderType.POLLINATIONS ? { allowUserKeys: false } : input.allowUserKeys !== undefined ? { allowUserKeys: input.allowUserKeys } : {}),
       ...(input.customHeaders !== undefined ? { customHeaders: input.customHeaders as Prisma.InputJsonValue } : {}),
       ...(input.metadata !== undefined ? { metadata: input.metadata as Prisma.InputJsonValue } : {}),
     } })
@@ -377,13 +437,35 @@ export class ProvidersService implements OnModuleInit {
     return headers
   }
 
+  private hasSupportedImageSignature(bytes: Uint8Array) {
+    const ascii = (start: number, end: number) => Buffer.from(bytes.subarray(start, end)).toString('ascii')
+    return (bytes.length >= 8 && bytes[0] === 0x89 && ascii(1, 4) === 'PNG')
+      || (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8)
+      || (bytes.length >= 12 && ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP')
+      || (bytes.length >= 6 && ['GIF87a', 'GIF89a'].includes(ascii(0, 6)))
+  }
+
   async fetchRemoteModels(id: string) {
     const provider = await this.prisma.providerChannel.findUnique({ where: { id } })
     if (!provider) throw new NotFoundException('上游渠道不存在')
     const apiKey = this.crypto.decrypt(provider.encryptedApiKey)
-    if (!apiKey) throw new BadRequestException('请先配置渠道 API 密钥')
+    if (!apiKey && provider.type !== ProviderType.POLLINATIONS) throw new BadRequestException('请先配置渠道 API 密钥')
     const startedAt = Date.now()
     try {
+      if (provider.type === ProviderType.POLLINATIONS) {
+        const url = this.buildPollinationsImageUrl(provider.baseUrl, 'minimal blue circle on white background', { model: 'flux', width: 64, height: 64, seed: 1 })
+        const response = await fetch(url, { headers: this.headers(provider.customHeaders), signal: AbortSignal.timeout(Math.min(provider.timeoutMs, 30_000)) })
+        const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() || ''
+        const declaredSize = Number(response.headers.get('content-length') || 0)
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`)
+        if (!contentType.startsWith('image/')) throw new Error(`渠道返回了非图片内容：${contentType || '未知类型'}`)
+        if (declaredSize > 5 * 1024 * 1024) throw new Error('渠道健康检查返回的图片超过 5 MB')
+        const bytes = new Uint8Array(await response.arrayBuffer())
+        if (bytes.length < 64 || bytes.length > 5 * 1024 * 1024 || !this.hasSupportedImageSignature(bytes)) throw new Error('渠道返回的图片数据无效')
+        const models = ['flux']
+        await this.prisma.providerChannel.update({ where: { id }, data: { lastHealthStatus: 'healthy', lastHealthMessage: `图片接口正常，${Date.now() - startedAt}ms`, lastHealthAt: new Date() } })
+        return { models, latencyMs: Date.now() - startedAt }
+      }
       const response = await fetch(`${provider.baseUrl}/models`, { headers: this.applyAuth(this.headers(provider.customHeaders), provider.authType, apiKey), signal: AbortSignal.timeout(Math.min(provider.timeoutMs, 30_000)) })
       const raw = await response.text()
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${raw.slice(0, 300)}`)
@@ -450,7 +532,7 @@ export class ProvidersService implements OnModuleInit {
 
   async listModelsForUser(userId: string, capability?: ModelCapability) {
     const policy = await this.userPolicy(userId)
-    const models = await this.prisma.modelPreset.findMany({ where: { enabled: true, ...(capability ? { capability } : {}), ...(policy.restrictModels ? { id: { in: policy.allowedModelIds } } : {}) }, orderBy: [{ capability: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }], include: { provider: { select: { id: true, name: true, type: true, enabled: true, encryptedApiKey: true } }, providerRoutes: { where: { enabled: true }, select: { id: true, providerId: true, options: true, provider: { select: { enabled: true, encryptedApiKey: true } } } } } })
+    const models = await this.prisma.modelPreset.findMany({ where: { enabled: true, ...(capability ? { capability } : {}), ...(policy.restrictModels ? { id: { in: policy.allowedModelIds } } : {}) }, orderBy: [{ capability: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }], include: { provider: { select: { id: true, name: true, type: true, enabled: true, encryptedApiKey: true } }, providerRoutes: { where: { enabled: true }, select: { id: true, providerId: true, options: true, provider: { select: { type: true, enabled: true, encryptedApiKey: true } } } } } })
     return models.map((model) => {
       const override = policy.costOverrides.get(model.id)
       const effectiveCreditCost = override ?? Math.ceil(model.flatCreditCost * policy.creditRatePercent / 100)
@@ -531,7 +613,12 @@ export class ProvidersService implements OnModuleInit {
       sub2apiUserInfoUrl: _sub2apiUserInfoUrl,
       ...safe
     } = row
-    if (admin) return { ...safe, hasSmtpPassword: Boolean(encryptedSmtpPassword), hasLinuxDoClientSecret: Boolean(encryptedLinuxDoClientSecret) }
+    if (admin) return {
+      ...safe,
+      chatHomeContent: this.chatHomeContent(row.chatHomeContent),
+      hasSmtpPassword: Boolean(encryptedSmtpPassword),
+      hasLinuxDoClientSecret: Boolean(encryptedLinuxDoClientSecret),
+    }
     return {
       siteName: row.siteName,
       siteLogoUrl: row.siteLogoUrl,
@@ -553,6 +640,8 @@ export class ProvidersService implements OnModuleInit {
       otpResendSeconds: row.otpResendSeconds,
       defaultTheme: row.defaultTheme,
       defaultLanguage: row.defaultLanguage,
+      chatUiPreset: row.chatUiPreset,
+      chatHomeContent: this.chatHomeContent(row.chatHomeContent),
       userByokEnabled: row.userByokEnabled,
       rechargeEnabled: row.rechargeEnabled,
       currency: row.currency,
@@ -564,8 +653,9 @@ export class ProvidersService implements OnModuleInit {
   }
 
   async updateSystemSettings(input: SystemSettingsInput) {
-    const { smtpPassword, linuxDoClientSecret, ...settings } = input
+    const { smtpPassword, linuxDoClientSecret, chatHomeContent, ...settings } = input
     const data: Prisma.SystemSettingUpdateInput = { ...settings }
+    if (chatHomeContent) data.chatHomeContent = this.chatHomeContent(chatHomeContent) as Prisma.InputJsonValue
     if (smtpPassword) {
       data.encryptedSmtpPassword = this.crypto.encrypt(smtpPassword)
       data.smtpPasswordHint = this.crypto.hint(smtpPassword)
@@ -582,6 +672,37 @@ export class ProvidersService implements OnModuleInit {
     }
     await this.prisma.systemSetting.upsert({ where: { id: 'global' }, update: data, create: { id: 'global', ...data } as Prisma.SystemSettingCreateInput })
     return this.getSystemSettings(true)
+  }
+
+  private chatHomeContent(value: Prisma.JsonValue | Record<string, unknown> | null | undefined) {
+    const input = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+    const text = (item: unknown, fallback = '', max = 500) => typeof item === 'string' ? item.trim().slice(0, max) : fallback
+    const destination = (item: unknown, fallback: string) => {
+      const value = text(item, fallback, 1000)
+      if (value.startsWith('/')) return value
+      try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.toString() : fallback } catch { return fallback }
+    }
+    const defaultRecommendations = DEFAULT_CHAT_HOME_CONTENT.doubaoRecommendations
+    const recommendations = Array.isArray(input.doubaoRecommendations) ? input.doubaoRecommendations : defaultRecommendations
+    const defaultBanners = DEFAULT_CHAT_HOME_CONTENT.qianwenBanners
+    const banners = Array.isArray(input.qianwenBanners) ? input.qianwenBanners : defaultBanners
+    const rawProject = input.kimiProject && typeof input.kimiProject === 'object' && !Array.isArray(input.kimiProject) ? input.kimiProject as Record<string, unknown> : DEFAULT_CHAT_HOME_CONTENT.kimiProject
+    return {
+      doubaoRecommendations: recommendations.slice(0, 12).map((item, index) => {
+        const row = item && typeof item === 'object' && !Array.isArray(item) ? item as Record<string, unknown> : {}
+        const fallback = defaultRecommendations[index % defaultRecommendations.length]
+        return { title: text(row.title, fallback.title, 160), prompt: text(row.prompt, fallback.prompt, 2000), targetUrl: destination(row.targetUrl, fallback.targetUrl) }
+      }).filter((item) => item.title),
+      qianwenBanners: banners.slice(0, 8).map((item, index) => {
+        const row = item && typeof item === 'object' && !Array.isArray(item) ? item as Record<string, unknown> : {}
+        const fallback = defaultBanners[index % defaultBanners.length]
+        return {
+          title: text(row.title, fallback.title, 120), description: text(row.description, fallback.description, 240),
+          buttonText: text(row.buttonText, fallback.buttonText, 40), imageUrl: destination(row.imageUrl, ''), targetUrl: destination(row.targetUrl, fallback.targetUrl),
+        }
+      }).filter((item) => item.title),
+      kimiProject: { label: text(rawProject.label, DEFAULT_CHAT_HOME_CONTENT.kimiProject.label, 60), targetUrl: destination(rawProject.targetUrl, DEFAULT_CHAT_HOME_CONTENT.kimiProject.targetUrl) },
+    }
   }
 
   private externalUrl(input: string) {
@@ -728,7 +849,7 @@ export class ProvidersService implements OnModuleInit {
     }
 
     const now = Date.now()
-    const allConfiguredRoutes = (preset?.providerRoutes || []).filter((route) => route.enabled && route.provider.enabled && route.provider.encryptedApiKey)
+    const allConfiguredRoutes = (preset?.providerRoutes || []).filter((route) => route.enabled && route.provider.enabled && this.providerReady(route.provider))
     const configuredRoutes = allConfiguredRoutes.filter((route) => capability !== ModelCapability.VIDEO || this.routeSupportsVideo(route.options, requirements))
     const readyRoutes = configuredRoutes.filter((route) => !route.provider.cooldownUntil || route.provider.cooldownUntil.getTime() <= now)
     // Cooldown keeps an unhealthy route behind healthy alternatives. It must not make the only
@@ -738,7 +859,7 @@ export class ProvidersService implements OnModuleInit {
       .sort((a, b) => b.priority - a.priority || (b.random ** (1 / b.weight)) - (a.random ** (1 / a.weight)))
     for (const { route } of routes) candidates.push({ source: 'admin', providerId: route.provider.id, routeId: route.id, label: route.provider.name, type: route.provider.type, baseUrl: route.provider.baseUrl, apiKey: this.crypto.decrypt(route.provider.encryptedApiKey), authType: route.provider.authType, headers: this.headers(route.provider.customHeaders), timeoutMs: route.provider.timeoutMs, model: route.upstreamModelOverride || model, presetKey: preset?.key, creditCost, ...basePricing, videoCapabilities: this.routeVideoCapabilities(route.options, basePricing.videoCapabilities), inputCostMicrosPerMillion: route.inputCostMicrosPerMillion ?? basePricing.inputCostMicrosPerMillion, outputCostMicrosPerMillion: route.outputCostMicrosPerMillion ?? basePricing.outputCostMicrosPerMillion, imageCostMicros: route.imageCostMicros ?? basePricing.imageCostMicros, videoCostMicros: route.videoCostMicros ?? basePricing.videoCostMicros })
 
-    if (!allConfiguredRoutes.length && preset?.provider?.enabled && preset.provider.encryptedApiKey) {
+    if (!allConfiguredRoutes.length && preset?.provider?.enabled && this.providerReady(preset.provider)) {
       candidates.push({ source: 'admin', providerId: preset.provider.id, label: preset.provider.name, type: preset.provider.type, baseUrl: preset.provider.baseUrl, apiKey: this.crypto.decrypt(preset.provider.encryptedApiKey), authType: preset.provider.authType, headers: this.headers(preset.provider.customHeaders), timeoutMs: preset.provider.timeoutMs, model, presetKey: preset.key, creditCost, ...basePricing })
     }
 

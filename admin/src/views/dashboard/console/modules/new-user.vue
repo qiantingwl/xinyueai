@@ -68,18 +68,22 @@
     min-width: 0;
     overflow: hidden;
   }
+
   .new-user-table {
     width: 100%;
     margin-top: 10px;
     overflow: hidden;
   }
+
   .new-user-table :deep(.el-table__inner-wrapper),
   .new-user-table :deep(.el-table__body-wrapper) {
     overflow-x: hidden !important;
   }
+
   .new-user-table :deep(.el-scrollbar__bar.is-horizontal) {
     display: none !important;
   }
+
   .user-name {
     display: block;
     overflow: hidden;

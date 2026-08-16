@@ -20,6 +20,7 @@ class PromptLibraryItemUpdateDto {
   @IsOptional() @IsString() @MaxLength(2000) description?: string
   @IsOptional() @IsArray() @ArrayMaxSize(30) @IsString({ each: true }) tags?: string[]
   @IsOptional() @IsString() @MaxLength(2000) coverUrl?: string
+  @IsOptional() @IsString() @MaxLength(2000) previewVideoUrl?: string
   @IsOptional() @IsBoolean() enabled?: boolean
 }
 
@@ -28,9 +29,12 @@ export class PromptLibraryController {
   constructor(private readonly library: PromptLibraryService) {}
 
   @Get()
-  list(@Query('q') query?: string, @Query('source') sourceId?: string, @Query('tag') tag?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
-    return this.library.list({ query, sourceId, tag, page: Number(page) || 1, pageSize: Number(pageSize) || 24 })
+  list(@Query('type') promptType?: string, @Query('q') query?: string, @Query('source') sourceId?: string, @Query('tag') tag?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    return this.library.list({ promptType, query, sourceId, tag, page: Number(page) || 1, pageSize: Number(pageSize) || 24 })
   }
+
+  @Get('items/:itemId')
+  item(@Param('itemId') itemId: string) { return this.library.publicItemById(itemId) }
 }
 
 @Controller('admin/prompt-library')
@@ -49,8 +53,8 @@ export class AdminPromptLibraryController {
   }
 
   @Get('items')
-  items(@Query('q') query?: string, @Query('source') sourceId?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
-    return this.library.adminItems({ query, sourceId, page: Number(page) || 1, pageSize: Number(pageSize) || 20 })
+  items(@Query('type') promptType?: string, @Query('q') query?: string, @Query('source') sourceId?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    return this.library.adminItems({ promptType, query, sourceId, page: Number(page) || 1, pageSize: Number(pageSize) || 20 })
   }
 
   @Patch('items/:itemId')
@@ -71,6 +75,13 @@ export class AdminPromptLibraryController {
   async refresh(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest) {
     const result = await this.library.refreshAll()
     await this.audit(admin.id, request, 'prompt_library.refresh', 'all', { total: result.total })
+    return result
+  }
+
+  @Post('sources/:id/refresh')
+  async refreshSource(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Param('id') id: string) {
+    const result = await this.library.refreshSource(id)
+    await this.audit(admin.id, request, 'prompt_library.source.refresh', id, { count: result.count, complete: result.complete })
     return result
   }
 

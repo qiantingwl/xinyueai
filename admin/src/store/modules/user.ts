@@ -141,7 +141,9 @@ export const useUserStore = defineStore(
      * 如果是同一账号重新登录，保留工作台标签页
      */
     const logOut = () => {
-      void fetch('/v1/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined)
+      void fetch('/v1/auth/logout', { method: 'POST', credentials: 'include' }).catch(
+        () => undefined
+      )
       // 保存当前用户 ID，用于下次登录时判断是否为同一用户
       const currentUserId = info.value.userId
       if (currentUserId) {

@@ -1,10 +1,10 @@
 .office-center {
   --office-blue: #4f8cff;
-  --office-composer-surface: #1f1f1f;
+  --office-composer-surface: #242424;
   --office-composer-control: #292929;
   --office-composer-control-hover: #333;
-  --office-composer-border: rgba(255, 255, 255, .1);
-  --office-composer-shadow: 0 12px 42px rgba(0, 0, 0, .26);
+  --office-composer-border: #394654;
+  --office-composer-shadow: 0 2px 4px rgba(116, 158, 243, .02), 0 4px 12px rgba(102, 188, 253, .04), 0 8px 24px rgba(95, 178, 255, .12);
   background: var(--studio-bg);
   color: var(--studio-text);
   display: grid;
@@ -134,24 +134,29 @@
 .office-deliverable > button { align-items: center; background: var(--studio-inverse-bg); border: 0; border-radius: 6px; color: var(--studio-inverse-text); display: flex; font-size: 11px; gap: 5px; height: 32px; padding: 0 10px; }
 .office-deliverable > button:disabled { opacity: .55; }
 
-.office-composer-wrap { bottom: 22px; left: 50%; max-width: calc(100% - 40px); position: absolute; transform: translateX(-50%); width: min(940px, calc(100% - 40px)); z-index: 10; }
-.office-composer { background: var(--office-composer-surface); border: 1px solid var(--office-composer-border); border-radius: 22px; box-shadow: var(--office-composer-shadow); padding: 16px 14px 11px; transition: border-color .16s ease, box-shadow .16s ease; }
-.office-composer:focus-within { border-color: rgba(116, 160, 222, .66); box-shadow: var(--office-composer-shadow), 0 0 0 3px rgba(74, 144, 226, .1); }
-.office-composer textarea { background: transparent; border: 0; color: var(--studio-text); display: block; font: inherit; font-size: 15px; line-height: 1.6; max-height: 220px; min-height: 66px; outline: 0; padding: 1px 9px 8px; resize: none; width: 100%; }
+.office-composer-wrap { bottom: 16px; left: 50%; max-width: calc(100% - 40px); position: absolute; transform: translateX(-50%); width: min(1000px, calc(100% - 40px)); z-index: 10; }
+.office-composer { background: var(--office-composer-surface); border: 1px solid var(--office-composer-border); border-radius: 24px; box-shadow: var(--office-composer-shadow); min-height: 100px; padding: 10px; transition: border-color .16s ease, box-shadow .16s ease; }
+.office-composer:focus-within { border-color: #668bc0; box-shadow: var(--office-composer-shadow); }
+.office-composer textarea { background: transparent; border: 0; color: var(--studio-text); display: block; font: inherit; font-size: 15px; height: 36px; line-height: 1.5; max-height: 120px; min-height: 36px; outline: 0; overflow-y: auto; padding: 3px 10px 7px; resize: none; width: 100%; }
 .office-composer textarea::placeholder { color: var(--studio-muted); }
-.office-composer > footer { align-items: center; display: flex; gap: 10px; justify-content: space-between; min-height: 38px; position: relative; }
-.office-composer > footer > div { align-items: center; display: flex; gap: 3px; min-width: 0; overflow: visible; }
+.office-composer > footer { align-items: center; display: flex; gap: 8px; justify-content: space-between; min-height: 36px; position: relative; }
+.office-composer > footer > div { align-items: center; display: flex; gap: 2px; min-width: 0; overflow: visible; }
 .office-composer > footer > div::-webkit-scrollbar { display: none; }
 .office-composer button { color: var(--studio-text); }
-.office-composer > footer button { align-items: center; background: transparent; border: 0; border-radius: 9px; display: inline-flex; flex: 0 0 auto; gap: 5px; height: 36px; justify-content: center; padding: 0 9px; transition: background-color .16s ease, color .16s ease; }
+.office-composer > footer button { align-items: center; background: transparent; border: 0; border-radius: 8px; display: inline-flex; flex: 0 0 auto; gap: 5px; height: 32px; justify-content: center; padding: 0 9px; transition: background-color .16s ease, color .16s ease; }
 .office-composer > footer button:hover { background: var(--office-composer-control-hover); }
 .office-composer > footer button:disabled { cursor: not-allowed; }
-.office-composer .office-mode-button, .office-composer .office-model-button, .office-composer .office-format-button, .office-composer .office-skill-button { color: var(--studio-muted); font-size: 12px; max-width: 180px; }
-.office-composer .office-skill-button.active { background: var(--office-composer-control); color: var(--studio-text); }
+.office-composer .office-mode-button, .office-composer .office-model-button, .office-composer .office-skill-button { color: var(--studio-muted); font-size: 12px; max-width: 180px; }
+.office-composer .office-skill-button.active, .office-composer .office-quick-skill.active { background: var(--office-composer-control); color: var(--studio-text); }
+.office-composer .office-quick-skill { color: var(--studio-muted); font-size: 12px; }
 .office-composer .office-web-button { color: var(--studio-muted); font-size: 12px; } .office-composer .office-web-button.active { background: rgba(79, 140, 255, .14); color: #7eaeff; }
-.office-composer .office-submit { background: var(--studio-inverse-bg); border-radius: 50%; color: var(--studio-inverse-text); height: 38px; padding: 0; width: 38px; }
+.office-composer .office-submit { background: var(--studio-inverse-bg); border-radius: 50%; color: var(--studio-inverse-text); height: 36px; padding: 0; width: 36px; }
 .office-composer .office-submit:hover { background: #fff; }
 .office-composer .office-submit:disabled { opacity: .35; }
+.office-composer-actions { align-items: center; display: flex; flex: 0 0 auto; gap: 4px; }
+.office-composer .office-voice { align-items: center; background: transparent; border: 0; border-radius: 50%; color: var(--studio-muted); display: inline-flex; height: 36px; justify-content: center; padding: 0; width: 36px; }
+.office-composer .office-voice:hover { background: var(--office-composer-control-hover); color: var(--studio-text); }
+.office-composer .office-voice.is-listening { background: var(--studio-inverse-bg); color: var(--studio-inverse-text); }
 .office-attachments { display: flex; gap: 9px; max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 1px 8px 10px; scrollbar-width: none; }
 .office-attachments::-webkit-scrollbar { display: none; }
 .office-attachments article { background: var(--office-composer-control); border: 1px solid var(--office-composer-border); border-radius: 10px; flex: 0 0 auto; position: relative; }
@@ -167,14 +172,13 @@
 .office-attachments article.is-file > button { right: 6px; top: 6px; }
 
 .office-control-anchor { display: inline-flex; flex: 0 0 auto; position: relative; }
-.office-mode-menu, .office-model-menu, .office-format-menu { background: var(--studio-elevated); border: 1px solid var(--office-composer-border); border-radius: 12px; bottom: calc(100% + 9px); box-shadow: var(--office-composer-shadow); display: grid; left: 0; min-width: 250px; padding: 7px; position: absolute; z-index: 24; }
+.office-mode-menu, .office-model-menu { background: var(--studio-elevated); border: 1px solid var(--office-composer-border); border-radius: 12px; bottom: calc(100% + 9px); box-shadow: var(--office-composer-shadow); display: grid; left: 0; min-width: 250px; padding: 7px; position: absolute; z-index: 24; }
 .office-model-menu { max-height: min(320px, calc(100dvh - 220px)); min-width: 276px; overflow-y: auto; scrollbar-color: var(--studio-muted) transparent; scrollbar-width: thin; }
-.office-format-menu { left: auto; right: 0; }
-.office-mode-menu > button, .office-model-menu > button, .office-format-menu > button { align-items: center; background: transparent; border: 0; border-radius: 9px; color: var(--studio-text); display: flex; gap: 10px; min-height: 48px; padding: 7px 10px; text-align: left; }
-.office-mode-menu > button:hover, .office-mode-menu > button.active, .office-model-menu > button:hover, .office-model-menu > button.active, .office-format-menu > button:hover, .office-format-menu > button.active { background: var(--studio-control); }
-.office-mode-menu > button span, .office-model-menu > button span, .office-format-menu > button span { display: grid; flex: 1; }
-.office-mode-menu strong, .office-model-menu strong, .office-format-menu strong { font-size: 12px; }
-.office-mode-menu small, .office-model-menu small, .office-format-menu small { color: var(--studio-muted); font-size: 10px; margin-top: 2px; }
+.office-mode-menu > button, .office-model-menu > button { align-items: center; background: transparent; border: 0; border-radius: 9px; color: var(--studio-text); display: flex; gap: 10px; min-height: 48px; padding: 7px 10px; text-align: left; }
+.office-mode-menu > button:hover, .office-mode-menu > button.active, .office-model-menu > button:hover, .office-model-menu > button.active { background: var(--studio-control); }
+.office-mode-menu > button span, .office-model-menu > button span { display: grid; flex: 1; }
+.office-mode-menu strong, .office-model-menu strong { font-size: 12px; }
+.office-mode-menu small, .office-model-menu small { color: var(--studio-muted); font-size: 10px; margin-top: 2px; }
 
 .office-skill-panel { background: var(--studio-elevated); border: 1px solid var(--office-composer-border); border-radius: 14px; bottom: calc(100% + 10px); box-shadow: var(--office-composer-shadow); display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); left: 0; max-height: min(520px, calc(100dvh - 220px)); overflow: hidden; position: absolute; width: 100%; }
 .office-skill-panel > header { align-items: center; border-bottom: 1px solid var(--studio-border); display: flex; justify-content: space-between; min-height: 52px; padding: 8px 12px 8px 16px; }
@@ -196,8 +200,9 @@
 .office-skill-list small { color: var(--studio-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .office-error { background: #4a2424; border: 1px solid #733838; border-radius: 6px; color: #ffc7c2; font-size: 11px; margin: 7px 0 0; padding: 8px 10px; }
 
-html[data-studio-theme="light"] .office-center { --office-composer-surface: #fff; --office-composer-control: #f2f3f4; --office-composer-control-hover: #eef0f1; --office-composer-border: rgba(0, 0, 0, .09); --office-composer-shadow: 0 12px 38px rgba(24, 28, 33, .12); }
-html[data-studio-theme="light"] .office-composer, html[data-studio-theme="light"] .office-skill-panel, html[data-studio-theme="light"] .office-mode-menu, html[data-studio-theme="light"] .office-model-menu, html[data-studio-theme="light"] .office-format-menu, html[data-studio-theme="light"] .office-history { background: #fff; box-shadow: var(--office-composer-shadow); }
+html[data-studio-theme="light"] .office-center { --office-composer-surface: #fff; --office-composer-control: #f2f3f4; --office-composer-control-hover: #eef0f1; --office-composer-border: #e6ebf3; --office-composer-shadow: 0 2px 4px rgba(116, 158, 243, .02), 0 4px 12px rgba(102, 188, 253, .04), 0 8px 24px rgba(95, 178, 255, .17); }
+html[data-studio-theme="light"] .office-composer, html[data-studio-theme="light"] .office-skill-panel, html[data-studio-theme="light"] .office-mode-menu, html[data-studio-theme="light"] .office-model-menu, html[data-studio-theme="light"] .office-history { background: #fff; box-shadow: var(--office-composer-shadow); }
+html[data-studio-theme="light"] .office-composer:focus-within { border-color: #b9d7ff; }
 html[data-studio-theme="light"] .office-user-message { background: #f4f4f5; }
 html[data-studio-theme="light"] .office-composer .office-submit { background: #18181b; color: #fff; }
 html[data-studio-theme="light"] .office-error { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
@@ -215,9 +220,8 @@ html[data-studio-theme="light"] .office-error { background: #fff1f2; border-colo
   .office-recommendations small { display: none; }
   .office-composer-wrap { bottom: 10px; max-width: calc(100% - 20px); width: calc(100% - 20px); }
   .office-composer .office-model-button { display: none; }
+  .office-composer .office-quick-skill:nth-of-type(n+4) { display: none; }
   .office-composer .office-mode-button, .office-composer .office-skill-button { max-width: 120px; overflow: hidden; }
-  .office-composer .office-format-button { font-size: 0; padding: 0; width: 36px; }
-  .office-composer .office-format-button svg:last-child { display: none; }
   .office-result__inner { padding: 34px 16px 190px; }
   .office-user-message { max-width: 88%; }
   .office-skill-panel { max-height: calc(100dvh - 190px); }

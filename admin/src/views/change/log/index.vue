@@ -40,7 +40,9 @@
         </div>
 
         <!-- 标签 -->
-        <ElTag v-if="item.requireReLogin" type="warning" size="small">{{ xt('需要重新登录') }}</ElTag>
+        <ElTag v-if="item.requireReLogin" type="warning" size="small">{{
+          xt('需要重新登录')
+        }}</ElTag>
       </div>
     </div>
   </div>

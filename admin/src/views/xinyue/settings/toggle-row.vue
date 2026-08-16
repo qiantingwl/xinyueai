@@ -15,21 +15,23 @@
 <style scoped>
   .toggle-row {
     display: flex;
+    gap: 16px;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
     min-height: 68px;
     padding: 12px 14px;
     border: 1px solid var(--art-gray-200);
     border-radius: 6px;
   }
+
   .toggle-row span {
     display: grid;
     gap: 4px;
   }
+
   .toggle-row small {
-    color: var(--art-gray-500);
     font-size: 12px;
     line-height: 1.4;
+    color: var(--art-gray-500);
   }
 </style>

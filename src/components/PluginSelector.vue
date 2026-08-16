@@ -1,17 +1,17 @@
 <template>
   <div class="plugin-selector" :class="{ 'plugin-selector--compact': compact }">
-    <button ref="trigger" type="button" :class="{ 'is-open': isOpen }" :aria-expanded="isOpen" :aria-label="`选择插件，当前为${selected?.name || '未启用'}`" @click="toggle">
-      <Blocks :size="15" /><span>{{ selected?.name || '插件' }}</span><ChevronDown class="plugin-selector__chevron" :size="13" />
+    <button ref="trigger" type="button" :class="{ 'is-open': isOpen }" :aria-expanded="isOpen" :aria-label="`选择技能，当前为${selected?.name || '未启用'}`" @click="toggle">
+      <Blocks :size="15" /><span>{{ selected?.name || '技能' }}</span><ChevronDown class="plugin-selector__chevron" :size="13" />
     </button>
     <Teleport to="body">
       <div v-if="isOpen" ref="popover" class="plugin-selector__popover plugin-selector__popover--floating" :style="popoverStyle">
-        <header><span><strong>选择插件</strong><small>只显示支持当前任务的已安装或私有插件</small></span><RouterLink to="/plugins" @click="setOpen(false)">管理</RouterLink></header>
+        <header><span><strong>选择技能</strong><small>只显示支持当前任务的已安装或私有技能</small></span><RouterLink to="/capabilities" @click="setOpen(false)">管理</RouterLink></header>
         <button type="button" :class="{ 'is-active': !modelValue }" @click="select('')"><span><strong>不使用插件</strong><small>按当前模型和设置直接生成</small></span><Check v-if="!modelValue" :size="15" /></button>
         <button v-for="plugin in plugins" :key="plugin.id" type="button" :class="{ 'is-active': modelValue === plugin.id }" @click="select(plugin.id)">
           <span><strong>{{ plugin.name }}<em v-if="plugin.owned">私有</em></strong><small>{{ plugin.description || capabilityLabel }}</small></span><Check v-if="modelValue === plugin.id" :size="15" />
         </button>
         <p v-if="loading">正在读取可用插件</p>
-        <p v-else-if="!plugins.length">暂无可用插件，可前往插件市场安装</p>
+        <p v-else-if="!plugins.length">暂无可用技能，可前往能力中心安装</p>
       </div>
     </Teleport>
   </div>

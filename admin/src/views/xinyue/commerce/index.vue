@@ -21,8 +21,9 @@
             ><ElTableColumn :label="xt('商品')" min-width="220"
               ><template #default="{ row }"
                 ><strong>{{ row.name }}</strong
-                ><ElTag v-if="row.recommended" size="small" type="warning" class="inline-tag"
-                  >{{ xt('推荐') }}</ElTag
+                ><ElTag v-if="row.recommended" size="small" type="warning" class="inline-tag">{{
+                  xt('推荐')
+                }}</ElTag
                 ><small class="note">{{ row.description || xt('暂无商品说明') }}</small></template
               ></ElTableColumn
             ><ElTableColumn :label="xt('创作点')" width="120"
@@ -47,7 +48,9 @@
             ><ElTableColumn :label="xt('操作')" width="140"
               ><template #default="{ row }"
                 ><ElButton link type="primary" @click="openPackage(row)">{{ xt('编辑') }}</ElButton
-                ><ElButton link type="danger" @click="removePackage(row)">{{ xt('删除') }}</ElButton></template
+                ><ElButton link type="danger" @click="removePackage(row)">{{
+                  xt('删除')
+                }}</ElButton></template
               ></ElTableColumn
             ></ElTable
           ></ElCard
@@ -66,10 +69,11 @@
             ><ElTableColumn :label="xt('渠道')" min-width="210"
               ><template #default="{ row }"
                 ><strong>{{ row.name }}</strong
-                ><ElTag v-if="row.isDefault" size="small" type="success" class="inline-tag"
-                  >{{ xt('默认') }}</ElTag
+                ><ElTag v-if="row.isDefault" size="small" type="success" class="inline-tag">{{
+                  xt('默认')
+                }}</ElTag
                 ><small class="note"
-                   >{{ xt(providerText[row.providerKey] || row.providerKey) }} ·
+                  >{{ xt(providerText[row.providerKey] || row.providerKey) }} ·
                   {{ row._count?.transactions || 0 }} {{ xt('笔交易') }}</small
                 ></template
               ></ElTableColumn
@@ -116,7 +120,9 @@
               ><template #default="{ row }"
                 ><ElButton link type="primary" @click="checkChannel(row)">{{ xt('检测') }}</ElButton
                 ><ElButton link @click="openChannel(row)">{{ xt('编辑') }}</ElButton
-                ><ElButton link type="danger" @click="removeChannel(row)">{{ xt('删除') }}</ElButton></template
+                ><ElButton link type="danger" @click="removeChannel(row)">{{
+                  xt('删除')
+                }}</ElButton></template
               ></ElTableColumn
             ></ElTable
           ></ElCard
@@ -136,7 +142,7 @@
                 ><ElOption
                   v-for="status in transactionStatuses"
                   :key="status"
-                   :label="xt(transactionStatusText[status])"
+                  :label="xt(transactionStatusText[status])"
                   :value="status" /></ElSelect></ElFormItem
             ><ElFormItem
               ><ElSelect v-model="filters.channelId" clearable :placeholder="xt('支付渠道')"
@@ -168,7 +174,7 @@
                 >{{ row.orderType === 'SUBSCRIPTION' ? xt('订阅') : xt('充值')
                 }}<small class="note"
                   >{{ row.channel?.name }} ·
-                   {{ xt(methodText[row.paymentMethod] || row.paymentMethod) }}</small
+                  {{ xt(methodText[row.paymentMethod] || row.paymentMethod) }}</small
                 ></template
               ></ElTableColumn
             ><ElTableColumn :label="xt('金额')" width="120"
@@ -179,13 +185,17 @@
               ><template #default="{ row }"
                 ><ElTooltip :content="row.failureReason || ''" :disabled="!row.failureReason"
                   ><ElTag :type="transactionType(row.status)">{{
-                  xt(transactionStatusText[row.status] || row.status)
+                    xt(transactionStatusText[row.status] || row.status)
                   }}</ElTag></ElTooltip
                 ></template
               ></ElTableColumn
             ><ElTableColumn :label="xt('操作')" width="110"
               ><template #default="{ row }"
-                ><ElButton v-if="row.status === 'PAID'" link type="primary" @click="complete(row)"
+                ><ElButton
+                  v-if="row.status === 'PAID'"
+                  link
+                  type="primary"
+                  @click="complete(row)"
                   >{{ xt('完成入账') }}</ElButton
                 ><span v-else class="note">{{ xt('无需处理') }}</span></template
               ></ElTableColumn
@@ -209,7 +219,9 @@
                 ><small class="note">{{ xt('前缀') }} {{ row.codePrefix }}</small></template
               ></ElTableColumn
             ><ElTableColumn :label="xt('面值')" width="110"
-              ><template #default="{ row }">{{ row.credits }} {{ xt('点') }}</template></ElTableColumn
+              ><template #default="{ row }"
+                >{{ row.credits }} {{ xt('点') }}</template
+              ></ElTableColumn
             ><ElTableColumn :label="xt('使用进度')" min-width="180"
               ><template #default="{ row }"
                 ><ElProgress
@@ -295,14 +307,14 @@
                   v-for="(label, value) in providerText"
                   :key="value"
                   :value="value"
-                   :label="xt(label)" /></ElSelect></ElFormItem></ElCol></ElRow
+                  :label="xt(label)" /></ElSelect></ElFormItem></ElCol></ElRow
         ><ElFormItem :label="xt('支付方式')"
           ><ElCheckboxGroup v-model="channelForm.supportedMethods"
             ><ElCheckbox
               v-for="method in providerMethods[channelForm.providerKey]"
               :key="method"
               :value="method"
-               >{{ xt(methodText[method]) }}</ElCheckbox
+              >{{ xt(methodText[method]) }}</ElCheckbox
             ></ElCheckboxGroup
           ></ElFormItem
         ><template v-if="channelForm.providerKey === 'EASYPAY'"
@@ -372,9 +384,9 @@
         ></ElForm
       ><template #footer
         ><ElButton @click="channelDrawer = false">{{ xt('取消') }}</ElButton
-        ><ElButton type="primary" :loading="saving" @click="saveChannel"
-          >{{ xt('保存渠道') }}</ElButton
-        ></template
+        ><ElButton type="primary" :loading="saving" @click="saveChannel">{{
+          xt('保存渠道')
+        }}</ElButton></template
       ></ElDrawer
     >
 
@@ -601,7 +613,9 @@
     }
   }
   async function removePackage(row: RechargePackage) {
-    await ElMessageBox.confirm(`${xt('确认删除或下架')} "${row.name}"?`, xt('充值商品'), { type: 'warning' })
+    await ElMessageBox.confirm(`${xt('确认删除或下架')} "${row.name}"?`, xt('充值商品'), {
+      type: 'warning'
+    })
     await xinyueApi.deleteRechargePackage(row.id)
     await load()
   }
@@ -679,12 +693,17 @@
     await load()
   }
   async function removeChannel(row: PaymentChannel) {
-    await ElMessageBox.confirm(`${xt('确认删除或停用')} "${row.name}"?`, xt('支付渠道'), { type: 'warning' })
+    await ElMessageBox.confirm(`${xt('确认删除或停用')} "${row.name}"?`, xt('支付渠道'), {
+      type: 'warning'
+    })
     await xinyueApi.deletePaymentChannel(row.id)
     await load()
   }
   async function complete(row: PaymentTransaction) {
-    await ElMessageBox.confirm(`${xt('确认交易')} ${row.outTradeNo} ${xt('已完成并执行入账？')}`, xt('完成支付'))
+    await ElMessageBox.confirm(
+      `${xt('确认交易')} ${row.outTradeNo} ${xt('已完成并执行入账？')}`,
+      xt('完成支付')
+    )
     await xinyueApi.completePayment(row.id)
     await loadTransactions()
   }
@@ -724,68 +743,82 @@
     gap: 12px;
     height: 100%;
   }
+
   .page-title,
   .pane-action {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
+
   .page-title h1 {
     margin: 0 0 4px;
     font-size: 22px;
   }
+
   .page-title p,
   .pane-action span,
   .note {
     display: block;
     margin: 3px 0 0;
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .business-tabs {
     display: flex;
     flex: 1;
-    min-height: 0;
     flex-direction: column;
+    min-height: 0;
   }
+
   .business-tabs :deep(.el-tabs__content),
   .business-tabs :deep(.el-tab-pane) {
     height: 100%;
     min-height: 0;
   }
+
   .business-tabs :deep(.el-tab-pane) {
     display: flex;
     flex-direction: column;
     gap: 12px;
   }
+
   .pane-action {
     min-height: 34px;
   }
+
   .inline-tag {
     margin-left: 8px;
   }
+
   .line-through {
     text-decoration: line-through;
   }
+
   .filter-card :deep(.el-card__body) {
     padding-bottom: 2px;
   }
+
   .filter-card :deep(.el-form-item) {
     margin-bottom: 14px;
   }
+
   .wide {
     width: 100%;
   }
+
   .plain-code {
     display: grid;
     grid-template-columns: 1fr auto;
-    align-items: center;
     gap: 10px;
-    margin-top: 16px;
+    align-items: center;
     padding: 14px;
+    margin-top: 16px;
     border: 1px solid var(--art-gray-200);
     border-radius: 6px;
   }
+
   .plain-code code {
     font-size: 18px;
     font-weight: 700;

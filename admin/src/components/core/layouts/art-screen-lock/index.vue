@@ -110,15 +110,11 @@
   import { Lock, Unlock } from '@element-plus/icons-vue'
   import type { FormInstance, FormRules } from 'element-plus'
   import { useI18n } from 'vue-i18n'
-  import CryptoJS from 'crypto-js'
   import { useUserStore } from '@/store/modules/user'
   import { mittBus } from '@/utils/sys'
 
   // 国际化
   const { t } = useI18n()
-
-  // 环境变量
-  const ENCRYPT_KEY = import.meta.env.VITE_LOCK_ENCRYPT_KEY
 
   // Store
   const userStore = useUserStore()
@@ -322,16 +318,26 @@
   }
 
   // 工具函数
-  const verifyPassword = (inputPassword: string, storedPassword: string): boolean => {
-    try {
-      const decryptedPassword = CryptoJS.AES.decrypt(storedPassword, ENCRYPT_KEY).toString(
-        CryptoJS.enc.Utf8
-      )
-      return inputPassword === decryptedPassword
-    } catch (error) {
-      console.error('密码解密失败:', error)
-      return false
+  const hashPassword = async (password: string): Promise<string> => {
+    const bytes = new TextEncoder().encode(password)
+    const digest = await crypto.subtle.digest('SHA-256', bytes)
+    return `sha256:${Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, '0')
+    ).join('')}`
+  }
+
+  const verifyPassword = async (
+    inputPassword: string,
+    storedPassword: string
+  ): Promise<boolean> => {
+    if (!storedPassword.startsWith('sha256:')) return false
+    const candidate = await hashPassword(inputPassword)
+    if (candidate.length !== storedPassword.length) return false
+    let difference = 0
+    for (let index = 0; index < candidate.length; index += 1) {
+      difference |= candidate.charCodeAt(index) ^ storedPassword.charCodeAt(index)
     }
+    return difference === 0
   }
 
   // 事件处理函数
@@ -351,52 +357,39 @@
   const handleLock = async () => {
     if (!formRef.value) return
 
-    await formRef.value.validate((valid, fields) => {
-      if (valid) {
-        const encryptedPassword = CryptoJS.AES.encrypt(formData.password, ENCRYPT_KEY).toString()
-        userStore.setLockStatus(true)
-        userStore.setLockPassword(encryptedPassword)
-        visible.value = false
-        formData.password = ''
-      } else {
-        console.error('表单验证失败:', fields)
-      }
-    })
+    const valid = await formRef.value.validate().catch(() => false)
+    if (!valid) return
+    const passwordHash = await hashPassword(formData.password)
+    userStore.setLockStatus(true)
+    userStore.setLockPassword(passwordHash)
+    visible.value = false
+    formData.password = ''
   }
 
   const handleUnlock = async () => {
     if (!unlockFormRef.value) return
 
-    await unlockFormRef.value.validate((valid, fields) => {
-      if (valid) {
-        const isValid = verifyPassword(unlockForm.password, lockPassword.value)
+    const valid = await unlockFormRef.value.validate().catch(() => false)
+    if (!valid) return
+    const isValid = await verifyPassword(unlockForm.password, lockPassword.value)
 
-        if (isValid) {
-          try {
-            userStore.setLockStatus(false)
-            userStore.setLockPassword('')
-            unlockForm.password = ''
-            visible.value = false
-            showDevToolsWarning.value = false
-          } catch (error) {
-            console.error('更新store失败:', error)
-          }
-        } else {
-          // 触发抖动动画
-          const inputElement = unlockInputRef.value?.$el
-          if (inputElement) {
-            inputElement.classList.add('shake-animation')
-            setTimeout(() => {
-              inputElement.classList.remove('shake-animation')
-            }, 300)
-          }
-          ElMessage.error(t('lockScreen.pwdError'))
-          unlockForm.password = ''
-        }
-      } else {
-        console.error('表单验证失败:', fields)
+    if (isValid) {
+      userStore.setLockStatus(false)
+      userStore.setLockPassword('')
+      unlockForm.password = ''
+      visible.value = false
+      showDevToolsWarning.value = false
+    } else {
+      const inputElement = unlockInputRef.value?.$el
+      if (inputElement) {
+        inputElement.classList.add('shake-animation')
+        setTimeout(() => {
+          inputElement.classList.remove('shake-animation')
+        }, 300)
       }
-    })
+      ElMessage.error(t('lockScreen.pwdError'))
+      unlockForm.password = ''
+    }
   }
 
   const toLogin = () => {

@@ -44,8 +44,8 @@
           <div v-for="conversation in filteredConversations" :key="conversation.id" class="workspace-recent-row" :class="{ 'is-active': activeMode === 'chat' && conversation.id === studio.currentConversationId }">
             <form v-if="renamingConversationId === conversation.id" class="workspace-recent-rename" @submit.prevent="saveConversationRename(conversation.id)">
               <input v-model="conversationRename" maxlength="120" aria-label="对话名称" autofocus :disabled="conversationRenameBusy" @keydown.esc="cancelConversationRename" />
-              <button type="submit" aria-label="保存对话名称" title="保存" :disabled="conversationRenameBusy || !conversationRename.trim()"><Check :size="15" /></button>
-              <button type="button" aria-label="取消修改对话名称" title="取消" :disabled="conversationRenameBusy" @click="cancelConversationRename"><X :size="15" /></button>
+              <button type="submit" aria-label="保存重命名" title="保存" :disabled="conversationRenameBusy || !conversationRename.trim()"><LoaderCircle v-if="conversationRenameBusy" :size="14" /><Check v-else :size="14" /></button>
+              <button type="button" aria-label="取消重命名" title="取消" :disabled="conversationRenameBusy" @click="cancelConversationRename"><X :size="14" /></button>
             </form>
             <template v-else>
               <button class="workspace-recent-item" type="button" :title="conversation.title" @click="openConversation(conversation.id)" @dblclick.prevent="startConversationRename(conversation)">{{ conversation.title }}</button>
@@ -131,8 +131,8 @@
         <button role="menuitem" type="button" :disabled="conversationActionBusy" @click="shareConversation(activeConversationMenu)"><Share2 :size="16" />分享</button>
         <button role="menuitem" type="button" :disabled="conversationActionBusy" @click="startConversationRename(activeConversationMenu)"><Pencil :size="16" />重命名</button>
         <button role="menuitem" type="button" :disabled="conversationActionBusy" @click="toggleConversationPinned(activeConversationMenu)"><PinOff v-if="activeConversationMenu.pinnedAt" :size="16" /><Pin v-else :size="16" />{{ activeConversationMenu.pinnedAt ? '取消置顶' : '置顶聊天' }}</button>
-        <button v-if="!activeConversationMenu.auditProtected" role="menuitem" type="button" :disabled="conversationActionBusy" @click="archiveConversation(activeConversationMenu.id)"><Archive :size="16" />归档</button>
-        <button v-if="!activeConversationMenu.auditProtected" class="is-danger" role="menuitem" type="button" :disabled="conversationActionBusy" @click="deleteConversation(activeConversationMenu)"><Trash2 :size="16" />删除</button>
+        <button role="menuitem" type="button" :disabled="conversationActionBusy" @click="archiveConversation(activeConversationMenu.id)"><Archive :size="16" />归档</button>
+        <button class="is-danger" role="menuitem" type="button" :disabled="conversationActionBusy" @click="deleteConversation(activeConversationMenu)"><Trash2 :size="16" />删除</button>
       </div>
       <div v-if="settingsOpen" class="studio-modal-backdrop" @click.self="settingsOpen = false">
         <section class="studio-settings-dialog" role="dialog" aria-modal="true" :aria-labelledby="`settings-${settingsSection}`">
@@ -1115,16 +1115,15 @@ function cancelConversationRename() {
   conversationRename.value = ''
 }
 async function saveConversationRename(conversationId: string) {
-  const title = conversationRename.value.trim()
-  if (!title || conversationRenameBusy.value) return
+  if (!conversationRename.value.trim() || conversationRenameBusy.value) return
   conversationRenameBusy.value = true
   try {
-    await studio.renameConversation(conversationId, title)
+    await studio.renameConversation(conversationId, conversationRename.value)
     renamingConversationId.value = ''
     conversationRename.value = ''
     message.success('对话名称已更新')
   } catch (reason) {
-    message.error(reason instanceof Error ? reason.message : '对话名称更新失败')
+    message.error(reason instanceof Error ? reason.message : '对话重命名失败')
   } finally {
     conversationRenameBusy.value = false
   }
@@ -1174,27 +1173,15 @@ async function logout() {
 }
 
 const externalIconMap: Record<string, Component> = { code: Code2, 'book-open': BookOpen, webhook: Webhook, 'key-round': KeyRound, 'life-buoy': LifeBuoy, 'external-link': ExternalLink }
-const navItems = computed<WorkspaceNavItem[]>(() => {
-  const visibility: Record<string, boolean> = {
-    creation: publicSettings.sidebarCreationEnabled,
-    commerce: publicSettings.sidebarCommerceEnabled,
-    office: publicSettings.sidebarOfficeEnabled,
-    prompts: publicSettings.sidebarPromptsEnabled,
-    plugins: publicSettings.sidebarPluginsEnabled,
-    projects: publicSettings.sidebarProjectsEnabled,
-    assets: publicSettings.sidebarAssetsEnabled,
-  }
-  const items: WorkspaceNavItem[] = [
-    { key: 'chat', mode: 'chat', label: t('workspace.newChat'), icon: SquarePen, to: '/chat', external: false, openNewTab: false },
-    { key: 'creation', mode: 'images', activeModes: ['images', 'videos'], label: t('workspace.creation'), icon: ImageIcon, to: '/image', external: false, openNewTab: false },
-    { key: 'commerce', mode: 'commerce', label: t('workspace.commerce'), icon: ShoppingBag, to: '/commerce', external: false, openNewTab: false },
-    { key: 'office', mode: 'office', label: t('workspace.office'), icon: BriefcaseBusiness, to: '/office', external: false, openNewTab: false },
-    { key: 'prompts', mode: 'prompts', label: t('workspace.prompts'), icon: LibraryBig, to: '/prompts', external: false, openNewTab: false },
-    { key: 'plugins', mode: 'plugins', label: t('workspace.plugins'), icon: Blocks, to: '/plugins', external: false, openNewTab: false },
-    { key: 'projects', mode: 'projects', label: t('workspace.projects'), icon: Folder, to: '/projects', external: false, openNewTab: false },
-    { key: 'assets', mode: 'assets', label: t('workspace.assets'), icon: Files, to: '/files', external: false, openNewTab: false },
-    ...externalLinks.value.map((item) => ({ key: `external-${item.key}`, mode: 'api' as const, label: item.name, icon: externalIconMap[item.icon] || ExternalLink, to: item.url, external: true, openNewTab: item.openNewTab })),
-  ]
-  return items.filter((item) => visibility[item.key] !== false)
-})
+const navItems = computed<WorkspaceNavItem[]>(() => [
+  { key: 'chat', mode: 'chat', label: t('workspace.newChat'), icon: SquarePen, to: '/chat', external: false, openNewTab: false },
+  ...(publicSettings.sidebarCreationEnabled ? [{ key: 'creation', mode: 'images' as const, activeModes: ['images', 'videos'] as StudioMode[], label: t('workspace.creation'), icon: ImageIcon, to: '/image', external: false, openNewTab: false }] : []),
+  ...(publicSettings.sidebarCommerceEnabled ? [{ key: 'commerce', mode: 'commerce' as const, label: t('workspace.commerce'), icon: ShoppingBag, to: '/commerce', external: false, openNewTab: false }] : []),
+  ...(publicSettings.sidebarOfficeEnabled ? [{ key: 'office', mode: 'office' as const, label: t('workspace.office'), icon: BriefcaseBusiness, to: '/office', external: false, openNewTab: false }] : []),
+  ...(publicSettings.sidebarPromptsEnabled ? [{ key: 'prompts', mode: 'prompts' as const, label: t('workspace.prompts'), icon: LibraryBig, to: '/prompts', external: false, openNewTab: false }] : []),
+  ...(publicSettings.sidebarPluginsEnabled ? [{ key: 'plugins', mode: 'plugins' as const, label: '能力中心', icon: Blocks, to: '/capabilities', external: false, openNewTab: false }] : []),
+  ...(publicSettings.sidebarProjectsEnabled ? [{ key: 'projects', mode: 'projects' as const, label: t('workspace.projects'), icon: Folder, to: '/projects', external: false, openNewTab: false }] : []),
+  ...(publicSettings.sidebarAssetsEnabled ? [{ key: 'assets', mode: 'assets' as const, label: t('workspace.assets'), icon: Files, to: '/files', external: false, openNewTab: false }] : []),
+  ...externalLinks.value.map((item) => ({ key: `external-${item.key}`, mode: 'api' as const, label: item.name, icon: externalIconMap[item.icon] || ExternalLink, to: item.url, external: true, openNewTab: item.openNewTab })),
+])
 </script>

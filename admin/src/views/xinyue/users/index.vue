@@ -186,10 +186,10 @@
           ></ElRow>
           <ElRow :gutter="16"
             ><ElCol :span="12"
-            ><ElFormItem :label="xt('企业 / 组织')"
+              ><ElFormItem :label="xt('企业 / 组织')"
                 ><ElInput v-model.trim="userForm.company" maxlength="120" /></ElFormItem></ElCol
             ><ElCol :span="12"
-            ><ElFormItem :label="xt('联系电话')"
+              ><ElFormItem :label="xt('联系电话')"
                 ><ElInput v-model.trim="userForm.phone" maxlength="40" /></ElFormItem></ElCol
           ></ElRow>
           <ElAlert
@@ -216,9 +216,9 @@
                 :label="`${group.name}${group.isDefault ? ` (${xt('系统默认')})` : ''}${group.enabled ? '' : ` (${xt('已停用')})`}`"
                 :value="group.id"
                 :disabled="!group.enabled && !userForm.groupIds.includes(group.id)" /></ElSelect
-            ><small class="field-help"
-              >{{ xt('保存后立即应用该分组的模型权限、扣点倍率和 BYOK 策略。') }}</small
-            ></ElFormItem
+            ><small class="field-help">{{
+              xt('保存后立即应用该分组的模型权限、扣点倍率和 BYOK 策略。')
+            }}</small></ElFormItem
           >
           <ElFormItem :label="xt('用户标签')"
             ><ElSelect
@@ -405,157 +405,190 @@
     max-width: 100%;
     overflow: hidden;
   }
+
   .page-title {
     display: flex;
+    gap: 12px;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
     min-width: 0;
   }
+
   .page-title > div {
     min-width: 0;
   }
+
   .page-eyebrow {
     display: block;
     margin-bottom: 5px;
-    color: var(--theme-color);
     font-size: 12px;
     font-weight: 600;
     line-height: 1;
+    color: var(--theme-color);
   }
+
   .page-title h1 {
     margin: 0 0 4px;
     font-size: 24px;
   }
+
   .page-title p {
     margin: 0;
     color: var(--art-gray-500);
   }
+
   .user-count {
     flex: 0 0 auto;
     padding: 0 10px;
     font-weight: 600;
   }
+
   .filter-card {
     min-width: 0;
     max-width: 100%;
   }
+
   .filter-card :deep(.el-card__body) {
     padding: 16px 20px 2px;
   }
+
   .filter-card :deep(.el-form-item) {
     margin-right: 10px;
     margin-bottom: 14px;
   }
+
   .search-field {
     width: 270px;
   }
+
   .filter-select {
     width: 150px;
   }
+
   .filter-actions {
     margin-right: 0 !important;
   }
+
   .compact-table-card {
     flex: 0 0 auto;
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
   }
+
   .compact-table-card :deep(.el-card__body) {
-    height: auto;
     min-width: 0;
     max-width: 100%;
+    height: auto;
     overflow: hidden;
   }
+
   .table-heading {
     display: grid;
     gap: 3px;
   }
+
   .table-heading strong {
-    color: var(--art-gray-900);
     font-size: 16px;
+    color: var(--art-gray-900);
   }
+
   .table-heading span {
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .table-scroll {
     width: 100%;
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
   }
+
   .data-table {
     width: 100%;
     min-width: 0 !important;
   }
+
   .customer {
     display: flex;
-    align-items: center;
     gap: 10px;
+    align-items: center;
     min-width: 0;
   }
+
   .customer-marker {
+    flex: 0 0 8px;
     width: 8px;
     height: 8px;
-    flex: 0 0 8px;
-    border-radius: 50%;
     background: var(--theme-color);
+    border-radius: 50%;
     opacity: 0.72;
   }
+
   .customer div {
     display: grid;
     gap: 3px;
     min-width: 0;
   }
+
   .customer strong,
   .customer small {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
   .customer small,
   .block-note {
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .block-note {
     display: block;
     margin-top: 3px;
   }
+
   .w-full {
     width: 100%;
   }
+
   .group-hint {
     margin-bottom: 18px;
   }
+
   .field-help {
     display: block;
     width: 100%;
     margin-top: 7px;
-    color: var(--art-gray-500);
     font-size: 12px;
     line-height: 1.5;
+    color: var(--art-gray-500);
   }
+
   .drawer-footer {
     display: grid;
     grid-template-columns: auto 1fr auto auto;
-    align-items: center;
     gap: 10px;
+    align-items: center;
     width: 100%;
   }
-  @media (max-width: 800px) {
+
+  @media (width <= 800px) {
     .page-title {
-      align-items: flex-start;
       flex-wrap: wrap;
+      align-items: flex-start;
     }
+
     .page-title h1 {
       font-size: 21px;
     }
+
     .page-title :deep(.el-tag) {
       margin-left: auto;
     }
+
     .search-field,
     .filter-select {
       width: min(100%, 300px);

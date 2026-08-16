@@ -1,17 +1,15 @@
 import { defineStore } from 'pinia'
 import { api, streamApiEvents } from '../services/api'
-import type { ConversationSummary, GenerationOptions, GenerationRun, Message, Project, ProjectSkillCandidate, ProjectSkillStatus, ProjectSkillVersion, ProjectVersion, ProjectWorkflowConfig, ProjectWorkflowStatus, StudioAsset, StudioMode } from '../types'
+import type { ConversationSummary, GenerationOptions, GenerationRun, Message, MessageWebSearch, Project, ProjectVersion, ProjectWorkflowConfig, ProjectWorkflowStatus, StudioAsset, StudioMode } from '../types'
 import { createClientId } from '../utils/client-id'
 
-type ServerConversation = { id: string; title: string; model: string; projectId?: string | null; temporary?: boolean; auditReadOnly?: boolean; auditProtected?: boolean; pinnedAt?: string | null; sharedAt?: string | null; createdAt: string; updatedAt: string; user?: { id: string; displayName: string; email?: string | null } | null; deletedMessageCount?: number; messages?: ServerMessage[]; generationJobs?: ServerJob[] }
-type ServerMessage = { id: string; role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL'; content: string; model?: string | null; metadata?: { feedback?: 'UP' | 'DOWN' | null } | null; author?: { id: string; displayName: string; email?: string | null } | null; deletedAt?: string | null; canDelete?: boolean; canEdit?: boolean; createdAt: string; attachments?: { assetId?: string; asset?: { id: string } }[] }
-type ServerProjectMember = { userId: string; joinedAt: string; user: { id: string; displayName: string; email: string | null; avatarUrl?: string | null } }
-type ServerProject = { id: string; name: string; description?: string; instructions?: string; workflowStatus?: ProjectWorkflowStatus; workflowConfig?: ProjectWorkflowConfig | null; defaultModel?: string; defaultAssistantId?: string | null; revision?: number; accessRole?: 'OWNER' | 'MEMBER'; user?: { id: string; displayName: string; email: string | null }; members?: ServerProjectMember[]; archivedAt?: string | null; updatedAt: string; assets?: ServerAsset[]; conversations?: ServerConversation[]; _count?: { assets?: number; conversations?: number; versions?: number } }
+type ServerConversation = { id: string; title: string; model: string; projectId?: string | null; temporary?: boolean; pinnedAt?: string | null; sharedAt?: string | null; createdAt: string; updatedAt: string; messages?: ServerMessage[]; generationJobs?: ServerJob[] }
+type ServerMessageMetadata = { feedback?: 'UP' | 'DOWN' | null; suggestionVersion?: number; suggestions?: string[]; webSearch?: unknown }
+type ServerMessage = { id: string; role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL'; content: string; model?: string | null; metadata?: ServerMessageMetadata | null; createdAt: string; attachments?: { assetId?: string; asset?: { id: string } }[] }
+type ServerProject = { id: string; name: string; description?: string; instructions?: string; workflowStatus?: ProjectWorkflowStatus; workflowConfig?: ProjectWorkflowConfig | null; defaultModel?: string; defaultAssistantId?: string | null; revision?: number; archivedAt?: string | null; updatedAt: string; assets?: ServerAsset[]; conversations?: ServerConversation[]; accessRole?: 'OWNER' | 'ADMIN' | 'MEMBER'; user?: { id: string; displayName: string; email?: string | null }; members?: Project['members']; activeSkillVersion?: Project['activeSkillVersion']; _count?: { assets?: number; conversations?: number; versions?: number } }
 type ServerVersion = Omit<ProjectVersion, 'createdAt' | 'snapshot'> & { createdAt: string; snapshot: ProjectVersion['snapshot'] }
-type ServerSkillVersion = Omit<ProjectSkillVersion, 'createdAt'> & { createdAt: string }
-type ServerSkillStatus = Omit<ProjectSkillStatus, 'active' | 'versions'> & { active: ServerSkillVersion | null; versions: ServerSkillVersion[] }
 type ServerAsset = { id: string; kind: 'IMAGE' | 'VIDEO' | 'FILE' | 'PRODUCT_PACK'; name: string; mimeType: string; size: number; objectKey?: string; contentUrl: string; createdAt: string; metadata?: Record<string, unknown> | null }
-type ServerJob = { id: string; conversationId?: string | null; kind: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE'; status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'; model: string; prompt: string; options?: Record<string, unknown>; creditCost?: number; errorMessage?: string | null; stream?: { messageId: string; content: string; model?: string | null } | null; outputs?: { asset: ServerAsset }[]; createdAt: string }
+type ServerJob = { id: string; conversationId?: string | null; kind: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE'; status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'; model: string; prompt: string; options?: Record<string, unknown>; creditCost?: number; errorMessage?: string | null; stream?: { messageId: string; content: string; model?: string | null; metadata?: ServerMessageMetadata | null } | null; outputs?: { asset: ServerAsset }[]; createdAt: string }
 
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 const terminalJob = (job: ServerJob) => ['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(job.status)
@@ -34,6 +32,21 @@ let pendingWorkspaceHydration: Promise<void> | null = null
 let conversationLoadSequence = 0
 const pendingChatJobs = new Map<string, Promise<ServerJob>>()
 
+function mapWebSearch(value: unknown): MessageWebSearch | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const row = value as Record<string, unknown>
+  if (row.enabled !== true) return undefined
+  const status = row.status === 'completed' || row.status === 'failed' ? row.status : 'searching'
+  const queries = Array.isArray(row.queries) ? row.queries.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 3) : []
+  const sources = Array.isArray(row.sources) ? row.sources.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const source = item as Record<string, unknown>
+    if (typeof source.url !== 'string' || !/^https?:\/\//i.test(source.url)) return []
+    return [{ title: typeof source.title === 'string' && source.title.trim() ? source.title.trim() : source.url, url: source.url, content: typeof source.content === 'string' ? source.content : undefined, publishedAt: typeof source.publishedAt === 'string' ? source.publishedAt : undefined }]
+  }).slice(0, 15) : []
+  return { enabled: true, status, queries, sources, error: typeof row.error === 'string' ? row.error : undefined }
+}
+
 export class ChatSendError extends Error {
   constructor(message: string, public readonly restoreDraft: boolean) {
     super(message)
@@ -42,7 +55,7 @@ export class ChatSendError extends Error {
 }
 
 function mapConversation(item: ServerConversation): ConversationSummary {
-  return { id: item.id, title: item.title, model: item.model, projectId: item.projectId, pinnedAt: item.pinnedAt ? Date.parse(item.pinnedAt) : null, sharedAt: item.sharedAt ? Date.parse(item.sharedAt) : null, createdAt: Date.parse(item.createdAt), updatedAt: Date.parse(item.updatedAt), author: item.user, deletedMessageCount: item.deletedMessageCount || 0, auditProtected: Boolean(item.auditProtected) }
+  return { id: item.id, title: item.title, model: item.model, projectId: item.projectId, pinnedAt: item.pinnedAt ? Date.parse(item.pinnedAt) : null, sharedAt: item.sharedAt ? Date.parse(item.sharedAt) : null, createdAt: Date.parse(item.createdAt), updatedAt: Date.parse(item.updatedAt) }
 }
 
 function mapWorkflowConfig(input?: ProjectWorkflowConfig | null): ProjectWorkflowConfig {
@@ -55,16 +68,12 @@ function mapWorkflowConfig(input?: ProjectWorkflowConfig | null): ProjectWorkflo
 }
 
 function mapProject(item: ServerProject): Project {
-  return { id: item.id, name: item.name, brief: item.description || '尚未添加项目说明。', description: item.description || '', instructions: item.instructions || '', updatedAt: Date.parse(item.updatedAt), assetIds: item.assets?.map((asset) => asset.id) || [], assets: item.assets?.map(mapAsset) || [], conversations: item.conversations?.map(mapConversation) || [], assetCount: item._count?.assets ?? item.assets?.length ?? 0, conversationCount: item._count?.conversations ?? item.conversations?.length ?? 0, versionCount: item._count?.versions ?? item.revision ?? 1, archived: Boolean(item.archivedAt), workflowStatus: item.workflowStatus || 'PLANNING', workflowConfig: mapWorkflowConfig(item.workflowConfig), defaultModel: item.defaultModel || '', defaultAssistantId: item.defaultAssistantId || null, revision: item.revision || 1, accessRole: item.accessRole || 'OWNER', owner: item.user, members: (item.members || []).map((member) => ({ ...member, joinedAt: Date.parse(member.joinedAt) })) }
+  return { id: item.id, name: item.name, brief: item.description || '尚未添加项目说明。', description: item.description || '', instructions: item.instructions || '', updatedAt: Date.parse(item.updatedAt), assetIds: item.assets?.map((asset) => asset.id) || [], assets: item.assets?.map(mapAsset) || [], conversations: item.conversations?.map(mapConversation) || [], assetCount: item._count?.assets ?? item.assets?.length ?? 0, conversationCount: item._count?.conversations ?? item.conversations?.length ?? 0, versionCount: item._count?.versions ?? item.revision ?? 1, archived: Boolean(item.archivedAt), workflowStatus: item.workflowStatus || 'PLANNING', workflowConfig: mapWorkflowConfig(item.workflowConfig), defaultModel: item.defaultModel || '', defaultAssistantId: item.defaultAssistantId || null, revision: item.revision || 1, accessRole: item.accessRole || 'OWNER', owner: item.user, members: item.members || [], activeSkillVersion: item.activeSkillVersion || null }
 }
 
 function mapVersion(item: ServerVersion): ProjectVersion {
   const snapshot = item.snapshot || {} as ProjectVersion['snapshot']
   return { ...item, createdAt: Date.parse(item.createdAt) || Date.now(), snapshot: { ...snapshot, workflowStatus: snapshot.workflowStatus || 'PLANNING', workflowConfig: mapWorkflowConfig(snapshot.workflowConfig), defaultModel: snapshot.defaultModel || '', defaultAssistantId: snapshot.defaultAssistantId || null } }
-}
-
-function mapSkillVersion(item: ServerSkillVersion): ProjectSkillVersion {
-  return { ...item, createdAt: Date.parse(item.createdAt) || Date.now() }
 }
 
 function mapAsset(item: ServerAsset): StudioAsset {
@@ -139,7 +148,6 @@ export const useStudioStore = defineStore('studio', {
     currentConversationId: '',
     openingConversationId: '',
     temporaryChat: false,
-    conversationAuditReadOnly: false,
     currentProjectId: '',
     isGenerating: false,
     activeJobId: '',
@@ -225,7 +233,6 @@ export const useStudioStore = defineStore('studio', {
       this.currentConversationId = ''
       this.openingConversationId = ''
       this.temporaryChat = temporary
-      this.conversationAuditReadOnly = false
       this.messages = [welcomeMessage()]
       this.isGenerating = false
       this.activeJobId = ''
@@ -242,11 +249,12 @@ export const useStudioStore = defineStore('studio', {
         if (loadSequence !== conversationLoadSequence || this.openingConversationId !== conversationId) return conversation
         this.currentConversationId = conversation.id
         this.temporaryChat = Boolean(conversation.temporary)
-        this.conversationAuditReadOnly = Boolean(conversation.auditReadOnly)
         this.messages = (conversation.messages || []).filter((message) => message.role === 'USER' || message.role === 'ASSISTANT').map((message) => ({
           id: message.id, role: message.role.toLowerCase() as 'user' | 'assistant', content: message.content,
           model: message.model || undefined, createdAt: Date.parse(message.createdAt), attachmentIds: message.attachments?.map((attachment) => attachment.assetId || attachment.asset?.id || '').filter(Boolean),
-          feedback: message.metadata?.feedback || null, author: message.author, deletedAt: message.deletedAt ? Date.parse(message.deletedAt) : null, canDelete: Boolean(message.canDelete), canEdit: Boolean(message.canEdit),
+          feedback: message.metadata?.feedback || null,
+          suggestions: message.metadata?.suggestionVersion === 3 && Array.isArray(message.metadata.suggestions) ? message.metadata.suggestions.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 3) : [],
+          webSearch: mapWebSearch(message.metadata?.webSearch),
         }))
         if (!this.messages.length) this.messages = [welcomeMessage()]
         this.generations = (conversation.generationJobs || []).map((generation) => mapGeneration(generation))
@@ -310,23 +318,7 @@ export const useStudioStore = defineStore('studio', {
       const message = this.messages.find((item) => item.id === messageId)
       if (message) message.feedback = value
     },
-    async softDeleteMessage(messageId: string) {
-      if (!this.currentConversationId || this.conversationAuditReadOnly) return
-      await api(`/conversations/${this.currentConversationId}/messages/${messageId}`, { method: 'DELETE' })
-      this.messages = this.messages.filter((message) => message.id !== messageId)
-    },
-    async addProjectMember(projectId: string, email: string) {
-      const member = await api<ServerProjectMember>(`/projects/${projectId}/members`, { method: 'POST', body: JSON.stringify({ email: email.trim() }) })
-      const project = this.projects.find((item) => item.id === projectId)
-      if (project && !project.members.some((item) => item.userId === member.userId)) project.members.push({ ...member, joinedAt: Date.parse(member.joinedAt) })
-      return member
-    },
-    async removeProjectMember(projectId: string, userId: string) {
-      await api(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' })
-      const project = this.projects.find((item) => item.id === projectId)
-      if (project) project.members = project.members.filter((member) => member.userId !== userId)
-    },
-    async sendMessage(content: string, input: { model: string; assetIds?: string[]; assistantId?: string; pluginId?: string; agentMode?: boolean }) {
+    async sendMessage(content: string, input: { model: string; assetIds?: string[]; assistantId?: string; pluginId?: string; webSearchEnabled?: boolean }) {
       const trimmed = content.trim()
       if (!trimmed) return
       let messagePersisted = false
@@ -343,11 +335,11 @@ export const useStudioStore = defineStore('studio', {
         const userMessage = await api<ServerMessage>(`/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ content: trimmed, assetIds: input.assetIds || [] }) })
         messagePersisted = true
         if (this.currentConversationId === conversationId) this.messages.push({ id: userMessage.id, role: 'user', content: trimmed, createdAt: Date.parse(userMessage.createdAt), attachmentIds: input.assetIds })
-        const job = await api<ServerJob>('/generations', { method: 'POST', body: JSON.stringify({ kind: 'CHAT', prompt: trimmed, model: input.model, projectId: this.currentProjectId || undefined, conversationId, options: { ...(input.assistantId ? { assistantId: input.assistantId } : {}), ...(input.pluginId ? { pluginId: input.pluginId } : {}), ...(input.agentMode ? { agentMode: true } : {}) }, idempotencyKey: idempotencyKey('chat') }) })
+        const job = await api<ServerJob>('/generations', { method: 'POST', body: JSON.stringify({ kind: 'CHAT', prompt: trimmed, model: input.model, projectId: this.currentProjectId || undefined, conversationId, options: { ...(input.assistantId ? { assistantId: input.assistantId } : {}), ...(input.pluginId ? { pluginId: input.pluginId } : {}), webSearchEnabled: input.webSearchEnabled === true }, idempotencyKey: idempotencyKey('chat') }) })
         jobId = job.id
         if (this.currentConversationId === conversationId) this.activeJobId = job.id
         const pendingId = `stream:${job.id}`
-        if (this.currentConversationId === conversationId) this.messages.push({ id: pendingId, role: 'assistant', content: '', model: input.model, createdAt: Date.now() })
+        if (this.currentConversationId === conversationId) this.messages.push({ id: pendingId, role: 'assistant', content: '', model: input.model, createdAt: Date.now(), webSearch: input.webSearchEnabled ? { enabled: true, status: 'searching', queries: [], sources: [] } : undefined })
         await this.monitorChatJob(job.id, conversationId, input.model)
         await Promise.all([
           this.currentConversationId === conversationId && (!this.openingConversationId || this.openingConversationId === conversationId) ? this.openConversation(conversationId) : Promise.resolve(),
@@ -365,7 +357,7 @@ export const useStudioStore = defineStore('studio', {
         }
       }
     },
-    async branchMessage(messageId: string, content: string, model: string) {
+    async branchMessage(messageId: string, content: string, model: string, webSearchEnabled = false) {
       if (!this.currentConversationId || this.isGenerating) return
       const trimmed = content.trim()
       if (!trimmed) return
@@ -378,11 +370,11 @@ export const useStudioStore = defineStore('studio', {
           const index = this.messages.findIndex((message) => message.id === messageId)
           if (index >= 0) this.messages = [...this.messages.slice(0, index), { ...this.messages[index], content: trimmed, createdAt: Date.parse(updated.createdAt) }]
         }
-        const job = await api<ServerJob>('/generations', { method: 'POST', body: JSON.stringify({ kind: 'CHAT', prompt: trimmed, model, conversationId, projectId: this.currentProjectId || undefined, options: {}, idempotencyKey: idempotencyKey('chat-branch') }) })
+        const job = await api<ServerJob>('/generations', { method: 'POST', body: JSON.stringify({ kind: 'CHAT', prompt: trimmed, model, conversationId, projectId: this.currentProjectId || undefined, options: { webSearchEnabled }, idempotencyKey: idempotencyKey('chat-branch') }) })
         jobId = job.id
         if (this.currentConversationId === conversationId) this.activeJobId = job.id
         const pendingId = `stream:${job.id}`
-        if (this.currentConversationId === conversationId) this.messages.push({ id: pendingId, role: 'assistant', content: '', model, createdAt: Date.now() })
+        if (this.currentConversationId === conversationId) this.messages.push({ id: pendingId, role: 'assistant', content: '', model, createdAt: Date.now(), webSearch: webSearchEnabled ? { enabled: true, status: 'searching', queries: [], sources: [] } : undefined })
         await this.monitorChatJob(job.id, conversationId, model)
         await Promise.all([
           this.currentConversationId === conversationId && (!this.openingConversationId || this.openingConversationId === conversationId) ? this.openConversation(conversationId) : Promise.resolve(),
@@ -432,25 +424,6 @@ export const useStudioStore = defineStore('studio', {
       const index = this.projects.findIndex((item) => item.id === projectId)
       if (index >= 0) this.projects[index] = project
       return project
-    },
-    async loadProjectSkill(projectId: string): Promise<ProjectSkillStatus> {
-      const status = await api<ServerSkillStatus>(`/projects/${projectId}/skill`)
-      return { activeVersionId: status.activeVersionId, active: status.active ? mapSkillVersion(status.active) : null, versions: status.versions.map(mapSkillVersion) }
-    },
-    async setProjectSkill(projectId: string, payload: { name: string; content: string; changeSummary?: string }) {
-      return mapSkillVersion(await api<ServerSkillVersion>(`/projects/${projectId}/skill/manual`, { method: 'POST', body: JSON.stringify(payload) }))
-    },
-    summarizeProjectSkill(projectId: string, payload: { conversationId: string; request?: string }) {
-      return api<ProjectSkillCandidate>(`/projects/${projectId}/skill/summarize`, { method: 'POST', body: JSON.stringify(payload) })
-    },
-    async activateProjectSkillSummary(projectId: string, payload: { name: string; content: string; changeSummary?: string; sourceConversationId: string }) {
-      return mapSkillVersion(await api<ServerSkillVersion>(`/projects/${projectId}/skill/activate-summary`, { method: 'POST', body: JSON.stringify(payload) }))
-    },
-    async restoreProjectSkill(projectId: string, version: number) {
-      return mapSkillVersion(await api<ServerSkillVersion>(`/projects/${projectId}/skill/versions/${version}/restore`, { method: 'POST' }))
-    },
-    async disableProjectSkill(projectId: string) {
-      return mapSkillVersion(await api<ServerSkillVersion>(`/projects/${projectId}/skill`, { method: 'DELETE' }))
     },
     selectProject(projectId: string) { if (this.projects.some((project) => project.id === projectId)) this.currentProjectId = projectId },
     async setProjectArchived(projectId: string, archived: boolean) {
@@ -587,8 +560,8 @@ export const useStudioStore = defineStore('studio', {
         if (!current.stream || this.currentConversationId !== conversationId) return
         const pendingId = `stream:${jobId}`
         const index = this.messages.findIndex((message) => message.id === pendingId || message.id === current.stream?.messageId)
-        const streamed = { id: current.stream.messageId, role: 'assistant' as const, content: current.stream.content, model: current.stream.model || fallbackModel, createdAt: this.messages[index]?.createdAt || Date.now() }
-        if (index >= 0) this.messages[index] = streamed
+        const streamed = { id: current.stream.messageId, role: 'assistant' as const, content: current.stream.content, model: current.stream.model || fallbackModel, createdAt: this.messages[index]?.createdAt || Date.now(), webSearch: mapWebSearch(current.stream.metadata?.webSearch) || this.messages[index]?.webSearch }
+        if (index >= 0) this.messages.splice(index, 1, streamed)
         else this.messages.push(streamed)
       })
       pendingChatJobs.set(jobId, monitor)

@@ -171,104 +171,123 @@
 
 <style scoped>
   @reference '@styles/core/tailwind.css';
+
   .art-notification-panel {
     @apply absolute top-14.5 right-5 w-90 h-125 overflow-hidden transition-all duration-300 origin-top will-change-[top,left] max-[640px]:top-[65px] max-[640px]:right-0 max-[640px]:w-full max-[640px]:h-[80vh];
   }
+
   .bar-active {
     color: var(--theme-color) !important;
     border-bottom: 2px solid var(--theme-color);
   }
+
   .notification-content {
     height: calc(100% - 95px);
     min-height: 0;
   }
+
   .notification-list {
     height: calc(100% - 58px);
     overflow-y: auto;
   }
+
   .notification-item {
     position: relative;
     display: flex;
-    align-items: flex-start;
     gap: 12px;
+    align-items: flex-start;
     padding: 14px;
     cursor: pointer;
     border-bottom: 1px solid var(--art-card-border);
     transition: background-color 0.2s ease;
   }
+
   .notification-item:hover {
     background: var(--art-gray-100);
   }
+
   .notification-item.is-unread {
     background: color-mix(in srgb, var(--main-color) 4%, transparent);
   }
+
   .notification-icon {
     display: flex;
-    width: 36px;
-    height: 36px;
     flex: 0 0 36px;
     align-items: center;
     justify-content: center;
+    width: 36px;
+    height: 36px;
     border-radius: 8px;
   }
+
   .notification-copy {
-    min-width: 0;
     flex: 1;
+    min-width: 0;
   }
+
   .notification-copy h4 {
     margin: 0;
-    color: var(--art-gray-900);
     font-size: 13px;
     font-weight: 500;
     line-height: 1.45;
+    color: var(--art-gray-900);
   }
+
   .notification-copy p {
     margin: 4px 0 0;
     overflow: hidden;
-    color: var(--art-gray-600);
+    text-overflow: ellipsis;
     font-size: 12px;
     line-height: 1.5;
-    text-overflow: ellipsis;
+    color: var(--art-gray-600);
     white-space: nowrap;
   }
+
   .notification-copy time {
     display: block;
     margin-top: 5px;
-    color: var(--art-gray-500);
     font-size: 11px;
+    color: var(--art-gray-500);
   }
+
   .unread-dot {
+    flex: 0 0 6px;
     width: 6px;
     height: 6px;
-    flex: 0 0 6px;
     margin-top: 7px;
-    border-radius: 50%;
     background: var(--el-color-danger);
+    border-radius: 50%;
   }
+
   .notification-empty {
     display: grid;
-    height: 100%;
     place-content: center;
     justify-items: center;
+    height: 100%;
     color: var(--art-gray-500);
     text-align: center;
   }
+
   .notification-empty p {
     margin: 12px 0 0;
     font-size: 12px;
   }
+
   .notification-footer {
     position: relative;
     box-sizing: border-box;
     width: 100%;
     padding: 12px 14px 0;
   }
+
   .scrollbar-thin::-webkit-scrollbar {
     width: 5px !important;
   }
+
   .dark .scrollbar-thin::-webkit-scrollbar-track {
     background-color: var(--default-box-color);
   }
+
   .dark .scrollbar-thin::-webkit-scrollbar-thumb {
     background-color: #222 !important;
   }

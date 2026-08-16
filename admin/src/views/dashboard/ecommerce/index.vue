@@ -108,7 +108,7 @@
             ><ElTableColumn :label="xt('状态')" width="100"
               ><template #default="{ row }"
                 ><ElTag :type="transactionType(row.status)">{{
-                   xt(statusText[row.status] || row.status)
+                  xt(statusText[row.status] || row.status)
                 }}</ElTag></template
               ></ElTableColumn
             ></ElTable
@@ -309,43 +309,51 @@
     min-height: calc(100vh - 130px);
     overflow: hidden;
   }
+
   .dashboard-heading,
   .card-heading {
     display: flex;
+    gap: 16px;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 16px;
     min-width: 0;
   }
+
   .dashboard-heading {
     margin-bottom: 22px;
   }
+
   .dashboard-heading h1 {
     margin: 0;
     font-size: 24px;
     font-weight: 600;
     color: var(--art-gray-900);
   }
+
   .dashboard-heading p,
   .card-heading p {
     margin: 6px 0 0;
     font-size: 13px;
     color: var(--art-gray-600);
   }
+
   .heading-actions {
     display: flex;
     gap: 10px;
   }
+
   .equal-row :deep(.el-col) {
     display: flex;
     min-width: 0;
   }
+
   .metric-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px;
     margin-bottom: 20px;
   }
+
   .metric-card {
     display: flex;
     gap: 13px;
@@ -357,45 +365,53 @@
     border: 1px solid var(--art-card-border);
     border-radius: 8px;
   }
+
   .metric-icon {
     display: flex;
+    flex: 0 0 44px;
     align-items: center;
     justify-content: center;
     width: 44px;
     height: 44px;
-    flex: 0 0 44px;
     font-size: 21px;
     border-radius: 8px;
   }
+
   .metric-icon.green {
     color: #16845a;
     background: #e5f6ef;
   }
+
   .metric-icon.blue {
     color: #2563eb;
     background: #e8efff;
   }
+
   .metric-icon.orange {
     color: #c36c0c;
     background: #fff1dc;
   }
+
   .metric-icon.purple {
     color: #7c3aed;
     background: #f1eaff;
   }
+
   .metric-card span,
   .metric-card small {
     display: block;
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .metric-card strong {
     display: block;
     margin: 5px 0 3px;
-    color: var(--art-gray-900);
     font-size: 23px;
     font-weight: 650;
+    color: var(--art-gray-900);
   }
+
   .art-card {
     width: 100%;
     min-width: 0;
@@ -404,136 +420,166 @@
     border: 1px solid var(--art-card-border);
     border-radius: 8px;
   }
+
   .chart-card {
     min-height: 365px;
   }
+
   .card-heading h2 {
     margin: 0;
-    color: var(--art-gray-900);
     font-size: 16px;
     font-weight: 600;
+    color: var(--art-gray-900);
   }
+
   .status-list {
     margin-top: 30px;
   }
+
   .status-row + .status-row {
     margin-top: 25px;
   }
+
   .status-row > div {
     display: flex;
     justify-content: space-between;
     margin-bottom: 8px;
     font-size: 13px;
   }
+
   .status-row span {
     color: var(--art-gray-600);
   }
+
   .status-row strong {
     color: var(--art-gray-900);
   }
+
   .channel-health {
     display: flex;
-    align-items: center;
     gap: 10px;
+    align-items: center;
     padding-top: 24px;
     margin-top: 28px;
     border-top: 1px solid var(--art-gray-200);
   }
+
   .channel-health span {
-    color: var(--art-gray-600);
     font-size: 13px;
+    color: var(--art-gray-600);
   }
+
   .channel-health strong {
     margin-right: auto;
     color: var(--art-gray-900);
   }
+
   .table-card {
-    min-height: 350px;
     height: calc(100% - 20px);
+    min-height: 350px;
     overflow: hidden;
   }
+
   .table-card :deep(.el-table) {
     max-width: 100%;
     margin-top: 18px;
   }
+
   .compact-empty {
     min-height: 230px;
   }
+
   .note {
     display: block;
     margin-top: 4px;
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .product-list {
     margin-top: 20px;
   }
+
   .product-row {
     display: flex;
+    gap: 10px;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
     padding: 13px 0;
     border-bottom: 1px solid var(--art-gray-200);
   }
+
   .product-row:last-child {
     border-bottom: 0;
   }
+
   .product-row strong,
   .product-row span {
     display: block;
   }
+
   .product-row span {
     margin-top: 4px;
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .reconciliation-card {
     margin-bottom: 0;
   }
+
   .reconciliation-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
     margin-top: 20px;
   }
+
   .reconciliation-grid > div {
     display: grid;
-    min-width: 0;
     grid-template-columns: 22px minmax(0, 1fr) auto;
     gap: 8px;
     align-items: center;
+    min-width: 0;
     padding: 14px;
     color: var(--art-gray-600);
     background: var(--art-gray-100);
     border-radius: 6px;
   }
+
   .reconciliation-grid svg {
     color: var(--el-color-primary);
   }
+
   .reconciliation-grid strong {
     color: var(--art-gray-900);
   }
+
   .reconciliation-grid .warning svg,
   .reconciliation-grid .warning strong {
     color: #d97706;
   }
-  @media (max-width: 900px) {
+
+  @media (width <= 900px) {
     .metric-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
     .reconciliation-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
-  @media (max-width: 600px) {
+
+  @media (width <= 600px) {
     .dashboard-heading {
       flex-direction: column;
     }
+
     .heading-actions {
-      width: 100%;
       flex-wrap: wrap;
+      width: 100%;
     }
+
     .metric-grid,
     .reconciliation-grid {
       grid-template-columns: 1fr;

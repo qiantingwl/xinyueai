@@ -52,15 +52,15 @@ export class AgentTasksProcessor extends WorkerHost {
       const restored = await this.restore(runId)
       const graph = new StateGraph(AgentState)
         .addNode('prepare', (state) => this.prepare(state))
-        .addNode('plan', (state) => this.plan(state))
+        .addNode('planning', (state) => this.plan(state))
         .addNode('tools', (state) => this.executeTools(state))
         .addNode('draft', (state) => this.draft(state))
         .addNode('verify', (state) => this.verify(state))
         .addNode('replan', (state) => this.replan(state))
         .addNode('deliver', (state) => this.deliver(state))
         .addConditionalEdges(START, (state) => state.resumeNode, { prepare: 'prepare', tools: 'tools', draft: 'draft' })
-        .addEdge('prepare', 'plan')
-        .addEdge('plan', 'tools')
+        .addEdge('prepare', 'planning')
+        .addEdge('planning', 'tools')
         .addConditionalEdges('tools', (state) => state.waitingApproval ? END : 'draft', { draft: 'draft', [END]: END })
         .addEdge('draft', 'verify')
         .addConditionalEdges('verify', (state) => state.verdict, { complete: 'deliver', replan: 'replan' })
@@ -113,7 +113,8 @@ export class AgentTasksProcessor extends WorkerHost {
         data: { userId: task.userId, projectId: task.projectId, title: task.title, model: task.model, temporary: false },
       })
       conversationId = conversation.id
-      const prompt = [task.goal, task.instructions ? `执行要求：\n${task.instructions}` : ''].filter(Boolean).join('\n\n')
+      const instructions = this.taskInstructions(task)
+      const prompt = [task.goal, instructions ? `执行要求：\n${instructions}` : ''].filter(Boolean).join('\n\n')
       await this.prisma.message.create({
         data: { conversationId, authorId: task.userId, role: 'USER', content: prompt, attachments: this.attachmentIds(task.attachmentIds).length ? { create: this.attachmentIds(task.attachmentIds).map((assetId) => ({ assetId })) } : undefined },
       })
@@ -130,7 +131,7 @@ export class AgentTasksProcessor extends WorkerHost {
     await this.startStep(state.taskId, 1, '正在制定执行计划')
     const task = await this.task(state.taskId)
     const available = await this.tools.available(task)
-    const prompt = this.plannerPrompt(task.goal, task.instructions, available, state.verifierFeedback, state.iteration)
+    const prompt = this.plannerPrompt(task.goal, this.taskInstructions(task), available, state.verifierFeedback, state.iteration)
     const completion = await this.model.complete(task, state.runKey, `planner-${state.iteration}`, prompt, async () => this.touch(state.taskId, state.runId, '正在生成结构化执行计划'))
     const fallback: AgentPlan = { summary: '直接分析任务并形成完整交付结果', actions: [], output: '完整办公成果' }
     const parsed = this.model.parseJson<AgentPlan>(completion.content, fallback)
@@ -211,7 +212,7 @@ export class AgentTasksProcessor extends WorkerHost {
     await this.startStep(state.taskId, 2, `正在执行第 ${state.iteration + 1} 轮任务`)
     const task = await this.task(state.taskId)
     const context = JSON.stringify(state.toolResults).slice(0, 60_000)
-    const prompt = `你是 Xinyue AI 办公任务执行器。请完成用户最终目标并直接生成可交付成品。\n\n用户目标：\n${task.goal}\n\n额外要求：\n${task.instructions || '无'}\n\n执行计划：\n${JSON.stringify(state.plan)}\n\n工具和资料结果：\n${context || '本轮没有调用工具'}\n\n上一轮校验反馈：\n${state.verifierFeedback || '无'}\n\n要求：只使用工具返回的真实事实；信息不足时明确标注；联网资料涉及事实时在正文中使用 [1]、[2] 编号引用，并在文末输出“来源”列表，保留真实标题和 URL；输出完整正文，不要输出执行过程。`
+    const prompt = `你是 Xinyue AI 办公任务执行器。请完成用户最终目标并直接生成可交付成品。\n\n用户目标：\n${task.goal}\n\n额外要求：\n${this.taskInstructions(task) || '无'}\n\n执行计划：\n${JSON.stringify(state.plan)}\n\n工具和资料结果：\n${context || '本轮没有调用工具'}\n\n上一轮校验反馈：\n${state.verifierFeedback || '无'}\n\n要求：只使用工具返回的真实事实；信息不足时明确标注；联网资料涉及事实时在正文中使用 [1]、[2] 编号引用，并在文末输出“来源”列表，保留真实标题和 URL；输出完整正文，不要输出执行过程。`
     const completion = await this.model.complete(task, state.runKey, `draft-${state.iteration}`, prompt, async (content) => {
       await this.prisma.agentRun.update({ where: { id: state.runId }, data: { finalAnswer: content, currentNode: 'draft' } })
       await this.touch(state.taskId, state.runId, '正在生成交付结果')
@@ -226,7 +227,7 @@ export class AgentTasksProcessor extends WorkerHost {
     await this.assertActive(state.taskId)
     await this.startStep(state.taskId, 3, '正在校验完整性、事实依据和交付质量')
     const task = await this.task(state.taskId)
-    const prompt = `你是严格的交付质量检查器。判断结果是否已经完成用户目标。只输出 JSON：{"approved":boolean,"feedback":"具体问题和修改要求"}。\n\n用户目标：${task.goal}\n额外要求：${task.instructions || '无'}\n计划：${JSON.stringify(state.plan)}\n工具结果：${JSON.stringify(state.toolResults).slice(0, 40_000)}\n候选结果：${state.answer.slice(0, 60_000)}`
+    const prompt = `你是严格的交付质量检查器。判断结果是否已经完成用户目标。只输出 JSON：{"approved":boolean,"feedback":"具体问题和修改要求"}。\n\n用户目标：${task.goal}\n额外要求：${this.taskInstructions(task) || '无'}\n计划：${JSON.stringify(state.plan)}\n工具结果：${JSON.stringify(state.toolResults).slice(0, 40_000)}\n候选结果：${state.answer.slice(0, 60_000)}`
     const completion = await this.model.complete(task, state.runKey, `verifier-${state.iteration}`, prompt)
     const verdict = this.model.parseJson<{ approved?: boolean; feedback?: string }>(completion.content, { approved: state.answer.trim().length >= 80, feedback: '结果内容不足，请补充完整交付内容。' })
     const feedback = String(verdict.feedback || '').slice(0, 8000)
@@ -243,7 +244,7 @@ export class AgentTasksProcessor extends WorkerHost {
     await this.event(state.taskId, state.runId, 'replan', `开始第 ${nextIteration + 1} 轮`, state.verifierFeedback)
     const task = await this.task(state.taskId)
     const available = await this.tools.available(task)
-    const completion = await this.model.complete(task, state.runKey, `planner-${nextIteration}`, this.plannerPrompt(task.goal, task.instructions, available, state.verifierFeedback, nextIteration))
+    const completion = await this.model.complete(task, state.runKey, `planner-${nextIteration}`, this.plannerPrompt(task.goal, this.taskInstructions(task), available, state.verifierFeedback, nextIteration))
     const fallback: AgentPlan = { summary: '根据校验反馈完善交付结果', actions: [], output: '修订后的完整成果' }
     const parsed = this.model.parseJson<AgentPlan>(completion.content, fallback)
     const known = new Set(available.map((tool) => tool.key))
@@ -256,7 +257,7 @@ export class AgentTasksProcessor extends WorkerHost {
     await this.assertActive(state.taskId)
     const task = await this.task(state.taskId)
     const now = new Date()
-    const existing = await this.prisma.message.findFirst({ where: { conversationId: task.conversationId!, metadata: { path: ['agentRunId'], equals: state.runId } }, select: { id: true } })
+    const existing = await this.prisma.message.findFirst({ where: { conversationId: task.conversationId!, deletedAt: null, metadata: { path: ['agentRunId'], equals: state.runId } }, select: { id: true } })
     if (existing) await this.prisma.message.update({ where: { id: existing.id }, data: { content: state.answer, model: task.model } })
     else await this.prisma.message.create({ data: { conversationId: task.conversationId!, role: 'ASSISTANT', content: state.answer, model: task.model, metadata: { agentTaskId: task.id, agentRunId: state.runId } } })
     await this.prisma.$transaction([
@@ -271,7 +272,7 @@ export class AgentTasksProcessor extends WorkerHost {
   }
 
   private plannerPrompt(goal: string, instructions: string, available: AgentToolDescriptor[], feedback: string, iteration: number) {
-    return `你是办公 Agent 规划器。只输出 JSON，不要 Markdown。格式：{"summary":"计划摘要","actions":[{"tool":"工具 key","input":{},"reason":"调用理由"}],"output":"交付物说明"}。\n工具不是必须调用；仅在确实需要真实外部信息时调用。用户询问近期事件、实时数据、指定网页、事实核验或明确要求搜索时，应调用 web_search，并把 query 写成清晰检索词；复杂调研可以生成多个互不重复的搜索动作。不得虚构工具 key。最多 8 个工具动作。\n\n用户目标：${goal}\n额外要求：${instructions || '无'}\n当前轮次：${iteration + 1}\n上一轮校验反馈：${feedback || '无'}\n可用工具：${JSON.stringify(available.map(({ key, name, description, requiresApproval }) => ({ key, name, description, requiresApproval })))}`
+    return `你是办公 Agent 规划器。只输出 JSON，不要 Markdown。格式：{"summary":"计划摘要","actions":[{"tool":"工具 key","input":{},"reason":"调用理由"}],"output":"交付物说明"}。\n工具不是必须调用；仅在确实需要真实外部信息时调用。用户询问近期事件、实时数据、指定网页、事实核验或明确要求搜索时，应调用 web_search，并把 query 写成清晰检索词；复杂调研可以生成多个互不重复的搜索动作。不得虚构工具 key。最多 8 个工具动作。\n\n用户目标：${goal}\n额外要求：${instructions || '无'}\n当前轮次：${iteration + 1}\n上一轮校验反馈：${feedback || '无'}\n可用工具：${JSON.stringify(available.map(({ key, name, description, requiresApproval, inputSchema }) => ({ key, name, description, requiresApproval, inputSchema })))}`
   }
 
   private async persistPlan(state: Pick<typeof AgentState.State, 'taskId' | 'runId' | 'iteration'>, plan: AgentPlan, available: AgentToolDescriptor[]) {
@@ -292,7 +293,16 @@ export class AgentTasksProcessor extends WorkerHost {
   }
 
   private async task(taskId: string) {
-    return this.prisma.agentTask.findUniqueOrThrow({ where: { id: taskId } })
+    return this.prisma.agentTask.findUniqueOrThrow({ where: { id: taskId }, include: { project: { select: { instructions: true, activeSkillVersion: { select: { name: true, version: true, content: true, enabled: true } } } } } })
+  }
+
+  private taskInstructions(task: Awaited<ReturnType<AgentTasksProcessor['task']>>) {
+    const skill = task.project?.activeSkillVersion
+    return [
+      task.instructions.trim(),
+      task.project?.instructions.trim() ? `项目默认指令：\n${task.project.instructions.trim()}` : '',
+      skill?.enabled && skill.content.trim() ? `项目技能“${skill.name}”（v${skill.version}）：\n${skill.content.trim()}` : '',
+    ].filter(Boolean).join('\n\n')
   }
 
   private async assertActive(taskId: string) {

@@ -2,8 +2,27 @@ export type StudioMode = 'chat' | 'images' | 'videos' | 'commerce' | 'office' | 
 export type PluginCapability = 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE' | 'OFFICE'
 export interface PluginCategory { id: string; name: string; slug: string; description: string; icon: string; sortOrder: number; enabled: boolean; _count?: { plugins: number } }
 export interface Plugin { id: string; name: string; slug: string; description: string; instruction: string; icon: string; version: string; categoryId?: string | null; capabilities: PluginCapability[]; recommendedModel: string; outputRequirements: string; visibility: 'OFFICIAL' | 'PRIVATE'; status: 'DRAFT' | 'PUBLISHED' | 'DISABLED'; featured: boolean; priceCredits: number; installCount: number; usageCount: number; errorCount: number; installed?: boolean; owned?: boolean; category?: PluginCategory | null }
+export interface AssistantProfile { id: string; name: string; description: string; defaultModel: string; templateIds?: string[]; tools?: Array<{ toolId: string }> }
+export interface CapabilityTool { id: string; key: string; name: string; description: string; icon?: string; kind?: 'BUILT_IN' | 'CONNECTOR'; authType?: 'NONE' | 'API_KEY'; documentationUrl?: string; credentialFields?: Array<{ key: string; label: string; type?: string; placeholder?: string; required?: boolean }>; requiresApproval: boolean; scopes?: string[]; enabled?: boolean; connection?: { status: string; credentialHints?: Record<string, string>; connectedAt: string } | null }
+export interface KnowledgeBaseAssetLink { assetId: string; chunkCount: number; asset: { id: string; name: string; mimeType: string; createdAt: string } }
+export interface KnowledgeBaseSummary { id: string; name: string; description: string; status: string; documentCount: number; chunkCount: number; assets?: KnowledgeBaseAssetLink[]; _count?: { assets: number; assistants: number } }
 
 export type AssetKind = 'image' | 'video' | 'text' | 'product-pack'
+
+export interface WebSearchSource {
+  title: string
+  url: string
+  content?: string
+  publishedAt?: string
+}
+
+export interface MessageWebSearch {
+  enabled: boolean
+  status: 'searching' | 'completed' | 'failed'
+  queries: string[]
+  sources: WebSearchSource[]
+  error?: string
+}
 
 export interface Message {
   id: string
@@ -13,10 +32,8 @@ export interface Message {
   attachmentIds?: string[]
   model?: string
   feedback?: 'UP' | 'DOWN' | null
-  author?: { id: string; displayName: string; email?: string | null } | null
-  deletedAt?: number | null
-  canDelete?: boolean
-  canEdit?: boolean
+  suggestions?: string[]
+  webSearch?: MessageWebSearch
 }
 
 export interface CodeArtifact {
@@ -34,15 +51,6 @@ export interface ConversationSummary {
   sharedAt?: number | null
   createdAt: number
   updatedAt: number
-  author?: { id: string; displayName: string; email?: string | null } | null
-  deletedMessageCount?: number
-  auditProtected?: boolean
-}
-
-export interface ProjectMember {
-  userId: string
-  joinedAt: number
-  user: { id: string; displayName: string; email: string | null; avatarUrl?: string | null }
 }
 
 export interface StudioAsset {
@@ -86,12 +94,19 @@ export interface Project {
   defaultModel: string
   defaultAssistantId?: string | null
   revision: number
-  accessRole: 'OWNER' | 'MEMBER'
-  owner?: { id: string; displayName: string; email: string | null }
+  accessRole: 'OWNER' | 'ADMIN' | 'MEMBER'
+  owner?: { id: string; displayName: string; email?: string | null }
   members: ProjectMember[]
+  activeSkillVersion?: ProjectSkillVersion | null
 }
 
-export type ProjectSkillChangeType = 'MANUAL' | 'SUMMARY' | 'RESTORE' | 'DISABLE'
+export interface ProjectMember {
+  projectId: string
+  userId: string
+  role: 'ADMIN' | 'MEMBER'
+  joinedAt: string
+  user: { id: string; displayName: string; email?: string | null; avatarUrl?: string | null }
+}
 
 export interface ProjectSkillVersion {
   id: string
@@ -100,19 +115,19 @@ export interface ProjectSkillVersion {
   name: string
   content: string
   enabled: boolean
-  changeType: ProjectSkillChangeType
+  changeType: 'MANUAL' | 'SUMMARY' | 'RESTORE' | 'DISABLE'
   changeSummary: string
-  previousVersionId?: string | null
   sourceConversationId?: string | null
+  createdAt: string
+  active?: boolean
+  createdBy?: { id: string; displayName: string; email?: string | null }
   sourceConversation?: { id: string; title: string } | null
-  createdBy: { id: string; displayName: string; email: string | null }
-  createdAt: number
-  active: boolean
 }
 
 export interface ProjectSkillStatus {
-  activeVersionId: string | null
-  active: ProjectSkillVersion | null
+  canManage: boolean
+  activeVersionId?: string | null
+  active?: ProjectSkillVersion | null
   versions: ProjectSkillVersion[]
 }
 
@@ -120,7 +135,7 @@ export interface ProjectSkillCandidate {
   name: string
   content: string
   changeSummary: string
-  basedOnVersion: number | null
+  basedOnVersion?: number | null
   sourceConversation: { id: string; title: string }
 }
 

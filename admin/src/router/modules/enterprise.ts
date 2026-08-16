@@ -40,7 +40,11 @@ export const enterpriseRoutes: AppRouteRecord[] = [
     path: '/enterprise/ai',
     name: 'EnterpriseAI',
     component: '/index/index',
-    meta: { title: 'xinyue.nav.ai', icon: 'ri:brain-line', roles: ['R_SUPER', 'R_ADMIN'] },
+    meta: {
+      title: 'xinyue.nav.modelGeneration',
+      icon: 'ri:brain-line',
+      roles: ['R_SUPER', 'R_ADMIN']
+    },
     children: [
       {
         path: 'providers',
@@ -59,25 +63,19 @@ export const enterpriseRoutes: AppRouteRecord[] = [
         name: 'GenerationJobs',
         component: '/xinyue/operations',
         meta: resource('生成任务', 'ri:task-line', 'jobs')
-      },
-      {
-        path: 'agent-operations',
-        name: 'AgentOperations',
-        component: '/xinyue/agent',
-        meta: resource('Agent 运营中心', 'ri:robot-3-line', 'agentOperations')
-      },
-      {
-        path: 'assets',
-        name: 'AssetLibrary',
-        component: '/xinyue/operations',
-        meta: resource('文件与资产', 'ri:image-line', 'assets')
-      },
-      {
-        path: 'projects',
-        name: 'ProjectWorkflowAudits',
-        component: '/xinyue/operations',
-        meta: resource('项目与工作流', 'ri:git-branch-line', 'projects')
-      },
+      }
+    ]
+  },
+  {
+    path: '/enterprise/content',
+    name: 'EnterpriseContent',
+    component: '/index/index',
+    meta: {
+      title: 'xinyue.nav.contentPlugins',
+      icon: 'ri:gallery-line',
+      roles: ['R_SUPER', 'R_ADMIN']
+    },
+    children: [
       {
         path: 'inspirations',
         name: 'InspirationManagement',
@@ -101,24 +99,42 @@ export const enterpriseRoutes: AppRouteRecord[] = [
         name: 'PromptLibraryManagement',
         component: '/xinyue/operations',
         meta: resource('提示词库', 'ri:book-open-line', 'promptLibrary')
-      },
+      }
+    ]
+  },
+  {
+    path: '/enterprise/agent-tools',
+    name: 'EnterpriseAgentTools',
+    component: '/index/index',
+    meta: {
+      title: 'xinyue.nav.agentTools',
+      icon: 'ri:robot-3-line',
+      roles: ['R_SUPER', 'R_ADMIN']
+    },
+    children: [
       {
-        path: 'plugins',
-        name: 'PluginManagement',
-        component: '/xinyue/operations',
-        meta: resource('插件管理', 'ri:apps-2-line', 'plugins')
-      },
-      {
-        path: 'plugin-categories',
-        name: 'PluginCategoryManagement',
-        component: '/xinyue/operations',
-        meta: resource('插件分类', 'ri:folder-settings-line', 'pluginCategories')
+        path: 'agent-operations',
+        name: 'AgentOperations',
+        component: '/xinyue/agent',
+        meta: resource('Agent 运营中心', 'ri:robot-3-line', 'agentOperations')
       },
       {
         path: 'assistants',
         name: 'AssistantManagement',
         component: '/xinyue/operations',
         meta: resource('AI 助手', 'ri:sparkling-2-line', 'assistants')
+      },
+      {
+        path: 'skills',
+        name: 'PluginManagement',
+        component: '/xinyue/operations',
+        meta: resource('技能管理', 'ri:apps-2-line', 'plugins')
+      },
+      {
+        path: 'skill-categories',
+        name: 'PluginCategoryManagement',
+        component: '/xinyue/operations',
+        meta: resource('技能分类', 'ri:folder-settings-line', 'pluginCategories')
       },
       {
         path: 'tools',
@@ -143,6 +159,30 @@ export const enterpriseRoutes: AppRouteRecord[] = [
         name: 'KnowledgeBaseManagement',
         component: '/xinyue/operations',
         meta: resource('知识库', 'ri:database-2-line', 'knowledgeBases')
+      }
+    ]
+  },
+  {
+    path: '/enterprise/workspace',
+    name: 'EnterpriseWorkspace',
+    component: '/index/index',
+    meta: {
+      title: 'xinyue.nav.workspaceData',
+      icon: 'ri:folder-chart-line',
+      roles: ['R_SUPER', 'R_ADMIN']
+    },
+    children: [
+      {
+        path: 'assets',
+        name: 'AssetLibrary',
+        component: '/xinyue/operations',
+        meta: resource('文件与资产', 'ri:image-line', 'assets')
+      },
+      {
+        path: 'projects',
+        name: 'ProjectWorkflowAudits',
+        component: '/xinyue/operations',
+        meta: resource('项目与工作流', 'ri:git-branch-line', 'projects')
       },
       {
         path: 'external-links',
@@ -256,7 +296,7 @@ export const enterpriseRoutes: AppRouteRecord[] = [
       title: 'xinyue.nav.settings',
       icon: 'ri:settings-3-line',
       keepAlive: true,
-      roles: ['R_SUPER']
+      roles: ['R_SUPER', 'R_ADMIN']
     }
   }
 ]

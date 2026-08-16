@@ -7,10 +7,12 @@ const directories = reportsOnly
   ? ['test-results', 'playwright-report', '.playwright-cli', join('output', 'playwright')]
   : [
       'dist',
+      join('admin', 'dist'),
+      join('server', 'dist'),
       'test-results',
       'playwright-report',
       '.playwright-cli',
-      join('output', 'playwright'),
+      'output',
       'xiaoye.io_yibazhan'
     ]
 const rootFiles = readdirSync(root, { withFileTypes: true })
@@ -21,9 +23,7 @@ const serverLogs = reportsOnly
   : readdirSync(join(root, 'server'), { withFileTypes: true })
       .filter((entry) => entry.isFile() && entry.name.endsWith('.log'))
       .map((entry) => join('server', entry.name))
-const buildCacheFiles = [join('server', 'dist', 'tsconfig.tsbuildinfo')]
-
-const targets = [...directories, ...rootFiles, ...serverLogs, ...buildCacheFiles]
+const targets = [...directories, ...rootFiles, ...serverLogs]
 for (const target of targets) {
   const absoluteTarget = join(root, target)
   if (!existsSync(absoluteTarget)) continue

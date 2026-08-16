@@ -10,7 +10,10 @@
     />
     <div class="ml-1">
       <h3 class="mt-5 text-lg font-medium">{{ xt('业务概述') }}</h3>
-      <p class="mt-1 text-sm">{{ xt('近 30 天新增') }} <span class="text-success font-medium">+{{ overview?.newUsers || 0 }}</span></p>
+      <p class="mt-1 text-sm"
+        >{{ xt('近 30 天新增') }}
+        <span class="text-success font-medium">+{{ overview?.newUsers || 0 }}</span></p
+      >
       <p class="mt-1 text-sm">{{ xt('用户、调用、内容资产和渠道健康情况') }}</p>
     </div>
     <div class="flex-b mt-2">
@@ -33,7 +36,9 @@
   import { xinyueText as xt } from '@/locales/xinyue'
   const { overview } = defineProps<{ overview: Overview | null }>()
 
-  const xAxisLabels = computed(() => overview?.trend.slice(-9).map((item) => item.date.slice(5)) || [])
+  const xAxisLabels = computed(
+    () => overview?.trend.slice(-9).map((item) => item.date.slice(5)) || []
+  )
 
   // 每月活跃用户数
   const chartData = computed(() => overview?.trend.slice(-9).map((item) => item.jobs) || [])

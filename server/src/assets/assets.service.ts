@@ -70,15 +70,15 @@ export class AssetsService {
     return join('users', userId, folder, new Date().toISOString().slice(0, 10), `${randomUUID()}${extension}`).replaceAll('\\', '/')
   }
 
-  private async assertProjectOwnership(userId: string, projectId?: string) {
+  private async assertProjectAccess(userId: string, projectId?: string) {
     if (!projectId) return
-    const project = await this.prisma.project.findFirst({ where: { id: projectId, userId }, select: { id: true } })
+    const project = await this.prisma.project.findFirst({ where: { id: projectId, archivedAt: null, OR: [{ userId }, { members: { some: { userId } } }] }, select: { id: true } })
     if (!project) throw new NotFoundException('项目不存在')
   }
 
   async storeUpload(userId: string, input: StoredFile) {
     try {
-      await this.assertProjectOwnership(userId, input.projectId)
+      await this.assertProjectAccess(userId, input.projectId)
     } catch (error) {
       input.stream.resume()
       throw error
@@ -109,7 +109,7 @@ export class AssetsService {
   }
 
   async storeGenerated(userId: string, data: Uint8Array, input: { name: string; mimeType: string; kind: AssetKind; projectId?: string; metadata?: Record<string, unknown> }) {
-    await this.assertProjectOwnership(userId, input.projectId)
+    await this.assertProjectAccess(userId, input.projectId)
     const namedExtension = extname(input.name).toLowerCase().replace(/[^a-z0-9.]/g, '').slice(0, 12)
     const extension = input.mimeType === 'image/png' ? '.png' : input.mimeType === 'image/webp' ? '.webp' : input.mimeType === 'image/gif' ? '.gif' : input.mimeType === 'image/avif' ? '.avif' : input.mimeType === 'image/svg+xml' ? '.svg' : input.mimeType === 'video/webm' ? '.webm' : input.mimeType === 'video/quicktime' ? '.mov' : input.mimeType.startsWith('video/') ? '.mp4' : namedExtension || '.bin'
     const fileName = input.name.toLowerCase().endsWith(extension) ? input.name : `${input.name}${extension}`

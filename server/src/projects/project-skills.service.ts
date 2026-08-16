@@ -1,7 +1,7 @@
 import { BadGatewayException, BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { ModelCapability, Prisma, ProjectSkillChangeType } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
-import { ProvidersService, type ResolvedProvider } from '../providers/providers.service'
+import { ProvidersService, ResolvedProvider } from '../providers/providers.service'
 
 type ActivateSkillInput = {
   name: string
@@ -27,14 +27,15 @@ export class ProjectSkillsService {
       },
     })
     return {
+      canManage: this.canManage(project, userId),
       activeVersionId: project.activeSkillVersionId,
       active: versions.find((item) => item.id === project.activeSkillVersionId) || null,
       versions: versions.map((item) => ({ ...item, active: item.id === project.activeSkillVersionId })),
     }
   }
 
-  async activate(userId: string, projectId: string, input: ActivateSkillInput, ownerOnly = false) {
-    const project = ownerOnly ? await this.ownedProject(userId, projectId) : await this.accessibleProject(userId, projectId)
+  async activate(userId: string, projectId: string, input: ActivateSkillInput) {
+    const project = await this.manageableProject(userId, projectId)
     const name = input.name.trim()
     const content = input.content.trim()
     if (!name || !content) throw new BadRequestException('技能名称和内容不能为空')
@@ -50,7 +51,7 @@ export class ProjectSkillsService {
   }
 
   async disable(userId: string, projectId: string) {
-    const project = await this.ownedProject(userId, projectId)
+    const project = await this.manageableProject(userId, projectId)
     if (!project.activeSkillVersion) throw new BadRequestException('项目当前未启用技能')
     return this.createVersion(project, userId, {
       name: project.activeSkillVersion.name,
@@ -62,7 +63,8 @@ export class ProjectSkillsService {
   }
 
   async restore(userId: string, projectId: string, version: number) {
-    const project = await this.accessibleProject(userId, projectId)
+    const project = await this.manageableProject(userId, projectId)
+    if (!Number.isInteger(version) || version < 1) throw new BadRequestException('技能版本号无效')
     const source = await this.prisma.projectSkillVersion.findFirst({ where: { projectId, version } })
     if (!source) throw new NotFoundException('技能版本不存在')
     return this.createVersion(project, userId, {
@@ -70,7 +72,7 @@ export class ProjectSkillsService {
       content: source.content,
       enabled: source.enabled,
       changeType: ProjectSkillChangeType.RESTORE,
-      changeSummary: `回退到技能 v${source.version}`,
+      changeSummary: `恢复技能 v${source.version}`,
       sourceConversationId: source.sourceConversationId || undefined,
     })
   }
@@ -87,7 +89,7 @@ export class ProjectSkillsService {
     if (!messages.length) throw new BadRequestException('该对话还没有可用于总结的内容')
     const transcript = messages.map((item) => `${item.role === 'USER' ? '用户' : '助手'}：${item.content}`).join('\n\n').slice(-40_000)
     const oldSkill = project.activeSkillVersion?.enabled ? project.activeSkillVersion : null
-    const prompt = `你是团队项目技能维护助手。请从旧技能和对话中提炼可复用、明确、可执行的新技能。保留仍然有效的旧规则，吸收对话中验证过的新偏好、流程和质量标准；不要写入一次性任务、个人隐私、账号密钥或对话原文。\n\n旧技能名称：${oldSkill?.name || '未设置'}\n旧技能内容：\n${oldSkill?.content || '无'}\n\n本次调整要求：\n${request.trim() || '结合对话自动提炼'}\n\n来源对话《${conversation.title}》：\n${transcript}\n\n只返回 JSON，不要 Markdown，格式为：{"name":"简短技能名称","content":"完整技能正文","changeSummary":"本次变化摘要"}`
+    const prompt = `你是企业项目技能维护助手。请从旧技能和项目对话中提炼可复用、明确、可执行的新技能。保留有效规则，吸收已经验证的偏好、流程和质量标准；禁止写入一次性任务、个人隐私、账号密钥或对话原文。\n\n旧技能名称：${oldSkill?.name || '未设置'}\n旧技能内容：\n${oldSkill?.content || '无'}\n\n调整要求：\n${request.trim() || '结合对话自动提炼'}\n\n来源对话《${conversation.title}》：\n${transcript}\n\n只返回 JSON：{"name":"简短技能名称","content":"完整技能正文","changeSummary":"本次变化摘要"}`
     const candidate = await this.generateCandidate(userId, project.defaultModel || undefined, prompt)
     return { ...candidate, sourceConversation: { id: conversation.id, title: conversation.title }, basedOnVersion: oldSkill?.version || null }
   }
@@ -124,22 +126,33 @@ export class ProjectSkillsService {
         if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2034' || attempt === 2) throw error
       }
     }
-    throw new Error('Unable to create project skill version')
+    throw new Error('项目技能版本创建失败')
   }
 
   private accessibleProject(userId: string, projectId: string) {
     return this.prisma.project.findFirst({
       where: { id: projectId, OR: [{ userId }, { members: { some: { userId } } }] },
-      select: { id: true, userId: true, defaultModel: true, activeSkillVersionId: true, activeSkillVersion: true },
+      select: {
+        id: true,
+        userId: true,
+        defaultModel: true,
+        activeSkillVersionId: true,
+        activeSkillVersion: true,
+        members: { where: { userId }, select: { role: true } },
+      },
     }).then((project) => {
       if (!project) throw new NotFoundException('项目不存在')
       return project
     })
   }
 
-  private ownedProject(userId: string, projectId: string) {
+  private canManage(project: Awaited<ReturnType<ProjectSkillsService['accessibleProject']>>, userId: string) {
+    return project.userId === userId || project.members.some((member) => member.role === 'ADMIN')
+  }
+
+  private manageableProject(userId: string, projectId: string) {
     return this.accessibleProject(userId, projectId).then((project) => {
-      if (project.userId !== userId) throw new ForbiddenException('只有项目创建者可以执行此操作')
+      if (!this.canManage(project, userId)) throw new ForbiddenException('只有项目所有者或管理员可以修改项目技能')
       return project
     })
   }
@@ -157,7 +170,7 @@ export class ProjectSkillsService {
     for (const provider of candidates) {
       try {
         const content = provider.source === 'demo'
-          ? JSON.stringify({ name: '项目协作技能', content: prompt.match(/旧技能内容：\n([\s\S]*?)\n\n本次调整要求/)?.[1]?.trim() === '无' ? '根据项目目标回答问题，优先给出明确、可执行且可复用的结果。' : `${prompt.match(/旧技能内容：\n([\s\S]*?)\n\n本次调整要求/)?.[1]?.trim()}\n\n结合本次项目对话持续采用已验证的工作方法。`, changeSummary: '结合所选对话补充可复用的工作方法' })
+          ? JSON.stringify({ name: '项目协作技能', content: '围绕项目目标工作，优先给出明确、可执行、可复用并且便于验收的结果。', changeSummary: '建立项目通用协作规范' })
           : await this.requestProvider(provider, prompt)
         await this.providers.recordProviderResult(provider.providerId, true)
         return this.parseCandidate(content)
@@ -174,11 +187,9 @@ export class ProjectSkillsService {
     let protocol: 'openai' | 'claude' | 'gemini' = 'openai'
     let body: Record<string, unknown> = { model: provider.model, messages: [{ role: 'user', content: prompt }], max_tokens: 4096, response_format: { type: 'json_object' } }
     if (provider.apiProtocol === 'anthropic') {
-      protocol = 'claude'; path = '/messages'
-      body = { model: provider.model, max_tokens: 4096, messages: [{ role: 'user', content: prompt }] }
+      protocol = 'claude'; path = '/messages'; body = { model: provider.model, max_tokens: 4096, messages: [{ role: 'user', content: prompt }] }
     } else if (provider.apiProtocol === 'gemini') {
-      protocol = 'gemini'; path = `/models/${encodeURIComponent(provider.model)}:generateContent`
-      body = { contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4096, responseMimeType: 'application/json' } }
+      protocol = 'gemini'; path = `/models/${encodeURIComponent(provider.model)}:generateContent`; body = { contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4096, responseMimeType: 'application/json' } }
     }
     const response = await fetch(`${provider.baseUrl}${path}`, { method: 'POST', headers: this.providers.buildRequestHeaders(provider, protocol), body: JSON.stringify(body), signal: AbortSignal.timeout(provider.timeoutMs) })
     if (!response.ok) throw new Error(`模型服务返回 ${response.status}: ${(await response.text()).slice(0, 300)}`)

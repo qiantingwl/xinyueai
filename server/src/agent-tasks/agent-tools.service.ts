@@ -11,6 +11,7 @@ export type AgentToolDescriptor = {
   description: string
   requiresApproval: boolean
   kind: 'builtin' | 'external'
+  inputSchema?: Prisma.JsonValue | null
 }
 
 type ToolExecutionTask = { id: string; userId: string; assistantId: string | null; projectId: string | null; webSearchEnabled: boolean }
@@ -28,12 +29,20 @@ export class AgentToolsService {
       { key: 'current_time', name: '日期与时间', description: '获取当前服务器日期、时间和时区', requiresApproval: false, kind: 'builtin' },
     ]
     if (task.webSearchEnabled && await this.web.isAvailable()) tools.push({ key: 'web_search', name: '网页搜索', description: '检索公开网页并返回可引用的标题、链接、摘要和来源，适合最新信息、事实核验与调研任务', requiresApproval: false, kind: 'builtin' })
-    if (!task.assistantId) return tools
-    const bindings = await this.prisma.assistantTool.findMany({
-      where: { assistantId: task.assistantId, tool: { enabled: true } },
-      include: { tool: true },
-    })
-    return [...tools, ...bindings.map(({ tool }) => ({ id: tool.id, key: tool.key, name: tool.name, description: tool.description, requiresApproval: tool.requiresApproval, kind: 'external' as const }))]
+    const [bindings, connected] = await Promise.all([
+      task.assistantId
+        ? this.prisma.assistantTool.findMany({ where: { assistantId: task.assistantId, tool: { enabled: true, kind: { not: 'CONNECTOR' } } }, include: { tool: true } })
+        : [],
+      this.prisma.toolDefinition.findMany({
+        where: {
+          enabled: true,
+          kind: 'CONNECTOR',
+          OR: [{ authType: 'NONE' }, { credentials: { some: { userId: task.userId, status: 'CONNECTED' } } }],
+        },
+      }),
+    ])
+    const external = [...bindings.map(({ tool }) => tool), ...connected]
+    return [...tools, ...external.map((tool) => ({ id: tool.id, key: tool.key, name: tool.name, description: tool.description, requiresApproval: tool.requiresApproval, kind: 'external' as const, inputSchema: tool.inputSchema }))]
   }
 
   async execute(task: ToolExecutionTask, tool: AgentToolDescriptor, input: Record<string, unknown>, executionKey?: string) {
@@ -44,7 +53,7 @@ export class AgentToolsService {
     if (tool.key === 'data_summary') return this.dataSummary(input)
     if (tool.key === 'current_time') return { iso: new Date().toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }
     if (!tool.id) throw new Error('工具配置不存在')
-    const configured = await this.prisma.toolDefinition.findFirst({ where: { id: tool.id, enabled: true } })
+    const configured = await this.prisma.toolDefinition.findFirst({ where: { id: tool.id, enabled: true }, include: { credentials: { where: { userId: task.userId, status: 'CONNECTED' }, take: 1 } } })
     if (!configured?.endpoint) throw new Error('工具尚未配置 Endpoint')
     this.validateInput(input, configured.inputSchema)
     const started = Date.now()
@@ -55,11 +64,23 @@ export class AgentToolsService {
       const method = configured.httpMethod.toUpperCase()
       const publicHeaders = this.record(configured.headers)
       const secretHeaders = configured.encryptedHeaders ? this.record(JSON.parse(this.crypto.decrypt(configured.encryptedHeaders))) : {}
+      const userCredentials = configured.credentials[0]?.encryptedCredentials ? this.record(JSON.parse(this.crypto.decrypt(configured.credentials[0].encryptedCredentials))) : {}
+      if (configured.kind === 'CONNECTOR' && configured.authType !== 'NONE' && !Object.keys(userCredentials).length) throw new Error('请先在能力中心完成连接器授权')
+      const credentialFields = Array.isArray(configured.credentialFields) ? configured.credentialFields as Array<Record<string, unknown>> : []
+      const userHeaders: Record<string, string> = {}
+      const queryCredentials: Array<[string, string]> = []
+      for (const field of credentialFields) {
+        const key = String(field.key || ''); const value = userCredentials[key]; if (!value) continue
+        const location = String(field.location || 'header'); const target = String(field.target || field.headerName || key)
+        const formatted = `${typeof field.prefix === 'string' ? field.prefix : ''}${value}`
+        if (location === 'query') queryCredentials.push([target, formatted]); else userHeaders[target] = formatted
+      }
       const url = new URL(configured.endpoint)
+      queryCredentials.forEach(([key, value]) => url.searchParams.set(key, value))
       if (method === 'GET' || method === 'DELETE') Object.entries(input).forEach(([key, value]) => { if (value !== undefined && value !== null) url.searchParams.set(key, typeof value === 'string' ? value : JSON.stringify(value)) })
       const response = await fetch(url, {
         method,
-        headers: { ...publicHeaders, ...secretHeaders, 'Content-Type': publicHeaders['Content-Type'] || publicHeaders['content-type'] || 'application/json', ...(executionKey ? { 'Idempotency-Key': executionKey } : {}) },
+        headers: { ...publicHeaders, ...secretHeaders, ...userHeaders, 'Content-Type': publicHeaders['Content-Type'] || publicHeaders['content-type'] || 'application/json', ...(executionKey ? { 'Idempotency-Key': executionKey } : {}) },
         ...(method === 'GET' || method === 'DELETE' ? {} : { body: JSON.stringify(input) }),
         signal: AbortSignal.timeout(Math.min(120_000, Math.max(1000, configured.timeoutMs))),
       })
@@ -110,7 +131,7 @@ export class AgentToolsService {
   private async projectContext(task: ToolExecutionTask) {
     if (!task.projectId) return { project: null, message: '当前任务未关联项目' }
     const project = await this.prisma.project.findFirst({
-      where: { id: task.projectId, userId: task.userId, archivedAt: null },
+      where: { id: task.projectId, archivedAt: null, OR: [{ userId: task.userId }, { members: { some: { userId: task.userId } } }] },
       select: {
         id: true,
         name: true,

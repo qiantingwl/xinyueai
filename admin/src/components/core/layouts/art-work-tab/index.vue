@@ -487,9 +487,9 @@
   }
 
   .worktab-viewport {
-    min-width: 0;
-    width: 0;
     flex: 1 1 auto;
+    width: 0;
+    min-width: 0;
   }
 
   .worktab-actions {

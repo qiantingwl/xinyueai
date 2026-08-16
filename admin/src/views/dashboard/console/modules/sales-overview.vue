@@ -3,7 +3,10 @@
     <div class="art-card-header">
       <div class="title">
         <h4>{{ xt('近 14 天生成趋势') }}</h4>
-        <p>{{ xt('今日任务') }} <span class="text-success">+{{ overview?.today.jobs || 0 }}</span></p>
+        <p
+          >{{ xt('今日任务') }}
+          <span class="text-success">+{{ overview?.today.jobs || 0 }}</span></p
+        >
       </div>
     </div>
     <ArtLineChart

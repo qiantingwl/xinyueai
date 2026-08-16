@@ -33,14 +33,7 @@ import type { EChartsOption } from '@/plugins/echarts'
 export type LegendPosition = 'bottom' | 'top' | 'left' | 'right'
 
 export type SymbolType =
-  | 'circle'
-  | 'rect'
-  | 'roundRect'
-  | 'triangle'
-  | 'diamond'
-  | 'pin'
-  | 'arrow'
-  | 'none'
+  'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond' | 'pin' | 'arrow' | 'none'
 
 // 图表主题配置
 export interface ChartThemeConfig {
@@ -280,9 +273,7 @@ export interface MapChartProps extends BaseChartProps {
 
 // 双向堆叠柱状图 Props 接口（人口金字塔样式）
 export interface BidirectionalBarChartProps
-  extends BaseChartProps,
-    AxisDisplayProps,
-    InteractionProps {
+  extends BaseChartProps, AxisDisplayProps, InteractionProps {
   /** 正向数据（向上显示） */
   positiveData: number[]
   /** 负向数据（向下显示） */

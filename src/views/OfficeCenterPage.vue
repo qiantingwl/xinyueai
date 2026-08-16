@@ -136,6 +136,7 @@
                 <button type="button" :class="{ active: taskMode === 'agent' }" @click="taskMode = 'agent'; modeMenuOpen = false"><Bot :size="16" /><span><strong>任务</strong><small>自主规划、执行并交付成品</small></span><Check v-if="taskMode === 'agent'" :size="15" /></button>
               </div>
             </span>
+            <button v-for="item in officeQuickSkills" :key="item.skill.id" class="office-quick-skill" :class="{ active: selectedSkill.id === item.skill.id }" type="button" @click="selectSkill(item.skill)"><component :is="item.icon" :size="15" />{{ item.label }}</button>
             <span class="office-control-anchor">
               <button class="office-model-button" type="button" :aria-expanded="modelMenuOpen" :disabled="!chatModels.length" @click="toggleModelMenu"><Sparkles :size="15" />{{ model || '暂无可用模型' }}<ChevronDown :size="13" /></button>
               <div v-if="modelMenuOpen" class="office-model-menu">
@@ -143,18 +144,18 @@
               </div>
             </span>
             <span class="office-control-anchor">
-              <button class="office-format-button" type="button" :aria-expanded="formatMenuOpen" title="选择交付文件格式" @click="toggleFormatMenu"><FileSpreadsheet v-if="exportFormat === 'xlsx'" :size="15" /><FileText v-else :size="15" />{{ exportFormatLabel }}<ChevronDown :size="13" /></button>
-              <div v-if="formatMenuOpen" class="office-format-menu">
-                <button type="button" :class="{ active: exportFormat === 'auto' }" @click="exportFormat = 'auto'; formatMenuOpen = false"><span><strong>自动格式</strong><small>根据办公技能选择文件类型</small></span><Check v-if="exportFormat === 'auto'" :size="15" /></button>
-                <button type="button" :class="{ active: exportFormat === 'docx' }" @click="exportFormat = 'docx'; formatMenuOpen = false"><FileText :size="16" /><span><strong>Word</strong><small>生成可编辑的 DOCX 文档</small></span><Check v-if="exportFormat === 'docx'" :size="15" /></button>
-                <button type="button" :class="{ active: exportFormat === 'xlsx' }" @click="exportFormat = 'xlsx'; formatMenuOpen = false"><FileSpreadsheet :size="16" /><span><strong>Excel</strong><small>生成可编辑的 XLSX 工作簿</small></span><Check v-if="exportFormat === 'xlsx'" :size="15" /></button>
+              <button class="office-mode-button" type="button" :aria-expanded="formatMenuOpen" title="选择交付文件格式" @click="toggleFormatMenu"><FileSpreadsheet v-if="exportFormat === 'xlsx'" :size="15" /><Presentation v-else-if="exportFormat === 'pptx'" :size="15" /><FileText v-else :size="15" />{{ exportFormatLabel }}<ChevronDown :size="13" /></button>
+              <div v-if="formatMenuOpen" class="office-mode-menu">
+                <button v-for="item in exportFormats" :key="item.value" type="button" :class="{ active: exportFormat === item.value }" @click="exportFormat = item.value; formatMenuOpen = false"><component :is="item.icon" :size="16" /><span><strong>{{ item.label }}</strong><small>{{ item.note }}</small></span><Check v-if="exportFormat === item.value" :size="15" /></button>
               </div>
             </span>
-            <button class="office-skill-button" :class="{ active: skillPanelOpen }" type="button" :aria-expanded="skillPanelOpen" @click="toggleSkillPanel"><Layers3 :size="16" />{{ selectedSkill.name }}<ChevronDown :size="13" /></button>
+            <button class="office-skill-button" :class="{ active: skillPanelOpen }" type="button" :aria-expanded="skillPanelOpen" @click="toggleSkillPanel"><LayoutGrid :size="16" />更多</button>
             <button v-if="taskMode === 'agent'" class="office-web-button" :class="{ active: webSearchEnabled }" type="button" :aria-pressed="webSearchEnabled" title="联网搜索" @click="webSearchEnabled = !webSearchEnabled"><Globe2 :size="16" />联网</button>
-            <PluginSelector v-if="auth.isAuthenticated" v-model="pluginId" capability="OFFICE" compact />
           </div>
-          <button class="office-submit" :type="generating ? 'button' : 'submit'" :disabled="canceling || (!generating && (!prompt.trim() || (auth.isAuthenticated && !model)))" :aria-label="generating ? '停止生成' : '提交任务'" @click="generating && cancelTask()"><LoaderCircle v-if="canceling" class="office-spin" :size="16" /><Square v-else-if="generating" :size="13" fill="currentColor" /><ArrowUp v-else :size="19" /></button>
+          <span class="office-composer-actions">
+            <button class="office-voice" :class="{ 'is-listening': voiceListening }" type="button" :aria-label="voiceListening ? '停止语音输入' : '开始语音输入'" :aria-pressed="voiceListening" :title="voiceListening ? '停止语音输入' : '语音输入'" :disabled="generating" @click="toggleVoice"><Mic :size="18" /></button>
+            <button class="office-submit" :type="generating ? 'button' : 'submit'" :disabled="canceling || (!generating && (!prompt.trim() || (auth.isAuthenticated && !model)))" :aria-label="generating ? '停止生成' : '提交任务'" @click="generating && cancelTask()"><LoaderCircle v-if="canceling" class="office-spin" :size="16" /><Square v-else-if="generating" :size="13" fill="currentColor" /><ArrowUp v-else :size="19" /></button>
+          </span>
         </footer>
       </form>
       <input ref="fileInput" type="file" accept="image/*,.docx,.xlsx,.xlsm,.txt,.md,.markdown,.csv,.json,.xml,.html,.css,.js,.jsx,.ts,.tsx,.py,.java,.go,.rs,.sql,.log,text/*,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden @change="handleFiles" />
@@ -169,21 +170,20 @@ import { useRouter } from 'vue-router'
 import {
   ArrowUp, BarChart3, Bot, BrainCircuit, BriefcaseBusiness, Check, ChevronDown, ChevronRight, Code2, Copy, Download,
   FileSpreadsheet, FileText, Layers3, Lightbulb, ListChecks, LoaderCircle, Mail, MessageSquareText,
-  PenLine, Plus, Presentation, Search, ShieldCheck, Sparkles, Square, SquarePen, Table2, X, Zap, History,
+  LayoutGrid, Mic, PenLine, Plus, Presentation, Search, ShieldCheck, Sparkles, Square, SquarePen, Table2, X, Zap, History,
   Archive, ArchiveRestore, CalendarClock, CalendarPlus, ExternalLink, Globe2, MoreHorizontal, Pause, Play, RotateCcw, Trash2,
   type LucideIcon,
 } from 'lucide-vue-next'
 import ChatMessageContent from '../components/ChatMessageContent.vue'
-import PluginSelector from '../components/PluginSelector.vue'
 import { api, apiUrl, streamApiEvents } from '../services/api'
 import { useAuthStore } from '../stores/auth'
 import { useStudioStore } from '../stores/studio'
-import type { StudioAsset } from '../types'
+import type { Plugin, StudioAsset } from '../types'
 import { createClientId } from '../utils/client-id'
 
 type TaskMode = 'fast' | 'expert' | 'agent'
-type OfficeExportFormat = 'auto' | 'docx' | 'xlsx'
-type OfficeSkill = { id: string; name: string; category: string; description: string; shortDescription: string; placeholder: string; color: string; icon: LucideIcon; assistantId?: string }
+type OfficeExportFormat = 'auto' | 'docx' | 'xlsx' | 'pptx' | 'md'
+type OfficeSkill = { id: string; name: string; category: string; description: string; shortDescription: string; placeholder: string; color: string; icon: LucideIcon; assistantId?: string; pluginId?: string }
 type CatalogModel = { key: string; displayName: string; description?: string; capability: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE'; enabled?: boolean; isDefault: boolean }
 type ServerConversation = { id: string }
 type ServerMessage = { id: string; createdAt: string }
@@ -257,13 +257,24 @@ const skillQuery = ref('')
 const selectedCategory = ref('全部')
 const model = ref('')
 const pluginId = ref('')
+type SpeechRecognizer = { lang: string; interimResults: boolean; continuous: boolean; onresult: ((event: { results: { [key: number]: { [key: number]: { transcript: string } } } }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null; start: () => void; stop: () => void }
+type SpeechRecognizerConstructor = new () => SpeechRecognizer
+const voiceListening = ref(false)
+const voiceRecognizer = ref<SpeechRecognizer | null>(null)
 const chatModels = ref<CatalogModel[]>([])
 const organizationSkills = ref<OfficeSkill[]>([])
+const installedSkills = ref<OfficeSkill[]>([])
 const deliverable = ref<OfficeDeliverable | null>(null)
 const organizationAssistantModels = new Map<string, string>()
 
-const allSkills = computed(() => [...builtInSkills, ...organizationSkills.value])
-const categories = computed(() => ['全部', '推荐', '文档', '数据', '沟通', '创意', ...(organizationSkills.value.length ? ['组织技能'] : [])])
+const allSkills = computed(() => [...builtInSkills, ...organizationSkills.value, ...installedSkills.value])
+const officeQuickSkills = computed(() => [
+  { label: 'PPT 生成', icon: Presentation, skill: builtInSkills.find((skill) => skill.id === 'ppt')! },
+  { label: 'AI 表格', icon: Table2, skill: builtInSkills.find((skill) => skill.id === 'spreadsheet')! },
+  { label: '帮我写作', icon: FileText, skill: builtInSkills.find((skill) => skill.id === 'writing')! },
+  { label: '会议纪要', icon: Mic, skill: builtInSkills.find((skill) => skill.id === 'meeting')! },
+])
+const categories = computed(() => ['全部', '推荐', '文档', '数据', '沟通', '创意', ...(organizationSkills.value.length ? ['组织技能'] : []), ...(installedSkills.value.length ? ['已安装'] : [])])
 const recommendedSkills = computed(() => builtInSkills.filter((skill) => skill.category === '推荐'))
 const filteredSkills = computed(() => allSkills.value.filter((skill) => {
   const categoryMatches = selectedCategory.value === '全部' || skill.category === selectedCategory.value
@@ -271,7 +282,14 @@ const filteredSkills = computed(() => allSkills.value.filter((skill) => {
   return categoryMatches && (!query || `${skill.name} ${skill.description}`.toLowerCase().includes(query))
 }))
 const modeLabel = computed(() => taskMode.value === 'fast' ? '快速' : taskMode.value === 'expert' ? '专家' : '任务')
-const exportFormatLabel = computed(() => exportFormat.value === 'docx' ? 'Word' : exportFormat.value === 'xlsx' ? 'Excel' : '自动格式')
+const exportFormats = [
+  { value: 'auto' as const, label: '自动格式', note: '根据办公技能选择文件类型', icon: FileText },
+  { value: 'docx' as const, label: 'Word', note: '可编辑的 DOCX 文档', icon: FileText },
+  { value: 'xlsx' as const, label: 'Excel', note: '可编辑的 XLSX 工作簿', icon: FileSpreadsheet },
+  { value: 'pptx' as const, label: 'PowerPoint', note: '可编辑的 PPTX 演示文稿', icon: Presentation },
+  { value: 'md' as const, label: 'Markdown', note: '适合继续编辑的纯文本文件', icon: Code2 },
+]
+const exportFormatLabel = computed(() => exportFormats.find((item) => item.value === exportFormat.value)?.label || '自动格式')
 const deliverableFormat = computed(() => deliverable.value?.name.split('.').pop()?.toUpperCase() || 'OFFICE')
 const deliverableIcon = computed(() => deliverable.value?.name.toLowerCase().endsWith('.pptx') ? Presentation : deliverable.value?.name.toLowerCase().endsWith('.xlsx') ? FileSpreadsheet : FileText)
 const pendingToolCalls = computed(() => activeAgentTask.value?.agentRun?.toolCalls.filter((call) => call.requiresApproval && call.approvalStatus === 'PENDING') || [])
@@ -297,6 +315,7 @@ function officeAttachmentMeta(asset: StudioAsset) {
 function selectSkill(skill: OfficeSkill) {
   const wasGeneratedPrefix = allSkills.value.some((item) => prompt.value.trim() === `${item.name}：` || prompt.value.trim() === `${item.name}:`)
   selectedSkill.value = skill
+  pluginId.value = skill.pluginId || ''
   const assistantModel = organizationAssistantModels.get(skill.id)
   if (assistantModel) model.value = assistantModel
   skillPanelOpen.value = false
@@ -357,6 +376,26 @@ function startNewTask() {
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void submitTask() }
 }
+function toggleVoice() {
+  if (voiceListening.value) { voiceRecognizer.value?.stop(); return }
+  const speechWindow = window as Window & { SpeechRecognition?: SpeechRecognizerConstructor; webkitSpeechRecognition?: SpeechRecognizerConstructor }
+  const Constructor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition
+  if (!Constructor) { error.value = '当前浏览器不支持语音输入，请使用 Chrome 或 Edge'; return }
+  const recognizer = new Constructor()
+  recognizer.lang = document.documentElement.lang.startsWith('en') ? 'en-US' : 'zh-CN'
+  recognizer.interimResults = false
+  recognizer.continuous = false
+  recognizer.onresult = (event) => {
+    const transcript = event.results[0]?.[0]?.transcript?.trim() || ''
+    if (transcript) prompt.value = `${prompt.value}${prompt.value ? ' ' : ''}${transcript}`
+  }
+  recognizer.onend = () => { voiceListening.value = false; voiceRecognizer.value = null }
+  recognizer.onerror = () => { voiceListening.value = false; voiceRecognizer.value = null; error.value = '语音输入没有获得麦克风权限' }
+  voiceRecognizer.value = recognizer
+  voiceListening.value = true
+  error.value = ''
+  try { recognizer.start() } catch { voiceListening.value = false; voiceRecognizer.value = null; error.value = '语音输入启动失败' }
+}
 function openFilePicker() {
   if (!auth.isAuthenticated) { void router.push('/login?redirect=/office'); return }
   fileInput.value?.click()
@@ -382,6 +421,7 @@ async function submitTask() {
   error.value = ''; answer.value = ''; submittedPrompt.value = raw; generating.value = true
   deliverable.value = null
   canceling.value = false
+  let accepted = false
   skillPanelOpen.value = false; modeMenuOpen.value = false; modelMenuOpen.value = false
   try {
     if (taskMode.value === 'agent') {
@@ -404,9 +444,10 @@ async function submitTask() {
       conversationId.value = `agent:${created.id}`
       const started = await api<AgentTask>(`/agent-tasks/${created.id}/run`, { method: 'POST' })
       activeAgentTask.value = started
+      accepted = true
+      prompt.value = ''
       const completed = await watchAgentTask(created.id)
       if (completed.status !== 'SUCCEEDED') throw new Error(completed.errorMessage || (completed.status === 'CANCELLED' ? '任务已停止' : 'Agent 任务执行失败'))
-      prompt.value = ''
       void createDeliverable()
       await Promise.all([loadAgentTasks(), studio.refreshConversations(), studio.refreshCredits()])
       return
@@ -417,14 +458,41 @@ async function submitTask() {
     const options = { officeMode: taskMode.value, officeSkill: selectedSkill.value.id, ...(selectedSkill.value.assistantId ? { assistantId: selectedSkill.value.assistantId } : {}), ...(pluginId.value ? { pluginId: pluginId.value } : {}) }
     const job = await api<ServerJob>('/generations', { method: 'POST', body: JSON.stringify({ kind: 'CHAT', prompt: raw, model: model.value, conversationId: conversation.id, options, idempotencyKey: `office:${createClientId()}` }) })
     activeJobId.value = job.id
-    const completed = await streamApiEvents<ServerJob>(`/generations/${job.id}/events`, (current) => { if (current.stream) answer.value = current.stream.content })
+    accepted = true
+    prompt.value = ''
+    const completed = await watchGenerationJob(job.id)
     if (completed.stream) answer.value = completed.stream.content
     if (completed.status !== 'SUCCEEDED') throw new Error(completed.errorMessage || (completed.status === 'CANCELLED' ? '任务已停止' : '办公任务生成失败'))
-    prompt.value = ''
     void createDeliverable()
     await Promise.all([studio.refreshConversations(), studio.refreshCredits()])
-  } catch (reason) { error.value = reason instanceof Error ? reason.message : '办公任务提交失败' }
+  } catch (reason) {
+    if (!accepted) prompt.value = raw
+    error.value = reason instanceof Error ? reason.message : '办公任务提交失败'
+  }
   finally { generating.value = false; canceling.value = false; activeJobId.value = ''; void nextTick(() => resultThread.value?.scrollTo({ top: resultThread.value.scrollHeight, behavior: 'smooth' })) }
+}
+
+const terminalJobStatuses = new Set<ServerJob['status']>(['SUCCEEDED', 'FAILED', 'CANCELLED'])
+const terminalAgentStatuses = new Set<AgentTaskStatus>(['SUCCEEDED', 'FAILED', 'CANCELLED', 'WAITING_APPROVAL'])
+const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+
+async function pollTask<T extends { status: string }>(path: string, terminalStatuses: Set<string>, onUpdate: (task: T) => void) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    const task = await api<T>(path, { cache: 'no-store' })
+    onUpdate(task)
+    if (terminalStatuses.has(task.status)) return task
+    await wait(1000)
+  }
+  throw new Error('任务执行超时，请稍后在历史任务中查看结果')
+}
+
+async function watchGenerationJob(id: string) {
+  const update = (current: ServerJob) => { if (current.stream) answer.value = current.stream.content }
+  try {
+    return await streamApiEvents<ServerJob>(`/generations/${id}/events`, update)
+  } catch {
+    return pollTask<ServerJob>(`/generations/${id}`, terminalJobStatuses, update)
+  }
 }
 async function cancelTask() {
   if (canceling.value || (!activeJobId.value && !activeAgentTaskId.value)) return
@@ -504,12 +572,18 @@ async function openAgentTask(id: string) {
   if (task.status === 'QUEUED' || task.status === 'RUNNING') void resumeAgentTask(task.id)
 }
 async function watchAgentTask(id: string) {
-  const completed = await streamApiEvents<AgentTask>(`/agent-tasks/${id}/events`, (current) => {
+  const update = (current: AgentTask) => {
     activeAgentTask.value = current
     if (current.conversationId) conversationId.value = current.conversationId
     const content = current.agentRun?.finalAnswer || current.run?.stream?.content
     if (content) answer.value = content
-  })
+  }
+  let completed: AgentTask
+  try {
+    completed = await streamApiEvents<AgentTask>(`/agent-tasks/${id}/events`, update)
+  } catch {
+    completed = await pollTask<AgentTask>(`/agent-tasks/${id}`, terminalAgentStatuses, update)
+  }
   activeAgentTask.value = completed
   if (completed.conversationId) conversationId.value = completed.conversationId
   const content = completed.agentRun?.finalAnswer || completed.run?.stream?.content
@@ -560,10 +634,13 @@ async function copyAnswer() {
   window.setTimeout(() => { copied.value = false }, 1500)
 }
 async function createDeliverable() {
-  if (!conversationId.value || exporting.value || deliverable.value) return
+  if ((!conversationId.value && !activeAgentTaskId.value) || exporting.value || deliverable.value) return
   exporting.value = true
   try {
-    deliverable.value = await api<OfficeDeliverable>('/office/exports', { method: 'POST', body: JSON.stringify({ conversationId: conversationId.value, ...(exportFormat.value === 'auto' ? {} : { format: exportFormat.value }) }) })
+    const target: Record<string, string> = activeAgentTaskId.value ? { agentTaskId: activeAgentTaskId.value } : { conversationId: conversationId.value }
+    if (exportFormat.value !== 'auto') target.format = exportFormat.value
+    deliverable.value = await api<OfficeDeliverable>('/office/exports', { method: 'POST', body: JSON.stringify(target) })
+    error.value = ''
     await studio.refreshAssets()
   } catch (reason) {
     error.value = `内容已生成，但交付文件制作失败：${reason instanceof Error ? reason.message : '请稍后重试'}`
@@ -593,9 +670,10 @@ async function downloadDeliverable() {
 onMounted(async () => {
   studio.setMode('office')
   document.addEventListener('xinyue:close-popovers', closeOfficePopovers)
-  const [models, assistants] = await Promise.all([
+  const [models, assistants, plugins] = await Promise.all([
     api<CatalogModel[]>(auth.isAuthenticated ? '/users/me/models' : '/catalog/models', { cache: 'no-store' }).catch(() => []),
     api<AssistantOption[]>('/assistants').catch(() => []),
+    auth.isAuthenticated ? api<Plugin[]>('/plugins/available?capability=OFFICE').catch(() => []) : Promise.resolve([]),
   ])
   chatModels.value = models.filter((item) => item.capability === 'CHAT' && item.enabled !== false)
   const defaultModel = chatModels.value.find((item) => item.isDefault) || chatModels.value[0]
@@ -605,7 +683,11 @@ onMounted(async () => {
     if (assistant.defaultModel) organizationAssistantModels.set(id, assistant.defaultModel)
     return { id, name: assistant.name, category: '组织技能', description: assistant.description || '由管理员配置的办公助手', shortDescription: assistant.description || '组织专属办公能力', placeholder: `描述需要交给${assistant.name}处理的任务`, color: ['#4f8cff', '#31b66b', '#8a6cff', '#f29b38'][index % 4], icon: Sparkles, assistantId: assistant.id }
   })
+  installedSkills.value = plugins.map((plugin, index) => ({ id: `skill:${plugin.id}`, name: plugin.name, category: '已安装', description: plugin.description || '已安装的办公技能', shortDescription: plugin.description || '已安装技能', placeholder: `描述需要使用${plugin.name}完成的任务`, color: ['#4f8cff', '#31b66b', '#8a6cff', '#f29b38'][index % 4], icon: Layers3, pluginId: plugin.id }))
   if (auth.isAuthenticated) void loadAgentTasks()
 })
-onUnmounted(() => document.removeEventListener('xinyue:close-popovers', closeOfficePopovers))
+onUnmounted(() => {
+  voiceRecognizer.value?.stop()
+  document.removeEventListener('xinyue:close-popovers', closeOfficePopovers)
+})
 </script>

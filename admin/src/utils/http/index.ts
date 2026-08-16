@@ -49,7 +49,7 @@ const axiosInstance = axios.create({
   transformResponse: [
     (data, headers) => {
       const contentType = headers['content-type']
-      if (contentType?.includes('application/json')) {
+      if (typeof contentType === 'string' && contentType.includes('application/json')) {
         try {
           return JSON.parse(data)
         } catch {
@@ -170,8 +170,9 @@ async function request<T = any>(config: ExtendedAxiosRequestConfig): Promise<T> 
     const res = await axiosInstance.request<T | BaseResponse<T>>(config)
 
     const payload = res.data
-    const isEnvelope = payload && typeof payload === 'object' && 'code' in payload && 'data' in payload
-    const data = isEnvelope ? (payload as BaseResponse<T>).data : payload as T
+    const isEnvelope =
+      payload && typeof payload === 'object' && 'code' in payload && 'data' in payload
+    const data = isEnvelope ? (payload as BaseResponse<T>).data : (payload as T)
 
     // 显示成功消息
     if (config.showSuccessMessage) {

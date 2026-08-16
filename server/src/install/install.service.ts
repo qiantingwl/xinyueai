@@ -27,9 +27,7 @@ export class InstallService {
   async status() {
     const databaseUrl = process.env.DATABASE_URL?.trim() || ''
     if (!databaseUrl) {
-      if (this.installationLocked() || process.env.APP_BOOT_MODE === 'maintenance') {
-        return { installed: false, locked: true, phase: 'database', databaseConfigured: false, databaseReady: false, databaseError: '数据库配置不可用，请恢复服务端运行配置并重启 API', requiresInstallToken: false }
-      }
+      if (this.installationLocked() || process.env.APP_BOOT_MODE === 'maintenance') return { installed: false, locked: true, phase: 'database', databaseConfigured: false, databaseReady: false, databaseError: '数据库配置不可用，请恢复服务端运行配置并重启 API', requiresInstallToken: false }
       this.logToken()
       return { installed: false, phase: 'database', databaseConfigured: false, databaseReady: false, requiresInstallToken: true }
     }
@@ -44,9 +42,7 @@ export class InstallService {
       this.logToken()
       return { installed: false, phase: 'site', databaseConfigured: true, databaseReady: true, siteName: result.siteName, requiresInstallToken: true }
     } catch (error) {
-      if (this.installationLocked() || process.env.APP_BOOT_MODE === 'maintenance') {
-        return { installed: false, locked: true, phase: 'database', databaseConfigured: true, databaseReady: false, databaseError: this.safeError(error), requiresInstallToken: false }
-      }
+      if (this.installationLocked() || process.env.APP_BOOT_MODE === 'maintenance') return { installed: false, locked: true, phase: 'database', databaseConfigured: true, databaseReady: false, databaseError: this.safeError(error), requiresInstallToken: false }
       this.logToken()
       return { installed: false, phase: 'database', databaseConfigured: true, databaseReady: false, databaseError: this.safeError(error), requiresInstallToken: true }
     }
@@ -56,17 +52,9 @@ export class InstallService {
     this.assertUnlocked()
     this.assertToken(input.installToken)
     await this.assertNotInstalled(process.env.DATABASE_URL?.trim())
-    try {
-      await testDatabase(input.databaseUrl)
-    } catch (error) {
-      throw new BadRequestException(`PostgreSQL 连接失败：${this.safeError(error)}`)
-    }
+    try { await testDatabase(input.databaseUrl) } catch (error) { throw new BadRequestException(`PostgreSQL 连接失败：${this.safeError(error)}`) }
     await this.testRedis(input.redisUrl)
-    try {
-      await deployMigrations(input.databaseUrl)
-    } catch (error) {
-      throw new BadRequestException(this.safeError(error))
-    }
+    try { await deployMigrations(input.databaseUrl) } catch (error) { throw new BadRequestException(this.safeError(error)) }
     const security = this.securityValues()
     writeRuntimeEnv({ DATABASE_URL: input.databaseUrl, REDIS_URL: input.redisUrl, INSTALL_TOKEN: this.installToken(), ...security })
     return { configured: true, migrated: true, nextPhase: 'site' }
@@ -84,23 +72,10 @@ export class InstallService {
         if (adminCount) throw new ConflictException('系统已经完成安装')
         await tx.systemSetting.upsert({
           where: { id: 'global' },
-          update: {
-            siteName: input.siteName.trim(), siteLogoUrl: input.siteLogoUrl?.trim() || '', supportUrl: input.supportUrl?.trim() || '',
-            registrationEnabled: input.registrationEnabled ?? true, passwordLoginEnabled: true, passwordRegistrationEnabled: input.registrationEnabled ?? true,
-            emailLoginEnabled: false, emailVerifyEnabled: false,
-          },
-          create: {
-            id: 'global', siteName: input.siteName.trim(), siteLogoUrl: input.siteLogoUrl?.trim() || '', supportUrl: input.supportUrl?.trim() || '',
-            registrationEnabled: input.registrationEnabled ?? true, passwordLoginEnabled: true, passwordRegistrationEnabled: input.registrationEnabled ?? true,
-            emailLoginEnabled: false, emailVerifyEnabled: false,
-          },
+          update: { siteName: input.siteName.trim(), siteLogoUrl: input.siteLogoUrl?.trim() || '', supportUrl: input.supportUrl?.trim() || '', registrationEnabled: input.registrationEnabled ?? true, passwordLoginEnabled: true, passwordRegistrationEnabled: input.registrationEnabled ?? true, emailLoginEnabled: false, emailVerifyEnabled: false },
+          create: { id: 'global', siteName: input.siteName.trim(), siteLogoUrl: input.siteLogoUrl?.trim() || '', supportUrl: input.supportUrl?.trim() || '', registrationEnabled: input.registrationEnabled ?? true, passwordLoginEnabled: true, passwordRegistrationEnabled: input.registrationEnabled ?? true, emailLoginEnabled: false, emailVerifyEnabled: false },
         })
-        await tx.user.create({
-          data: {
-            email: input.adminEmail.trim().toLowerCase(), displayName: input.adminDisplayName.trim(), passwordHash,
-            emailVerifiedAt: new Date(), role: 'SUPER_ADMIN', status: 'ACTIVE', settings: { create: {} }, creditAccount: { create: { balance: 0 } },
-          },
-        })
+        await tx.user.create({ data: { email: input.adminEmail.trim().toLowerCase(), displayName: input.adminDisplayName.trim(), passwordHash, emailVerifiedAt: new Date(), role: 'SUPER_ADMIN', status: 'ACTIVE', settings: { create: {} }, creditAccount: { create: { balance: 0 } } } })
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }))
     } catch (error) {
       if (error instanceof ConflictException) throw error
@@ -145,14 +120,8 @@ export class InstallService {
 
   private installToken() { return process.env.INSTALL_TOKEN?.trim() || this.generatedToken }
   private installationLocked() { return process.env.INSTALL_COMPLETED === 'true' }
-  private assertUnlocked() {
-    if (this.installationLocked() || process.env.APP_BOOT_MODE === 'maintenance') throw new ConflictException('站点已经完成安装，安装入口已锁定')
-  }
-  private logToken() {
-    if (this.tokenLogged) return
-    this.tokenLogged = true
-    this.logger.warn(`首次安装密钥：${this.installToken()}`)
-  }
+  private assertUnlocked() { if (this.installationLocked() || process.env.APP_BOOT_MODE === 'maintenance') throw new ConflictException('站点已经完成安装，安装入口已锁定') }
+  private logToken() { if (!this.tokenLogged) { this.tokenLogged = true; this.logger.warn(`首次安装密钥：${this.installToken()}`) } }
   private assertToken(value: string) {
     const expected = Buffer.from(this.installToken())
     const actual = Buffer.from(value.trim())

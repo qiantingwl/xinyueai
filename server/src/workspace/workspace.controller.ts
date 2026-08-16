@@ -1,12 +1,12 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Req, StreamableFile, UseGuards } from '@nestjs/common'
 import { ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsIn, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator'
-import { Prisma } from '@prisma/client'
+import { AssetKind, Prisma } from '@prisma/client'
 import type { FastifyRequest } from 'fastify'
 import { AuthGuard } from '../auth/auth.guard'
 import { AdminGuard } from '../admin/admin.guard'
 import { AuthenticatedUser, CurrentUser } from '../common/request-user'
 import { PrismaService } from '../prisma/prisma.service'
-import { AssetsService } from '../assets/assets.service'
+import { assetDisposition, AssetsService, resolveRasterImageMime } from '../assets/assets.service'
 import { OfficeExportService } from './office-export.service'
 import { CredentialCryptoService } from '../providers/credential-crypto.service'
 
@@ -25,6 +25,7 @@ class AssistantDto {
 class KnowledgeBaseDto { @IsString() @MinLength(1) @MaxLength(100) name!: string; @IsOptional() @IsString() @MaxLength(2000) description?: string }
 class KnowledgeBaseAssetDto { @IsString() @MinLength(1) @MaxLength(100) assetId!: string }
 class ToolCallDto { @IsOptional() @IsObject() input?: Record<string, unknown>; @IsOptional() @IsString() approvalRequestId?: string }
+class ConnectorCredentialDto { @IsObject() credentials!: Record<string, string> }
 class ToolApprovalRequestDto { @IsOptional() @IsString() @MaxLength(1000) reason?: string }
 class TeamDto { @IsString() @MinLength(1) @MaxLength(100) name!: string; @IsOptional() @IsString() @MaxLength(2000) description?: string }
 class TeamMemberDto { @IsEmail() email!: string; @IsOptional() @IsIn(['ADMIN', 'MEMBER']) role?: string }
@@ -33,6 +34,11 @@ class ToolDto {
   @IsString() @MinLength(2) @MaxLength(80) key!: string
   @IsString() @MinLength(1) @MaxLength(100) name!: string
   @IsOptional() @IsString() @MaxLength(2000) description?: string
+  @IsOptional() @IsString() @MaxLength(80) icon?: string
+  @IsOptional() @IsIn(['BUILT_IN', 'CONNECTOR']) kind?: string
+  @IsOptional() @IsIn(['NONE', 'API_KEY']) authType?: string
+  @IsOptional() @IsString() @MaxLength(2000) documentationUrl?: string
+  @IsOptional() @IsArray() @ArrayMaxSize(20) credentialFields?: Array<Record<string, unknown>>
   @IsOptional() @IsString() @MaxLength(500) endpoint?: string
   @IsOptional() @IsIn(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']) httpMethod?: string
   @IsOptional() @IsInt() @Min(1000) @Max(120000) timeoutMs?: number
@@ -50,24 +56,56 @@ class ReviewToolApprovalDto {
   @IsOptional() @IsInt() @Min(5) @Max(10080) expiresInMinutes?: number
 }
 class OfficeExportDto {
-  @IsString() @MinLength(1) @MaxLength(100) conversationId!: string
-  @IsOptional() @IsString() @MaxLength(100) messageId?: string
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(100) conversationId?: string
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(100) agentTaskId?: string
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(100) messageId?: string
   @IsOptional() @IsIn(['docx', 'xlsx', 'pptx', 'md']) format?: 'docx' | 'xlsx' | 'pptx' | 'md'
 }
 
 @Controller()
 @UseGuards(AuthGuard)
 export class WorkspaceController {
-  constructor(private readonly prisma: PrismaService, private readonly assets: AssetsService, private readonly officeExports: OfficeExportService) {}
+  constructor(private readonly prisma: PrismaService, private readonly assets: AssetsService, private readonly officeExports: OfficeExportService, private readonly crypto: CredentialCryptoService) {}
 
   @Post('office/exports')
-  exportOffice(@CurrentUser() user: AuthenticatedUser, @Body() body: OfficeExportDto) { return this.officeExports.create(user.id, body.conversationId, body.format, body.messageId) }
+  exportOffice(@CurrentUser() user: AuthenticatedUser, @Body() body: OfficeExportDto) { return this.officeExports.create(user.id, body) }
 
   @Get('assistants')
   assistants() { return this.prisma.assistant.findMany({ where: { enabled: true, visibility: 'PUBLIC' }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }], select: { id: true, name: true, description: true, defaultModel: true, templateIds: true, tools: { select: { toolId: true } } } }) }
 
   @Get('assistants/tools')
-  tools() { return this.prisma.toolDefinition.findMany({ where: { enabled: true }, orderBy: { name: 'asc' }, select: { id: true, key: true, name: true, description: true, requiresApproval: true, scopes: true } }) }
+  async tools(@CurrentUser() user: AuthenticatedUser) {
+    const rows = await this.prisma.toolDefinition.findMany({ where: { authType: { not: 'OAUTH2' }, OR: [{ enabled: true }, { kind: 'CONNECTOR' }] }, orderBy: [{ enabled: 'desc' }, { name: 'asc' }], select: { id: true, key: true, name: true, description: true, icon: true, kind: true, authType: true, documentationUrl: true, credentialFields: true, requiresApproval: true, scopes: true, enabled: true, credentials: { where: { userId: user.id }, select: { status: true, credentialHints: true, connectedAt: true } } } })
+    return rows.map(({ credentials, ...tool }) => ({ ...tool, connection: credentials[0] || null }))
+  }
+
+  @Get('assistants/tools/:toolId/icon')
+  async toolIcon(@Param('toolId') toolId: string) {
+    const tool = await this.prisma.toolDefinition.findFirst({ where: { id: toolId, OR: [{ enabled: true }, { kind: 'CONNECTOR' }] }, select: { iconAssetId: true } })
+    if (!tool?.iconAssetId) throw new NotFoundException('连接器图标不存在')
+    const result = await this.assets.readForAdmin(tool.iconAssetId)
+    return new StreamableFile(result.file, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name) })
+  }
+
+  @Post('assistants/tools/:toolId/credentials')
+  async connectTool(@CurrentUser() user: AuthenticatedUser, @Param('toolId') toolId: string, @Body() body: ConnectorCredentialDto) {
+    const tool = await this.prisma.toolDefinition.findFirst({ where: { id: toolId, kind: 'CONNECTOR', authType: 'API_KEY' }, select: { id: true, enabled: true, credentialFields: true } })
+    if (!tool) throw new NotFoundException('连接器不存在或不支持 API Key 授权')
+    const fields = Array.isArray(tool.credentialFields) ? tool.credentialFields as Array<Record<string, unknown>> : []
+    const allowed = new Set(fields.map((field) => String(field.key || '')).filter(Boolean))
+    const required = fields.filter((field) => field.required !== false).map((field) => String(field.key || '')).filter(Boolean)
+    const credentials = Object.fromEntries(Object.entries(body.credentials).filter(([key, value]) => allowed.has(key) && typeof value === 'string' && value.trim()).map(([key, value]) => [key, value.trim()]))
+    if (!Object.keys(credentials).length || required.some((key) => !credentials[key])) throw new BadRequestException('请完整填写连接器授权信息')
+    const hints = Object.fromEntries(Object.entries(credentials).map(([key, value]) => [key, value.length > 4 ? `••••${value.slice(-4)}` : '••••']))
+    await this.prisma.connectorCredential.upsert({ where: { userId_toolId: { userId: user.id, toolId } }, create: { userId: user.id, toolId, encryptedCredentials: this.crypto.encrypt(JSON.stringify(credentials)), credentialHints: hints as Prisma.InputJsonValue }, update: { encryptedCredentials: this.crypto.encrypt(JSON.stringify(credentials)), credentialHints: hints as Prisma.InputJsonValue, status: 'CONNECTED', connectedAt: new Date() } })
+    return { connected: true, configured: tool.enabled, status: 'CONNECTED', credentialHints: hints }
+  }
+
+  @Delete('assistants/tools/:toolId/credentials')
+  async disconnectTool(@CurrentUser() user: AuthenticatedUser, @Param('toolId') toolId: string) {
+    await this.prisma.connectorCredential.deleteMany({ where: { userId: user.id, toolId } })
+    return { disconnected: true }
+  }
 
   @Get('knowledge-bases')
   knowledgeBases(@CurrentUser() user: AuthenticatedUser) { return this.prisma.knowledgeBase.findMany({ where: { creatorId: user.id }, orderBy: { updatedAt: 'desc' }, include: { assets: { orderBy: { createdAt: 'desc' }, include: { asset: { select: { id: true, name: true, mimeType: true, createdAt: true } } } }, _count: { select: { assets: true, assistants: true } } } }) }
@@ -228,7 +266,7 @@ export class WorkspaceController {
 @Controller('admin')
 @UseGuards(AuthGuard, AdminGuard)
 export class AdminWorkspaceController {
-  constructor(private readonly prisma: PrismaService, private readonly crypto: CredentialCryptoService) {}
+  constructor(private readonly prisma: PrismaService, private readonly crypto: CredentialCryptoService, private readonly assets: AssetsService) {}
 
   @Get('assistants')
   assistants() { return this.prisma.assistant.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }], include: { tools: { select: { toolId: true } }, knowledgeBases: { select: { knowledgeBaseId: true } }, _count: { select: { knowledgeBases: true, tools: true } } } }) }
@@ -257,14 +295,40 @@ export class AdminWorkspaceController {
   @Get('tools')
   tools() { return this.prisma.toolDefinition.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { assistants: true, calls: true } } } }).then((rows) => rows.map((row) => ({ ...row, encryptedHeaders: undefined, hasSecretHeaders: Boolean(row.encryptedHeaders) }))) }
 
+  @Post('tools/:id/icon')
+  async uploadToolIcon(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Param('id') id: string) {
+    const tool = await this.prisma.toolDefinition.findUnique({ where: { id }, select: { id: true, iconAssetId: true } })
+    if (!tool) throw new NotFoundException('工具不存在')
+    const part = await request.file()
+    if (!part) throw new BadRequestException('请选择图标文件')
+    const mimeType = resolveRasterImageMime(part.filename, part.mimetype)
+    if (!mimeType) { part.file.resume(); throw new BadRequestException('图标仅支持 JPG、PNG、WebP、GIF 或 AVIF') }
+    const asset = await this.assets.storeUpload(admin.id, { stream: part.file, name: part.filename, mimeType, kind: AssetKind.IMAGE, metadata: { purpose: 'tool-icon', toolId: id } })
+    const icon = `/v1/assistants/tools/${id}/icon?v=${Date.now()}`
+    await this.prisma.toolDefinition.update({ where: { id }, data: { iconAssetId: asset.id, icon } })
+    if (tool.iconAssetId && tool.iconAssetId !== asset.id) await this.assets.removeAsAdmin(tool.iconAssetId).catch(() => undefined)
+    await this.audit(admin.id, request, 'tool.icon.upload', id, { assetId: asset.id })
+    return { assetId: asset.id, icon }
+  }
+
+  @Delete('tools/:id/icon')
+  async removeToolIcon(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Param('id') id: string) {
+    const tool = await this.prisma.toolDefinition.findUnique({ where: { id }, select: { iconAssetId: true } })
+    if (!tool) throw new NotFoundException('工具不存在')
+    await this.prisma.toolDefinition.update({ where: { id }, data: { iconAssetId: null, icon: 'wrench' } })
+    if (tool.iconAssetId) await this.assets.removeAsAdmin(tool.iconAssetId).catch(() => undefined)
+    await this.audit(admin.id, request, 'tool.icon.delete', id, { assetId: tool.iconAssetId || null })
+    return { removed: Boolean(tool.iconAssetId) }
+  }
+
   @Post('tools')
-  async createTool(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Body() body: ToolDto) { const secrets = this.cleanHeaders(body.secretHeaders); const row = await this.prisma.toolDefinition.create({ data: { key: body.key.trim(), name: body.name.trim(), description: body.description?.trim() || '', endpoint: body.endpoint?.trim() || '', httpMethod: body.httpMethod || 'POST', timeoutMs: body.timeoutMs ?? 45000, headers: this.cleanHeaders(body.headers) as Prisma.InputJsonValue, encryptedHeaders: Object.keys(secrets).length ? this.crypto.encrypt(JSON.stringify(secrets)) : '', secretHeaderHints: this.headerHints(secrets) as Prisma.InputJsonValue, inputSchema: body.inputSchema as Prisma.InputJsonValue, scopes: (body.scopes || []) as Prisma.InputJsonValue, enabled: body.enabled ?? false, requiresApproval: body.requiresApproval ?? true } }); await this.audit(admin.id, request, 'tool.create', row.id, { key: row.key }); return { ...await this.prisma.toolDefinition.findUniqueOrThrow({ where: { id: row.id }, include: { _count: { select: { assistants: true, calls: true } } } }), encryptedHeaders: undefined, hasSecretHeaders: Boolean(row.encryptedHeaders) } }
+  async createTool(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Body() body: ToolDto) { const secrets = this.cleanHeaders(body.secretHeaders); const row = await this.prisma.toolDefinition.create({ data: { key: body.key.trim(), name: body.name.trim(), description: body.description?.trim() || '', icon: body.icon?.trim() || 'wrench', kind: body.kind || 'BUILT_IN', authType: body.authType || 'NONE', documentationUrl: body.documentationUrl?.trim() || '', credentialFields: (body.credentialFields || []) as Prisma.InputJsonValue, endpoint: body.endpoint?.trim() || '', httpMethod: body.httpMethod || 'POST', timeoutMs: body.timeoutMs ?? 45000, headers: this.cleanHeaders(body.headers) as Prisma.InputJsonValue, encryptedHeaders: Object.keys(secrets).length ? this.crypto.encrypt(JSON.stringify(secrets)) : '', secretHeaderHints: this.headerHints(secrets) as Prisma.InputJsonValue, inputSchema: body.inputSchema as Prisma.InputJsonValue, scopes: (body.scopes || []) as Prisma.InputJsonValue, enabled: body.enabled ?? false, requiresApproval: body.requiresApproval ?? true } }); await this.audit(admin.id, request, 'tool.create', row.id, { key: row.key }); return { ...await this.prisma.toolDefinition.findUniqueOrThrow({ where: { id: row.id }, include: { _count: { select: { assistants: true, calls: true } } } }), encryptedHeaders: undefined, hasSecretHeaders: Boolean(row.encryptedHeaders) } }
 
   @Patch('tools/:id')
-  async updateTool(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Param('id') id: string, @Body() body: ToolDto) { const current = await this.prisma.toolDefinition.findUnique({ where: { id } }); if (!current) throw new NotFoundException('工具不存在'); const supplied = this.cleanHeaders(body.secretHeaders); const merged = body.clearSecretHeaders ? {} : body.secretHeaders === undefined ? null : { ...this.readHeaders(current.encryptedHeaders), ...supplied }; const row = await this.prisma.toolDefinition.update({ where: { id }, data: { key: body.key.trim(), name: body.name.trim(), description: body.description?.trim() || '', endpoint: body.endpoint?.trim() || '', httpMethod: body.httpMethod || 'POST', timeoutMs: body.timeoutMs ?? 45000, headers: this.cleanHeaders(body.headers) as Prisma.InputJsonValue, ...(merged ? { encryptedHeaders: Object.keys(merged).length ? this.crypto.encrypt(JSON.stringify(merged)) : '', secretHeaderHints: this.headerHints(merged) as Prisma.InputJsonValue } : {}), inputSchema: body.inputSchema as Prisma.InputJsonValue, scopes: (body.scopes || []) as Prisma.InputJsonValue, enabled: body.enabled ?? false, requiresApproval: body.requiresApproval ?? true } }); await this.audit(admin.id, request, 'tool.update', id, { key: row.key, enabled: row.enabled }); return { ...await this.prisma.toolDefinition.findUniqueOrThrow({ where: { id }, include: { _count: { select: { assistants: true, calls: true } } } }), encryptedHeaders: undefined, hasSecretHeaders: Boolean(row.encryptedHeaders) } }
+  async updateTool(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Param('id') id: string, @Body() body: ToolDto) { const current = await this.prisma.toolDefinition.findUnique({ where: { id } }); if (!current) throw new NotFoundException('工具不存在'); const supplied = this.cleanHeaders(body.secretHeaders); const merged = body.clearSecretHeaders ? {} : body.secretHeaders === undefined ? null : { ...this.readHeaders(current.encryptedHeaders), ...supplied }; const row = await this.prisma.toolDefinition.update({ where: { id }, data: { key: body.key.trim(), name: body.name.trim(), description: body.description?.trim() || '', icon: body.icon?.trim() || 'wrench', kind: body.kind || 'BUILT_IN', authType: body.authType || 'NONE', documentationUrl: body.documentationUrl?.trim() || '', credentialFields: (body.credentialFields || []) as Prisma.InputJsonValue, endpoint: body.endpoint?.trim() || '', httpMethod: body.httpMethod || 'POST', timeoutMs: body.timeoutMs ?? 45000, headers: this.cleanHeaders(body.headers) as Prisma.InputJsonValue, ...(merged ? { encryptedHeaders: Object.keys(merged).length ? this.crypto.encrypt(JSON.stringify(merged)) : '', secretHeaderHints: this.headerHints(merged) as Prisma.InputJsonValue } : {}), inputSchema: body.inputSchema as Prisma.InputJsonValue, scopes: (body.scopes || []) as Prisma.InputJsonValue, enabled: body.enabled ?? false, requiresApproval: body.requiresApproval ?? true } }); await this.audit(admin.id, request, 'tool.update', id, { key: row.key, enabled: row.enabled }); return { ...await this.prisma.toolDefinition.findUniqueOrThrow({ where: { id }, include: { _count: { select: { assistants: true, calls: true } } } }), encryptedHeaders: undefined, hasSecretHeaders: Boolean(row.encryptedHeaders) } }
 
   @Delete('tools/:id')
-  async deleteTool(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Param('id') id: string) { const row = await this.prisma.toolDefinition.delete({ where: { id } }); await this.audit(admin.id, request, 'tool.delete', id, { key: row.key }); return { deleted: true } }
+  async deleteTool(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Param('id') id: string) { const row = await this.prisma.toolDefinition.delete({ where: { id } }); if (row.iconAssetId) await this.assets.removeAsAdmin(row.iconAssetId).catch(() => undefined); await this.audit(admin.id, request, 'tool.delete', id, { key: row.key }); return { deleted: true } }
 
   @Get('tool-approval-requests')
   toolApprovalRequests() {

@@ -30,9 +30,11 @@
             ><p>{{ plan.description || xt('暂无套餐说明') }}</p
             ><dl
               ><div
-                ><dt>{{ xt('包含额度') }}</dt><dd>{{ plan.includedCredits }} {{ xt('点') }}</dd></div
+                ><dt>{{ xt('包含额度') }}</dt
+                ><dd>{{ plan.includedCredits }} {{ xt('点') }}</dd></div
               ><div
-                ><dt>{{ xt('并发任务') }}</dt><dd>{{ plan.concurrency }} {{ xt('路') }}</dd></div
+                ><dt>{{ xt('并发任务') }}</dt
+                ><dd>{{ plan.concurrency }} {{ xt('路') }}</dd></div
               ><div
                 ><dt>{{ xt('免费试用') }}</dt
                 ><dd>{{ plan.trialDays ? `${plan.trialDays} ${xt('天')}` : xt('关闭') }}</dd></div
@@ -49,7 +51,9 @@
               }}</ElTag
               ><div
                 ><ElButton link type="primary" @click="openEdit(plan)">{{ xt('编辑') }}</ElButton
-                ><ElButton link type="danger" @click="removePlan(plan)">{{ xt('删除') }}</ElButton></div
+                ><ElButton link type="danger" @click="removePlan(plan)">{{
+                  xt('删除')
+                }}</ElButton></div
               ></footer
             ></article
           ></div
@@ -83,7 +87,9 @@
               }}</template></ElTableColumn
             ><ElTableColumn :label="xt('操作')" width="100"
               ><template #default="{ row }"
-                ><ElButton link type="danger" @click="terminate(row)">{{ xt('终止') }}</ElButton></template
+                ><ElButton link type="danger" @click="terminate(row)">{{
+                  xt('终止')
+                }}</ElButton></template
               ></ElTableColumn
             ></ElTable
           ></ElCard
@@ -109,9 +115,11 @@
               ><template #default="{ row }">{{
                 money(row.amountCents, row.currency)
               }}</template></ElTableColumn
-            ><ElTableColumn :label="xt('支付方式')" width="110" prop="paymentMethod" /><ElTableColumn
-              :label="xt('状态')"
-              width="100"
+            ><ElTableColumn
+              :label="xt('支付方式')"
+              width="110"
+              prop="paymentMethod"
+            /><ElTableColumn :label="xt('状态')" width="100"
               ><template #default="{ row }"
                 ><ElTag :type="statusType(row.status)">{{
                   xt(statusText[row.status] || row.status)
@@ -120,8 +128,12 @@
             ><ElTableColumn :label="xt('操作')" width="160"
               ><template #default="{ row }"
                 ><template v-if="row.status === 'PENDING'"
-                  ><ElButton link type="primary" @click="markPaid(row)">{{ xt('确认到账') }}</ElButton
-                  ><ElButton link type="danger" @click="cancelOrder(row)">{{ xt('取消') }}</ElButton></template
+                  ><ElButton link type="primary" @click="markPaid(row)">{{
+                    xt('确认到账')
+                  }}</ElButton
+                  ><ElButton link type="danger" @click="cancelOrder(row)">{{
+                    xt('取消')
+                  }}</ElButton></template
                 ><span v-else class="note">{{ xt('无需处理') }}</span></template
               ></ElTableColumn
             ></ElTable
@@ -379,7 +391,9 @@
     }
   }
   async function removePlan(row: SubscriptionPlan) {
-    await ElMessageBox.confirm(`${xt('确认删除或下架')} "${row.name}"?`, xt('套餐操作'), { type: 'warning' })
+    await ElMessageBox.confirm(`${xt('确认删除或下架')} "${row.name}"?`, xt('套餐操作'), {
+      type: 'warning'
+    })
     await xinyueApi.deletePlan(row.id)
     await load()
   }
@@ -410,7 +424,9 @@
     await load()
   }
   async function cancelOrder(row: SubscriptionOrder) {
-    await ElMessageBox.confirm(`${xt('确认取消订单')} ${row.id}?`, xt('取消订单'), { type: 'warning' })
+    await ElMessageBox.confirm(`${xt('确认取消订单')} ${row.id}?`, xt('取消订单'), {
+      type: 'warning'
+    })
     await xinyueApi.cancelSubscriptionOrder(row.id)
     await load()
   }
@@ -424,91 +440,109 @@
     gap: 12px;
     height: 100%;
   }
+
   .page-title {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
+
   .page-title h1 {
     margin: 0 0 4px;
     font-size: 22px;
   }
+
   .page-title p,
   .note {
     display: block;
     margin: 3px 0 0;
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .business-tabs {
     display: flex;
     flex: 1;
-    min-height: 0;
     flex-direction: column;
+    min-height: 0;
   }
+
   .business-tabs :deep(.el-tabs__content),
   .business-tabs :deep(.el-tab-pane) {
     height: 100%;
     min-height: 0;
   }
+
   .plan-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
     gap: 14px;
   }
+
   .plan-grid article {
     display: grid;
     gap: 13px;
     padding: 18px;
+    background: var(--art-main-bg-color);
     border: 1px solid var(--art-gray-200);
     border-radius: 7px;
-    background: var(--art-main-bg-color);
   }
+
   .plan-grid article.recommended {
     border-color: var(--main-color);
   }
+
   .plan-grid article.disabled {
     opacity: 0.62;
   }
+
   .plan-grid header,
   .plan-grid footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
+
   .plan-grid header > div {
     display: grid;
     gap: 3px;
   }
+
   .plan-grid header small,
   .plan-grid h2 small,
   .plan-grid p,
   .plan-grid dt {
-    color: var(--art-gray-500);
     font-size: 12px;
+    color: var(--art-gray-500);
   }
+
   .plan-grid h2 {
     margin: 0;
     font-size: 24px;
   }
+
   .plan-grid p {
     min-height: 34px;
     margin: 0;
   }
+
   .plan-grid dl {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
     margin: 0;
   }
+
   .plan-grid dl div {
     display: grid;
     gap: 2px;
   }
+
   .plan-grid dd {
     margin: 0;
     font-weight: 600;
   }
+
   .wide {
     width: 100%;
   }

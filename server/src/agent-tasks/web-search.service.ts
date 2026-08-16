@@ -4,12 +4,23 @@ import { Prisma, WebSearchChannel, WebSearchProviderType } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { CredentialCryptoService } from '../providers/credential-crypto.service'
 
-type SearchInput = { query: string; maxResults?: number; topic?: string; includeDomains?: string[]; excludeDomains?: string[] }
+type SearchInput = { query: string; maxResults?: number; topic?: string; includeDomains?: string[]; excludeDomains?: string[]; timeoutMs?: number }
 type SearchResult = { title: string; url: string; content: string; publishedAt?: string; score?: number }
 type ChannelInput = {
   name: string; type: WebSearchProviderType; endpoint?: string; apiKey?: string; enabled?: boolean; priority?: number
   timeoutMs?: number; maxResults?: number; config?: Record<string, unknown>; clearApiKey?: boolean
 }
+type TgmengInput = {
+  license?: string
+  recommendationEnabled?: boolean
+  fallbackEnabled?: boolean
+  rootCategories?: string[]
+  recommendationLimit?: number
+  cacheMinutes?: number
+}
+
+const TGMENG_ENDPOINT = 'https://trendapi.tgmeng.com/api/skill/search'
+const TGMENG_CATEGORIES = ['新闻', '羊毛', '媒体', '电视', '生活', '社区', '财经', '股讯', '体育', '科技', '设计', '影音', '游戏', '健康', '教育', '期货', 'AI', '副业']
 
 const endpoints: Record<WebSearchProviderType, string> = {
   TAVILY: 'https://api.tavily.com/search',
@@ -21,17 +32,13 @@ const endpoints: Record<WebSearchProviderType, string> = {
 
 @Injectable()
 export class WebSearchService {
+  private tgmengCache: { expiresAt: number; value: Record<string, unknown> } | null = null
+
   constructor(private readonly prisma: PrismaService, private readonly config: ConfigService, private readonly crypto: CredentialCryptoService) {}
 
   async isAvailable() {
-    const configured = await this.prisma.webSearchChannel.count({
-      where: {
-        enabled: true,
-        endpoint: { not: '' },
-        OR: [{ type: WebSearchProviderType.CUSTOM }, { encryptedApiKey: { not: '' } }],
-      },
-    })
-    if (configured) return true
+    const channels = await this.prisma.webSearchChannel.findMany({ where: { enabled: true, endpoint: { not: '' } } })
+    if (channels.some((channel) => (!this.isTgmeng(channel) || this.record(channel.config).fallbackEnabled === true) && (channel.type === WebSearchProviderType.CUSTOM || Boolean(channel.encryptedApiKey)))) return true
     const endpoint = this.config.get<string>('WEB_SEARCH_ENDPOINT') || ''
     const apiKey = this.config.get<string>('WEB_SEARCH_API_KEY') || ''
     return Boolean(endpoint && apiKey)
@@ -44,26 +51,125 @@ export class WebSearchService {
     const channels = await this.prisma.webSearchChannel.findMany({
       where: { enabled: true }, orderBy: [{ priority: 'desc' }, { consecutiveFailures: 'asc' }, { createdAt: 'asc' }],
     })
-    const eligible = channels.filter((channel) => !channel.cooldownUntil || channel.cooldownUntil <= now)
+    const eligible = channels.filter((channel) => (!this.isTgmeng(channel) || this.record(channel.config).fallbackEnabled === true) && (!channel.cooldownUntil || channel.cooldownUntil <= now))
+    const primaryChannels = eligible.filter((channel) => !this.isTgmeng(channel))
+    const fallbackChannels = eligible.filter((channel) => this.isTgmeng(channel))
     const errors: string[] = channels.length && !eligible.length ? ['已配置渠道均处于故障冷却期'] : []
-    for (const channel of eligible) {
-      try {
-        const output = await this.execute(channel, input)
-        if (!output.results.length) throw new Error('搜索服务未返回可用结果')
-        await this.markSuccess(channel.id, output.results.length)
-        return { ...output, query, channel: { id: channel.id, name: channel.name, type: channel.type }, fallbackCount: errors.length, sources: output.results.map(({ title, url }) => ({ title, url })) }
-      } catch (reason) {
-        const message = reason instanceof Error ? reason.message : '搜索失败'
-        errors.push(`${channel.name}: ${message}`)
-        await this.markFailure(channel.id, message)
+    const tryChannels = async (candidates: WebSearchChannel[]) => {
+      for (const channel of candidates) {
+        try {
+          const output = await this.execute(channel, input)
+          if (!output.results.length) throw new Error('搜索服务未返回可用结果')
+          await this.markSuccess(channel.id, output.results.length)
+          return { ...output, query, channel: { id: channel.id, name: channel.name, type: channel.type }, fallbackCount: errors.length, sources: output.results.map(({ title, url }) => ({ title, url })) }
+        } catch (reason) {
+          const message = reason instanceof Error ? reason.message : '搜索失败'
+          errors.push(`${channel.name}: ${message}`)
+          await this.markFailure(channel.id, message)
+        }
       }
+      return null
     }
+    const primary = await tryChannels(primaryChannels)
+    if (primary) return primary
     const legacy = await this.legacy(input).catch((reason) => { errors.push(`环境变量渠道: ${reason instanceof Error ? reason.message : '搜索失败'}`); return null })
     if (legacy?.results.length) return { ...legacy, query, channel: { id: 'legacy', name: '环境变量渠道', type: 'CUSTOM' }, fallbackCount: errors.length, sources: legacy.results.map(({ title, url }) => ({ title, url })) }
+    const fallback = await tryChannels(fallbackChannels)
+    if (fallback) return fallback
     throw new Error(`所有联网搜索渠道均不可用${errors.length ? `：${errors.join('；')}` : '，请在管理端配置搜索渠道'}`)
   }
 
-  list() { return this.prisma.webSearchChannel.findMany({ orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }] }).then((rows) => rows.map((row) => this.publicChannel(row))) }
+  list() { return this.prisma.webSearchChannel.findMany({ orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }] }).then((rows) => rows.filter((row) => !this.isTgmeng(row)).map((row) => this.publicChannel(row))) }
+
+  async tgmengSettings() {
+    const row = await this.findTgmeng()
+    const config = this.record(row?.config)
+    return {
+      endpoint: TGMENG_ENDPOINT,
+      categories: TGMENG_CATEGORIES,
+      hasLicense: Boolean(row?.encryptedApiKey),
+      licenseHint: row?.apiKeyHint || '',
+      recommendationEnabled: config.recommendationEnabled === true,
+      fallbackEnabled: config.fallbackEnabled === true,
+      rootCategories: this.categories(config.rootCategories),
+      recommendationLimit: Math.min(12, Math.max(3, Number(config.recommendationLimit || 6))),
+      cacheMinutes: Math.min(1440, Math.max(1, Number(config.cacheMinutes || 10))),
+      lastHealthStatus: row?.lastHealthStatus || null,
+      lastHealthMessage: row?.lastHealthMessage || '',
+      lastSuccessAt: row?.lastSuccessAt || null,
+    }
+  }
+
+  async saveTgmeng(input: TgmengInput) {
+    const current = await this.findTgmeng()
+    const license = input.license?.trim() || ''
+    if (!current && !license) throw new BadRequestException('请填写糖果梦通用密钥')
+    const recommendationEnabled = input.recommendationEnabled ?? (this.record(current?.config).recommendationEnabled === true)
+    const fallbackEnabled = input.fallbackEnabled ?? (this.record(current?.config).fallbackEnabled === true)
+    const config = {
+      integration: 'tgmeng',
+      recommendationEnabled,
+      fallbackEnabled,
+      rootCategories: this.categories(input.rootCategories ?? this.record(current?.config).rootCategories),
+      recommendationLimit: Math.min(12, Math.max(3, Number(input.recommendationLimit ?? this.record(current?.config).recommendationLimit ?? 6))),
+      cacheMinutes: Math.min(1440, Math.max(1, Number(input.cacheMinutes ?? this.record(current?.config).cacheMinutes ?? 10))),
+    }
+    const encryptedApiKey = license ? this.crypto.encrypt(license) : current?.encryptedApiKey || ''
+    const data = {
+      name: '糖果梦热榜', type: WebSearchProviderType.CUSTOM, endpoint: TGMENG_ENDPOINT, encryptedApiKey,
+      apiKeyHint: license ? this.crypto.hint(license) : current?.apiKeyHint || '', enabled: recommendationEnabled || fallbackEnabled,
+      priority: -10000, timeoutMs: 15000, maxResults: config.recommendationLimit, config: config as Prisma.InputJsonValue,
+      lastHealthStatus: null, lastHealthMessage: '', cooldownUntil: null, consecutiveFailures: 0,
+    }
+    if (current) await this.prisma.webSearchChannel.update({ where: { id: current.id }, data })
+    else await this.prisma.webSearchChannel.create({ data })
+    this.tgmengCache = null
+    return this.tgmengSettings()
+  }
+
+  async checkTgmeng() {
+    const row = await this.findTgmeng()
+    if (!row?.encryptedApiKey) throw new BadRequestException('请先保存糖果梦通用密钥')
+    const started = Date.now()
+    try {
+      const output = await this.executeTgmeng(row, { query: '', maxResults: 3 })
+      if (!output.results.length) throw new Error('连接成功，但实时热榜没有返回内容')
+      await this.markSuccess(row.id, output.results.length, `连接正常，返回 ${output.results.length} 条热榜，${Date.now() - started}ms`)
+      return { healthy: true, latencyMs: Date.now() - started, resultCount: output.results.length }
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : '连接失败'
+      await this.markFailure(row.id, message)
+      throw new BadRequestException(message)
+    }
+  }
+
+  async recommendations(force = false) {
+    const row = await this.findTgmeng()
+    const config = this.record(row?.config)
+    if (!row?.enabled || !row.encryptedApiKey || config.recommendationEnabled !== true) return { enabled: false, items: [] }
+    if (!force && this.tgmengCache && this.tgmengCache.expiresAt > Date.now()) return this.tgmengCache.value
+    try {
+      const limit = Math.min(12, Math.max(3, Number(config.recommendationLimit || 6)))
+      const output = await this.executeTgmeng(row, { query: '', maxResults: limit, timeoutMs: 4000 })
+      const items = output.results.slice(0, limit).map((item) => ({
+        title: item.title,
+        prompt: `请联网搜索并介绍这个热点：${item.title}`,
+        targetUrl: '',
+        source: item.source || '',
+        category: item.rootCategory || '',
+        publishedAt: item.publishedAt || '',
+      }))
+      const value = { enabled: true, items, updatedAt: new Date().toISOString(), stale: false }
+      this.tgmengCache = { expiresAt: Date.now() + Math.min(1440, Math.max(1, Number(config.cacheMinutes || 10))) * 60_000, value }
+      await this.markSuccess(row.id, items.length)
+      return value
+    } catch {
+      if (this.tgmengCache) return { ...this.tgmengCache.value, stale: true }
+      const value = { enabled: true, items: [], stale: true }
+      this.tgmengCache = { expiresAt: Date.now() + 60_000, value }
+      return value
+    }
+  }
 
   async create(input: ChannelInput) {
     const row = await this.prisma.webSearchChannel.create({ data: this.channelData(input) })
@@ -105,12 +211,14 @@ export class WebSearchService {
   }
 
   async checkAll() {
-    const rows = await this.prisma.webSearchChannel.findMany({ where: { enabled: true }, select: { id: true, name: true } })
+    const channels = await this.prisma.webSearchChannel.findMany({ where: { enabled: true } })
+    const rows = channels.filter((row) => !this.isTgmeng(row)).map(({ id, name }) => ({ id, name }))
     const results = await Promise.all(rows.map(async (row) => { try { return { id: row.id, name: row.name, ...await this.check(row.id) } } catch (reason) { return { id: row.id, name: row.name, healthy: false, error: reason instanceof Error ? reason.message : '连接失败' } } }))
     return { checked: results.length, healthy: results.filter((item) => item.healthy).length, unhealthy: results.filter((item) => !item.healthy).length, results }
   }
 
   private async execute(channel: WebSearchChannel, input: SearchInput) {
+    if (this.isTgmeng(channel)) return this.executeTgmeng(channel, input)
     const apiKey = channel.encryptedApiKey ? this.crypto.decrypt(channel.encryptedApiKey) : ''
     if (!apiKey && channel.type !== 'CUSTOM') throw new Error('未配置 API 密钥')
     const maxResults = Math.min(20, Math.max(1, input.maxResults || channel.maxResults))
@@ -131,6 +239,42 @@ export class WebSearchService {
     let payload: Record<string, unknown>
     try { payload = JSON.parse(text) as Record<string, unknown> } catch { throw new Error('搜索服务返回的不是有效 JSON') }
     return this.normalize(channel.type, payload, maxResults, config)
+  }
+
+  private async executeTgmeng(channel: WebSearchChannel, input: SearchInput) {
+    const license = channel.encryptedApiKey ? this.crypto.decrypt(channel.encryptedApiKey) : ''
+    if (!license) throw new Error('未配置糖果梦通用密钥')
+    const config = this.record(channel.config)
+    const query = input.query.trim()
+    const maxResults = Math.min(20, Math.max(1, input.maxResults || channel.maxResults))
+    let response: Response
+    try {
+      response = await fetch(TGMENG_ENDPOINT, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(Math.min(60_000, Math.max(1000, input.timeoutMs ?? channel.timeoutMs))),
+        body: JSON.stringify({ license, keywords: query ? [query] : [], mode: 'REALTIME', rootCategories: query ? [] : this.categories(config.rootCategories), limit: maxResults, offset: 0, distinct: true }),
+      })
+    } catch (reason) {
+      throw new Error(`无法连接糖果梦接口：${this.networkError(reason)}`)
+    }
+    const text = await response.text()
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${text.slice(0, 300)}`)
+    let payload: Record<string, unknown>
+    try { payload = JSON.parse(text) as Record<string, unknown> } catch { throw new Error('糖果梦返回的不是有效 JSON') }
+    if (Number(payload.code) !== 200) throw new Error(String(payload.message || '糖果梦业务请求失败').slice(0, 300))
+    const data = this.record(payload.data as Prisma.JsonValue)
+    const raw = Array.isArray(data.items) ? data.items : []
+    const results = raw.slice(0, maxResults).map((item) => {
+      const row = this.record(item as Prisma.JsonValue)
+      const source = String(row.source || '')
+      const category = String(row.category || '')
+      const rootCategory = String(row.rootCategory || '')
+      return {
+        title: String(row.title || '').trim(), url: this.normalizeWebUrl(String(row.url || '')),
+        content: [source ? `来源：${source}` : '', rootCategory || category ? `分类：${rootCategory || category}` : '', Number.isFinite(Number(row.rank)) ? `榜单排名：${Number(row.rank)}` : ''].filter(Boolean).join('；'),
+        publishedAt: row.publishedAt ? String(row.publishedAt) : undefined, source, category, rootCategory,
+      }
+    }).filter((item) => Boolean(item.title) && (!query || Boolean(item.url)))
+    return { results }
   }
 
   private request(type: WebSearchProviderType, apiKey: string, input: SearchInput, maxResults: number, config: Record<string, unknown>): RequestInit {
@@ -178,6 +322,9 @@ export class WebSearchService {
   private async markFailure(id: string, message: string) { const channel = await this.prisma.webSearchChannel.findUnique({ where: { id }, select: { consecutiveFailures: true } }); if (!channel) return; const failures = channel.consecutiveFailures + 1; return this.prisma.webSearchChannel.update({ where: { id }, data: { totalRequests: { increment: 1 }, totalFailures: { increment: 1 }, consecutiveFailures: failures, lastFailureAt: new Date(), lastHealthAt: new Date(), lastHealthStatus: 'unhealthy', lastHealthMessage: message.slice(0, 500), cooldownUntil: new Date(Date.now() + Math.min(300, 15 * 2 ** Math.min(4, failures - 1)) * 1000) } }) }
   private channelData(input: ChannelInput): Prisma.WebSearchChannelCreateInput { const apiKey = input.apiKey?.trim() || ''; const endpoint = (input.endpoint || endpoints[input.type]).trim(); if (!endpoint) throw new BadRequestException('请填写搜索地址'); return { name: input.name.trim(), type: input.type, endpoint, encryptedApiKey: apiKey ? this.crypto.encrypt(apiKey) : '', apiKeyHint: apiKey ? this.crypto.hint(apiKey) : '', enabled: input.enabled ?? false, priority: input.priority ?? 0, timeoutMs: input.timeoutMs ?? 30000, maxResults: input.maxResults ?? 8, config: (input.config || {}) as Prisma.InputJsonValue } }
   private publicChannel<T extends WebSearchChannel>(row: T) { return { ...row, encryptedApiKey: undefined, hasApiKey: Boolean(row.encryptedApiKey) } }
+  private findTgmeng() { return this.prisma.webSearchChannel.findMany({ where: { type: WebSearchProviderType.CUSTOM } }).then((rows) => rows.find((row) => this.isTgmeng(row)) || null) }
+  private isTgmeng(channel: Pick<WebSearchChannel, 'config'>) { return this.record(channel.config).integration === 'tgmeng' }
+  private categories(value: unknown) { return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === 'string' && TGMENG_CATEGORIES.includes(item)))].slice(0, TGMENG_CATEGORIES.length) : [] }
   private record(value: Prisma.JsonValue | null | undefined): Record<string, any> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {} }
   private atPath(value: unknown, path: string): unknown {
     return path.split('.').filter(Boolean).reduce<unknown>((current, key) => current && typeof current === 'object' ? (current as Record<string, unknown>)[key] : undefined, value)
@@ -190,5 +337,15 @@ export class WebSearchService {
       url.password = ''
       return url.toString()
     } catch { return '' }
+  }
+  private networkError(reason: unknown) {
+    const error = reason instanceof Error ? reason : null
+    const cause = error?.cause && typeof error.cause === 'object' ? error.cause as { code?: string; message?: string } : null
+    const code = cause?.code || ''
+    if (error?.name === 'TimeoutError' || error?.name === 'AbortError' || code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT') return '连接超时，请检查部署服务器的 DNS、出口网络或代理设置'
+    if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'DNS 解析失败，请检查部署服务器的 DNS 设置'
+    if (code === 'ECONNRESET') return '连接被对方或出口网络重置'
+    if (code === 'ECONNREFUSED') return '目标服务器拒绝连接'
+    return [cause?.message, error?.message].find((message) => message && message !== 'fetch failed') || '网络请求失败'
   }
 }

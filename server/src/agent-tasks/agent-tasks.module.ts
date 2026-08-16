@@ -10,13 +10,14 @@ import { AgentSchedulesService } from './agent-schedules.service'
 import { AdminAgentTasksController } from './admin-agent-tasks.controller'
 import { AdminGuard } from '../admin/admin.guard'
 import { ProvidersModule } from '../providers/providers.module'
-import { WebSearchService } from './web-search.service'
 import { AdminWebSearchController } from './admin-web-search.controller'
+import { WebSearchModule } from './web-search.module'
+import { PublicRecommendationsController } from './public-recommendations.controller'
 
 @Module({
-  imports: [BullModule.registerQueue({ name: 'agent-task' }), GenerationsModule, ProvidersModule],
-  controllers: [AgentTasksController, AdminAgentTasksController, AdminWebSearchController],
-  providers: [AgentTasksService, AgentSchedulesService, AgentTasksProcessor, AgentModelService, AgentToolsService, WebSearchService, AdminGuard],
-  exports: [AgentToolsService, WebSearchService],
+  imports: [BullModule.registerQueue({ name: 'agent-task' }), GenerationsModule, ProvidersModule, WebSearchModule],
+  controllers: [AgentTasksController, AdminAgentTasksController, AdminWebSearchController, PublicRecommendationsController],
+  providers: [AgentTasksService, AgentSchedulesService, AgentTasksProcessor, AgentModelService, AgentToolsService, AdminGuard],
+  exports: [AgentToolsService],
 })
 export class AgentTasksModule {}

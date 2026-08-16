@@ -94,28 +94,25 @@
     })
   })
 
-  const containerStyle = computed(
-    (): CSSProperties =>
-      isFullPage.value
-        ? {
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100vh',
-            zIndex: 2500,
-            background: 'var(--default-bg-color)'
-          }
-        : {
-            maxWidth: containerWidth.value
-          }
+  const containerStyle = computed((): CSSProperties =>
+    isFullPage.value
+      ? {
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100vh',
+          zIndex: 2500,
+          background: 'var(--default-bg-color)'
+        }
+      : {
+          maxWidth: containerWidth.value
+        }
   )
 
-  const contentStyle = computed(
-    (): CSSProperties => ({
-      minHeight: containerMinHeight.value
-    })
-  )
+  const contentStyle = computed((): CSSProperties => ({
+    minHeight: containerMinHeight.value
+  }))
 
   const reload = () => {
     isRefresh.value = false

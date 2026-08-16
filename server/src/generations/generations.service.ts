@@ -25,7 +25,7 @@ export class GenerationsService {
     const moderationSource = input.kind === 'CHAT' ? 'CHAT' : input.kind === 'COMMERCE' ? 'COMMERCE' : 'IMAGE'
     await this.moderation.inspect(userId, moderationSource, input.prompt, { conversationId: input.conversationId || null, projectId: input.projectId || null, kind: input.kind })
     const [project, conversation] = await Promise.all([
-      input.projectId ? this.prisma.project.findFirst({ where: { id: input.projectId, OR: [{ userId }, { members: { some: { userId } } }] }, select: { id: true, instructions: true, activeSkillVersion: { select: { id: true, version: true, name: true, content: true, enabled: true } } } }) : null,
+      input.projectId ? this.prisma.project.findFirst({ where: { id: input.projectId, archivedAt: null, OR: [{ userId }, { members: { some: { userId } } }] }, select: { id: true, instructions: true, activeSkillVersion: { select: { id: true, version: true, name: true, content: true, enabled: true } } } }) : null,
       input.conversationId ? this.prisma.conversation.findFirst({ where: { id: input.conversationId, userId }, select: { id: true, projectId: true } }) : null,
     ])
     if (input.projectId && !project) throw new NotFoundException('项目不存在')
@@ -127,8 +127,8 @@ export class GenerationsService {
   async get(userId: string, id: string) {
     const job = await this.prisma.generationJob.findFirst({ where: { id, userId }, include: { outputs: { include: { asset: true }, orderBy: { position: 'asc' } } } })
     if (!job) throw new NotFoundException('任务不存在')
-    const streamMessage = job.kind === 'CHAT' && job.conversationId ? await this.prisma.message.findFirst({ where: { conversationId: job.conversationId, metadata: { path: ['jobId'], equals: job.id } }, select: { id: true, content: true, model: true } }) : null
-    return { ...job, errorMessage: publicGenerationError(job.kind, job.status, job.errorMessage), stream: streamMessage ? { messageId: streamMessage.id, content: streamMessage.content, model: streamMessage.model } : null, outputs: job.outputs.map((output) => ({ ...output, asset: { ...output.asset, size: Number(output.asset.size), contentUrl: `/v1/assets/${output.asset.id}/content` } })) }
+    const streamMessage = job.kind === 'CHAT' && job.conversationId ? await this.prisma.message.findFirst({ where: { conversationId: job.conversationId, deletedAt: null, metadata: { path: ['jobId'], equals: job.id } }, select: { id: true, content: true, model: true, metadata: true } }) : null
+    return { ...job, errorMessage: publicGenerationError(job.kind, job.status, job.errorMessage), stream: streamMessage ? { messageId: streamMessage.id, content: streamMessage.content, model: streamMessage.model, metadata: streamMessage.metadata } : null, outputs: job.outputs.map((output) => ({ ...output, asset: { ...output.asset, size: Number(output.asset.size), contentUrl: `/v1/assets/${output.asset.id}/content` } })) }
   }
   async list(userId: string, kind?: JobKind) {
     const jobs = await this.prisma.generationJob.findMany({ where: { userId, kind }, orderBy: { createdAt: 'desc' }, take: 100, include: { outputs: { include: { asset: true }, orderBy: { position: 'asc' } } } })
