@@ -12,7 +12,7 @@ const apiProxy = {
 export default defineConfig({
   plugins: [vue()],
   server: {
-    port: 5173,
+    port: 6001,
     proxy: {
       '/v1': apiProxy,
     },

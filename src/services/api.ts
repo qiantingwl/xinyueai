@@ -3,7 +3,9 @@ export class ApiError extends Error {
 }
 
 const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '') || ''
-const localFrontendPorts = new Set(['4173', '5173', '5174', '5175'])
+// The Vite dev server and the production Nginx entry both proxy /v1 same-origin.
+// Keep this empty so a host-facing port never bypasses that proxy to an internal API port.
+const localFrontendPorts = new Set<string>()
 
 export type ApiLifecycleDetail = {
   id: string

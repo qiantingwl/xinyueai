@@ -78,7 +78,7 @@ export class TeamService {
       select: { id: true, email: true, role: true, status: true, expiresAt: true },
     })
     const acceptPath = `/chat?teamInviteToken=${encodeURIComponent(token)}&settings=teams`
-    const acceptUrl = new URL(acceptPath, this.config.get<string>('WEB_ORIGIN') || 'http://localhost:5173').toString()
+    const acceptUrl = new URL(acceptPath, this.config.get<string>('WEB_ORIGIN') || 'http://localhost:6001').toString()
     if (existingUser) await this.prisma.notification.create({ data: { userId: existingUser.id, type: NotificationType.SYSTEM, title: `团队邀请：${team.name}`, body: `你被邀请以${role === 'ADMIN' ? '管理员' : '成员'}身份加入团队`, metadata: { teamId, invitationId: invitation.id, acceptPath } as Prisma.InputJsonValue } })
     const inviter = await this.prisma.user.findUnique({ where: { id: userId }, select: { displayName: true } })
     const emailSent = await this.email.sendTeamInvitation(email, team.name, inviter?.displayName || '团队管理员', acceptUrl).catch(() => false)

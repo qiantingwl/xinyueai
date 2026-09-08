@@ -14,6 +14,7 @@ interface ChatSubmissionState {
   activeCapability: Ref<ChatCapability>
   activeCapabilityModel: Readonly<Ref<string>>
   capabilityModelAvailable: Readonly<Ref<boolean>>
+  activeCapabilityModelUnavailableMessage: Readonly<Ref<string>>
   model: Readonly<Ref<string>>
   assistantId: Readonly<Ref<string>>
   pluginId: Readonly<Ref<string>>
@@ -81,7 +82,7 @@ export function useChatSubmission(state: ChatSubmissionState, actions: ChatSubmi
     await actions.loadModels()
     state.activeCapability.value = inferChatSubmissionCapability(content, state.activeCapability.value)
     if (!state.capabilityModelAvailable.value) {
-      actions.setError(unavailableChatCapabilityMessage(state.activeCapability.value))
+      actions.setError(state.activeCapabilityModelUnavailableMessage.value || unavailableChatCapabilityMessage(state.activeCapability.value))
       return
     }
 

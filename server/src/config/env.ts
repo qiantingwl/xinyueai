@@ -24,7 +24,7 @@ const optInBoolean = z.preprocess((value) => isOptInEnabled(value), z.boolean())
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3100),
-  WEB_ORIGIN: z.string().default('http://localhost:5173'),
+  WEB_ORIGIN: z.string().default('http://localhost:6001'),
   PUBLIC_BASE_URL: optionalUrl,
   COOKIE_SECURE: optionalBoolean,
   TRUST_PROXY: z.string().optional(),

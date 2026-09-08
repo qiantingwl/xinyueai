@@ -8,7 +8,7 @@ const outDir = 'tests/e2e/.ui-audit-admin'
 fs.rmSync(outDir, { recursive: true, force: true })
 fs.mkdirSync(outDir, { recursive: true })
 
-const adminUrl = 'http://localhost:5174/admin/'
+const adminUrl = 'http://localhost:6001/admin/'
 const { email: adminEmail, password: adminPassword } = getE2EAdminCredentials()
 
 const routes = [

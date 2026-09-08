@@ -55,7 +55,7 @@ Xinyue AI 将 AI 对话、模型接入、Provider 路由、无限画布、图片
 curl -fsSL https://raw.githubusercontent.com/qiantingwl/xinyueai/main/install.sh | bash
 ```
 
-安装脚本会检查 Docker、生成运行密钥和一次性安装令牌，并启动 PostgreSQL、Redis、Backend 和 Frontend。Frontend/Nginx 是唯一对外 Web 入口，默认监听所有主机地址；安装完成后直接打开终端输出的 `http://服务器IP:实际端口/`。如果 `8080` 已被占用，首次安装会从 `8081` 起自动选择可用端口并持久化到 `.env.production`。首次访问 `http://服务器IP:实际端口/install`，使用服务器本机 `.env.production` 中的安装令牌创建管理员；令牌不会打印到终端，初始化完成后入口会自动关闭。
+安装脚本会检查 Docker、生成运行密钥和一次性安装令牌，并启动 PostgreSQL、Redis、Backend 和 Frontend。Frontend/Nginx 是唯一对外 Web 入口，默认监听所有主机地址；安装完成后直接打开终端输出的 `http://服务器IP:实际端口/`。默认端口固定为 `6001`；如果端口已被占用，安装会停止并提示先释放该端口，不会自动切换到其他端口。首次访问 `http://服务器IP:6001/install`，使用服务器本机 `.env.production` 中的安装令牌创建管理员；令牌不会打印到终端，初始化完成后入口会自动关闭。
 
 一键部署不需要手工配置 Nginx、Cloudflare、数据库或 Redis。高级部署者可在 `.env.production` 设置 `XINYUE_HTTP_BIND=127.0.0.1` 和 `XINYUE_HTTP_PORT`，再用自己的域名反向代理到该本机端口。
 
@@ -93,7 +93,7 @@ docker compose up -d
 npm run setup:dev
 ```
 
-在三个终端分别启动用户端、API 和管理端：
+本地开发时启动用户端和 API；管理端可通过同一 Web 入口的 `/admin/` 访问：
 
 ```bash
 npm run dev
@@ -101,9 +101,9 @@ npm run server:dev
 npm run admin:dev
 ```
 
-- 用户端：`http://localhost:5173`
-- 管理端：`http://localhost:5174/admin/`
-- API：`http://localhost:3100/v1`
+- 用户端：`http://localhost:6001`
+- 管理端：`http://localhost:6001/admin/`
+- API：`http://localhost:6001/v1`
 
 初始化脚本只准备数据库和安全配置，不会创建固定管理员。首次打开 `/install`，使用 `server/.env` 中自动生成的 `INSTALL_TOKEN` 创建管理员。
 
@@ -120,4 +120,3 @@ npm run admin:dev
 
 ## 🤝 贡献
 欢迎提交 Bug 修复、文档改进、UI 优化、Provider 适配和测试补充。请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，并通过分支和 Pull Request 参与开发。
-

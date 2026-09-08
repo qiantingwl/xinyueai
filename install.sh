@@ -23,9 +23,6 @@ fi
 [[ -f .env.production.example ]] || die '缺少 .env.production.example。'
 if [[ ! -f .env.production ]]; then
   cp .env.production.example .env.production
-  env_created=true
-else
-  env_created=false
 fi
 
 random_secret() {
@@ -69,10 +66,8 @@ if [[ -n "${XINYUE_HTTP_PORT:-}" ]]; then
   # An explicit shell override must also be persisted so Compose and the
   # address printed below use the same host port.
   set_env XINYUE_HTTP_PORT "$XINYUE_HTTP_PORT"
-  http_port_explicit=true
 else
-  set_env_if_missing XINYUE_HTTP_PORT 8080
-  http_port_explicit=false
+  set_env_if_missing XINYUE_HTTP_PORT 6001
 fi
 
 port_in_use() {
@@ -105,16 +100,7 @@ for secret_key in POSTGRES_PASSWORD SESSION_SECRET CREDENTIAL_ENCRYPTION_KEY INS
 done
 frontend_running=$(docker compose --env-file .env.production -f docker-compose.prod.yml ps --status running --services 2>/dev/null | grep -x 'frontend' || true)
 if [[ -z "$frontend_running" ]] && port_in_use "$http_port"; then
-  if [[ "$http_port_explicit" == true || "$env_created" == false ]]; then
-    die "Web 端口 ${http_port} 已被占用；请显式设置一个可用的 XINYUE_HTTP_PORT 后重试。"
-  fi
-  original_port="$http_port"
-  while port_in_use "$http_port"; do
-    ((http_port += 1))
-    (( http_port <= 65535 )) || die '未找到可用的 Web 端口。'
-  done
-  set_env XINYUE_HTTP_PORT "$http_port"
-  printf '端口 %s 已被占用，已自动改用 %s。\n' "$original_port" "$http_port"
+  die "Web 端口 ${http_port} 已被占用；请先释放该端口后重试。安装不会自动切换到其他端口。"
 fi
 
 detect_access_host() {

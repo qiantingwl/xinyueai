@@ -12,6 +12,7 @@ export type CatalogModel = {
   badge?: string
   source?: 'PLATFORM' | 'USER'
   availability?: 'AVAILABLE' | 'DEGRADED' | 'UNCONFIGURED'
+  availabilityReason?: 'NO_CHANNEL' | 'API_KEY_MISSING' | 'CHANNEL_COOLDOWN' | 'HEALTH_CHECK_REQUIRED'
   healthyRouteCount?: number
   routeCount?: number
   vendor?: { id?: string; key?: string; name: string } | null
@@ -68,6 +69,23 @@ export function isAgentModelEligible(model: CatalogModel) {
   return model.options?.agentCapabilities?.eligible !== false && (!contextWindow || contextWindow >= 8192)
 }
 
+export function isCatalogModelAvailable(model?: CatalogModel) {
+  if (!model || model.availability === 'UNCONFIGURED') return false
+  return model.routeCount === undefined || model.routeCount > 0
+}
+
+export function catalogModelUnavailableMessage(model?: CatalogModel) {
+  if (!model) return '暂无可用模型'
+  if (model.availabilityReason === 'API_KEY_MISSING') return `${model.displayName} 未配置渠道 API key`
+  if (model.availabilityReason === 'NO_CHANNEL') return `${model.displayName} 未绑定渠道`
+  if (model.availabilityReason === 'CHANNEL_COOLDOWN') return `${model.displayName} 渠道暂时冷却中`
+  if (model.availabilityReason === 'HEALTH_CHECK_REQUIRED') return `${model.displayName} 渠道待检测`
+  if (model.availability === 'UNCONFIGURED' || model.routeCount === 0) {
+    return `${model.displayName} 未配置可用渠道`
+  }
+  return '暂无可用模型'
+}
+
 export function agentModelDescription(model: CatalogModel) {
   const capability = model.options?.agentCapabilities
   if (!isAgentModelEligible(model)) return capability?.reason || '未开放 Agent 任务'
@@ -85,8 +103,11 @@ export function findCatalogModel(models: CatalogModel[], value: string, capabili
 }
 
 export function defaultCatalogModel(models: CatalogModel[], capability: ModelCapability) {
-  return models.find((item) => item.capability === capability && item.isDefault)
-    || models.find((item) => item.capability === capability)
+  const candidates = models.filter((item) => item.capability === capability)
+  return candidates.find((item) => item.isDefault && isCatalogModelAvailable(item))
+    || candidates.find(isCatalogModelAvailable)
+    || candidates.find((item) => item.isDefault)
+    || candidates[0]
 }
 
 export function catalogModelKey(models: CatalogModel[], value: string, capability?: ModelCapability) {

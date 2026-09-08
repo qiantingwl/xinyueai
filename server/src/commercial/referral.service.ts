@@ -32,7 +32,7 @@ export class ReferralService implements OnModuleInit {
       this.prisma.invitation.count({ where: { inviterId: userId, status: { in: [ReferralStatus.COOLING, ReferralStatus.APPROVED] } } }),
       this.prisma.invitation.count({ where: { inviterId: userId, status: ReferralStatus.REVIEW_REQUIRED } }),
     ])
-    const origin = process.env.WEB_ORIGIN?.split(',')[0]?.trim().replace(/\/$/, '') || 'http://localhost:5173'
+    const origin = process.env.WEB_ORIGIN?.split(',')[0]?.trim().replace(/\/$/, '') || 'http://localhost:6001'
     return { code: code.code, url: `${origin}/login?register=1&invite=${code.code}`, invited, reward: rewarded._sum.reward || 0, pending, reviewRequired }
   }
 

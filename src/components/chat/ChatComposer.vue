@@ -14,7 +14,7 @@
           <textarea ref="composerInput" v-model="draft" rows="1" aria-label="消息" :placeholder="chatComposerPlaceholder" @focus="collapseWorkspacePopovers" @input="resizeComposer" @keydown="handleComposerKeydown" />
           <nav v-if="showChatComposerShortcutBar" class="chat-home-shortcuts chat-home-shortcuts--in-composer" :aria-label="`${chatUiLabel}快捷入口`" @wheel="scrollShortcutRail">
             <button v-if="chatComposerControls.modeEnabled" class="chat-home-mode-trigger" :class="{ 'is-open': chatModeMenuOpen }" type="button" :aria-expanded="chatModeMenuOpen" @click="toggleChatModeMenu"><component :is="activeChatModeIcon" :size="16" /><span>{{ activeChatMode }}</span><small v-if="chatUiPreset === 'doubao' && activeChatMode === '快速'">新</small><ChevronDown :size="12" /></button>
-            <button v-if="chatUiPreset === 'doubao' && chatComposerControls.modelSelectorEnabled" ref="modelAnchor" class="chat-home-inline-model" :class="{ 'is-open': modelOpen }" type="button" :aria-expanded="modelOpen" :aria-label="`选择模型，当前为${activeCapabilityModelLabel}`" :disabled="!capabilityModels.length" @click="toggleModelMenu"><ModelBadge v-if="activeCapabilityModelOption" :model="activeCapabilityModelOption" size="sm" /><span v-else aria-hidden="true">#</span><strong>{{ activeCapabilityModelLabel }}</strong><ChevronDown :size="12" /></button>
+            <button v-if="chatUiPreset === 'doubao' && chatComposerControls.modelSelectorEnabled" ref="modelAnchor" class="chat-home-inline-model" :class="{ 'is-open': modelOpen }" type="button" :aria-expanded="modelOpen" :aria-label="`选择模型，当前为${activeCapabilityModelLabel}`" @click="toggleModelMenu"><ModelBadge v-if="activeCapabilityModelOption" :model="activeCapabilityModelOption" size="sm" /><span v-else aria-hidden="true">#</span><strong>{{ activeCapabilityModelLabel }}</strong><ChevronDown :size="12" /></button>
             <button v-if="chatComposerControls.webSearchEnabled" class="composer-web-search" :class="{ 'is-active': webSearchEnabled }" type="button" :aria-pressed="webSearchEnabled" :title="webSearchEnabled ? '关闭联网搜索' : '开启联网搜索'" @click="toggleWebSearch"><Globe2 :size="16" /><span>联网</span></button>
             <button v-for="item in visibleChatShortcuts" :key="item.id" type="button" @click="executeChatQuickAction(item)">
               <component :is="quickActionIcon(item.icon)" :size="16" /><span>{{ item.label }}</span>
@@ -36,7 +36,7 @@
             </Teleport>
           </div>
           <button class="composer-voice" :class="{ 'is-listening': voiceListening && voiceTarget === 'chat' }" type="button" :aria-label="voiceListening && voiceTarget === 'chat' ? '停止语音输入' : '开始语音输入'" :aria-pressed="voiceListening && voiceTarget === 'chat'" :title="voiceListening && voiceTarget === 'chat' ? '停止语音输入' : '语音输入'" @click="toggleVoice('chat')"><Mic :size="17" /></button>
-          <button class="chat-composer-submit composer-send" :class="{ 'is-voice-entry': showChatVoiceEntry, 'is-generating': store.isGenerating }" :type="store.isGenerating || showChatVoiceEntry ? 'button' : 'submit'" :aria-label="store.isGenerating ? '停止生成' : showChatVoiceEntry ? '开始语音输入' : capabilityModelAvailable ? '发送' : '暂无可用模型'" :title="store.isGenerating ? '停止生成' : showChatVoiceEntry ? '开始语音输入' : capabilityModelAvailable ? '发送，Enter' : '暂无可用模型，请联系管理员或添加个人 API 密钥'" :disabled="!store.isGenerating && !showChatVoiceEntry && (!draft.trim() && !attachments.length || !capabilityModelAvailable)" @click="handleChatSubmitAction"><Square v-if="store.isGenerating" :size="14" fill="currentColor" /><AudioLines v-else-if="showChatVoiceEntry" :size="18" /><ArrowUp v-else :size="20" /></button>
+          <button class="chat-composer-submit composer-send" :class="{ 'is-voice-entry': showChatVoiceEntry, 'is-generating': store.isGenerating }" :type="store.isGenerating || showChatVoiceEntry ? 'button' : 'submit'" :aria-label="store.isGenerating ? '停止生成' : showChatVoiceEntry ? '开始语音输入' : capabilityModelAvailable ? '发送' : capabilityModelUnavailableMessage" :title="store.isGenerating ? '停止生成' : showChatVoiceEntry ? '开始语音输入' : capabilityModelAvailable ? '发送，Enter' : capabilityModelUnavailableMessage" :disabled="!store.isGenerating && !showChatVoiceEntry && (!draft.trim() && !attachments.length || !capabilityModelAvailable)" @click="handleChatSubmitAction"><Square v-if="store.isGenerating" :size="14" fill="currentColor" /><AudioLines v-else-if="showChatVoiceEntry" :size="18" /><ArrowUp v-else :size="20" /></button>
           <Transition name="composer-menu"><div v-if="chatModeMenuOpen" class="chat-home-floating-menu chat-home-mode-menu" role="menu"><button v-for="option in chatModeOptions" :key="option.label" type="button" role="menuitemradio" :aria-checked="activeChatMode === option.label" @click="selectChatMode(option.label)"><component :is="option.icon" :size="17" /><span><strong>{{ option.label }}</strong><small v-if="option.note">{{ option.note }}</small></span><em v-if="option.badge">{{ option.badge }}</em><Check v-if="activeChatMode === option.label" :size="15" /></button></div></Transition>
           <Transition name="composer-menu">
             <div v-if="chatMoreMenuOpen" class="chat-home-floating-menu chat-home-more-menu" role="menu">
@@ -111,6 +111,7 @@ const props = defineProps<{
   activeCapabilityModel: string
   activeCapabilityModelLabel: string
   capabilityModelAvailable: boolean
+  capabilityModelUnavailableMessage: string
   selectCapabilityModel: (value: string) => void
   activeChatModelLabel: string
   chatModelAvailable: boolean
@@ -142,10 +143,10 @@ const auth = useAuthStore()
 const catalog = useCatalogStore()
 const activeCapabilityModelOption = computed(() => findCatalogModel(props.capabilityModels, props.activeCapabilityModel, activeCapability.value === 'AGENT' ? 'CHAT' : activeCapability.value as 'CHAT' | 'IMAGE' | 'VIDEO'))
 const capabilityOptions = [
-  { key: 'CHAT' as const, label: '对话', icon: Sparkles },
-  { key: 'IMAGE' as const, label: '图片', icon: ImageIcon },
-  { key: 'VIDEO' as const, label: '视频', icon: Video },
-  { key: 'AGENT' as const, label: 'Agent', icon: WandSparkles },
+  { key: 'CHAT' as const, label: '对话模型', icon: Sparkles },
+  { key: 'IMAGE' as const, label: '图片模型', icon: ImageIcon },
+  { key: 'VIDEO' as const, label: '视频模型', icon: Video },
+  { key: 'AGENT' as const, label: 'Agent模型', icon: WandSparkles },
 ]
 const chatUiPreset = computed<ChatUiPreset>(() => props.chatUiPreset)
 const chatUiLabel = computed(() => ({ gpt: 'GPT', doubao: '豆包', qianwen: '千问', kimi: 'Kimi' })[chatUiPreset.value])

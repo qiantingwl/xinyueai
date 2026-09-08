@@ -103,7 +103,7 @@ export class AuthController {
     const redirect = this.safeRedirect(request.cookies?.xinyue_oauth_redirect)
     response.clearCookie('xinyue_oauth_redirect', { path: '/v1/auth/oauth/linuxdo' })
     response.clearCookie('xinyue_referral_code', { path: '/v1/auth/oauth/linuxdo' })
-    const frontendOrigin = (this.config.get<string>('WEB_ORIGIN') || 'http://localhost:5173').split(',')[0].trim().replace(/\/$/, '')
+    const frontendOrigin = (this.config.get<string>('WEB_ORIGIN') || 'http://localhost:6001').split(',')[0].trim().replace(/\/$/, '')
     if ('bindingRequired' in result) return response.redirect(`${frontendOrigin}/login?bind=${encodeURIComponent(result.provider)}&ticket=${encodeURIComponent(result.ticket)}&redirect=${encodeURIComponent(redirect)}`)
     this.setSessionCookie(response, result)
     response.redirect(`${frontendOrigin}${redirect}`)

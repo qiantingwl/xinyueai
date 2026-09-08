@@ -11,7 +11,7 @@ await mkdir(outputDir, { recursive: true })
 
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext({
-  baseURL: 'http://localhost:5173',
+  baseURL: 'http://localhost:6001',
   colorScheme: 'light',
   locale: 'zh-CN',
   viewport: { width: 1600, height: 1000 },
@@ -52,7 +52,7 @@ try {
 
   await page.unrouteAll({ behavior: 'wait' })
   await context.clearCookies()
-  await page.goto('http://localhost:5174/admin/', { waitUntil: 'networkidle' })
+  await page.goto('http://localhost:6001/admin/', { waitUntil: 'networkidle' })
   const emailInput = page.getByPlaceholder('管理员邮箱')
   if (await emailInput.isVisible()) {
     await emailInput.fill(adminEmail)

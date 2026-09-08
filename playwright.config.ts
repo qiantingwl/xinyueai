@@ -1,13 +1,13 @@
 import { defineConfig } from '@playwright/test'
 
-const baseURL = (process.env.E2E_BASE_URL || 'http://localhost:5173').replace(/\/+$/, '')
-const apiOrigin = (process.env.E2E_API_ORIGIN || 'http://localhost:3100').replace(/\/+$/, '')
+const baseURL = (process.env.E2E_BASE_URL || 'http://localhost:6001').replace(/\/+$/, '')
+const apiOrigin = (process.env.E2E_API_ORIGIN || 'http://localhost:6001').replace(/\/+$/, '')
 const webServers = [
   ...(process.env.E2E_BASE_URL
     ? []
     : [{
-        command: 'npm run dev -- --port 5173',
-        url: 'http://127.0.0.1:5173',
+        command: 'npm run dev -- --port 6001',
+        url: 'http://127.0.0.1:6001',
         reuseExistingServer: true,
         timeout: 120_000,
       }]),
@@ -15,7 +15,7 @@ const webServers = [
     ? []
     : [{
         command: 'npm --prefix server run start',
-        url: `${apiOrigin}/v1/health`,
+        url: `${baseURL}/v1/health`,
         reuseExistingServer: true,
         timeout: 120_000,
       }]),

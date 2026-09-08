@@ -8,7 +8,7 @@
 
 | 服务 | 作用 | 默认暴露 |
 | --- | --- | --- |
-| `frontend` | Nginx、用户端和管理端静态文件、API 反向代理 | 默认绑定 `0.0.0.0:8080`，是唯一宿主机 Web 入口（可通过 `XINYUE_HTTP_BIND`/`XINYUE_HTTP_PORT` 修改） |
+| `frontend` | Nginx、用户端和管理端静态文件、API 反向代理 | 默认绑定 `0.0.0.0:6001`，是唯一宿主机 Web 入口（可通过 `XINYUE_HTTP_BIND`/`XINYUE_HTTP_PORT` 修改） |
 | `backend` | NestJS API、BullMQ Worker、迁移和幂等初始化 | 容器 `3100` |
 | `postgres` | 主业务数据库 | 仅 Compose 内网 |
 | `redis` | 队列、缓存和任务状态 | 仅 Compose 内网 |
@@ -32,7 +32,7 @@ Copy-Item .env.production.example .env.production
 
 必须修改 `.env.production` 中的 `POSTGRES_PASSWORD`、`SESSION_SECRET`、`CREDENTIAL_ENCRYPTION_KEY`、`INSTALL_TOKEN` 和 `LOCAL_WORKER_TOKEN`，所有系统令牌均不得少于 32 位且不能使用占位值。`INSTALL_TOKEN` 只用于授权首次管理员创建，不能放入 URL、日志或工单。管理员账号通过首次访问 `/install` 页面创建，生产启动不会回退到固定管理员密码。
 
-一键安装默认把唯一的 Frontend/Nginx Web 入口绑定到 `0.0.0.0`，安装完成后可直接访问终端输出的 `http://服务器IP:实际端口/`，并通过 `/install` 创建首次管理员。安装脚本在首次生成配置时从 `8080` 开始检测；若端口已占用，会递增选择可用端口并写回 `XINYUE_HTTP_PORT`。已有 `.env.production` 或显式设置的 `XINYUE_HTTP_PORT` 不会被静默替换，冲突时安装会退出并提示用户选择端口。
+一键安装默认把唯一的 Frontend/Nginx Web 入口绑定到 `0.0.0.0:6001`，安装完成后可直接访问 `http://服务器IP:6001/`，并通过 `/install` 创建首次管理员。若 6001 已被占用，安装会退出并提示先释放该端口，不会自动切换到其他端口。已有 `.env.production` 或显式设置的 `XINYUE_HTTP_PORT` 不会被静默替换。
 
 Backend `3100`、PostgreSQL `5432` 和 Redis `6379` 只在 Compose 网络内开放，绝不映射到宿主机。手工部署可以设置 `XINYUE_HTTP_BIND=127.0.0.1`，仅供本机访问或由外部反向代理转发。
 
@@ -248,8 +248,8 @@ Prisma 迁移不会自动执行数据库降级，不能只回退代码而忽略�
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
 docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail 200 backend
 docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail 200 frontend
-Invoke-RestMethod http://localhost:8080/v1/health/live
-Invoke-RestMethod http://localhost:8080/v1/health/ready
+Invoke-RestMethod http://localhost:6001/v1/health/live
+Invoke-RestMethod http://localhost:6001/v1/health/ready
 ```
 
 上线检查：

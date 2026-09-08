@@ -322,7 +322,7 @@ services:
       # The frontend is the only host-facing service. Default to direct IP
       # access; advanced deployments can set XINYUE_HTTP_BIND=127.0.0.1 and
       # place a TLS reverse proxy in front of the selected host port.
-      - "${XINYUE_HTTP_BIND:-0.0.0.0}:${XINYUE_HTTP_PORT:-8080}:8080"
+      - "${XINYUE_HTTP_BIND:-0.0.0.0}:${XINYUE_HTTP_PORT:-6001}:8080"
     depends_on:
       backend:
         condition: service_healthy

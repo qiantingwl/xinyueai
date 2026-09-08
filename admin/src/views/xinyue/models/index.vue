@@ -75,9 +75,7 @@
         <ElTableColumn :label="xt('排序')" prop="sortOrder" width="75" />
         <ElTableColumn :label="xt('状态')" width="95"
           ><template #default="{ row }"
-            ><ElTag :type="row.enabled ? 'success' : 'info'">{{
-              row.enabled ? xt('前端可见') : xt('已停用')
-            }}</ElTag></template
+            ><ElTag :type="modelStatus(row).type">{{ modelStatus(row).label }}</ElTag></template
           ></ElTableColumn
         >
         <ElTableColumn :label="xt('操作')" width="125" fixed="right"
@@ -679,7 +677,7 @@
     const channels = (row.providerRoutes || []).map((route) => ({
       key: `route:${route.providerId}`,
       name: route.provider?.name || route.providerId,
-      enabled: route.enabled && (route.provider?.enabled ?? true),
+      enabled: route.enabled && providerCanPublish(route.provider),
       fallback: false,
       priority: route.priority ?? route.provider?.priority ?? 0
     }))
@@ -687,11 +685,25 @@
       channels.push({
         key: `fallback:${row.provider.id}`,
         name: row.provider.name,
-        enabled: true,
+        enabled: providerCanPublish(row.provider),
         fallback: true,
         priority: 0
       })
     return channels
+  }
+  const providerCanPublish = (provider?: ModelProviderRoute['provider'] | ModelPreset['provider']) => {
+    if (!provider?.enabled) return false
+    if (provider.cooldownUntil && new Date(provider.cooldownUntil).getTime() > Date.now()) return false
+    return provider.hasApiKey === true || provider.type === 'POLLINATIONS' || provider.type === 'LOCAL_WORKER'
+  }
+  const modelStatus = (row: ModelPreset) => {
+    if (!row.enabled) return { type: 'info' as const, label: xt('已停用') }
+    if (row.availability === 'AVAILABLE') return { type: 'success' as const, label: xt('前端可见') }
+    if (row.availability === 'DEGRADED') return { type: 'warning' as const, label: xt('渠道待检测') }
+    if (row.availabilityReason === 'API_KEY_MISSING') return { type: 'warning' as const, label: xt('未配置密钥') }
+    if (row.availabilityReason === 'CHANNEL_COOLDOWN') return { type: 'warning' as const, label: xt('渠道冷却中') }
+    if (row.availabilityReason === 'HEALTH_CHECK_REQUIRED') return { type: 'warning' as const, label: xt('渠道待检测') }
+    return { type: 'danger' as const, label: xt('未配置渠道') }
   }
   const pricingSummary = (row: ModelPreset) => {
     if (row.capability === 'CHAT' && (row.inputCreditsPerMillion || row.outputCreditsPerMillion)) return xt('按 Token 折算')

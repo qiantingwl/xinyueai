@@ -58,7 +58,7 @@
               </div>
               <span class="creation-cost" :title="`本次预计扣除 ${currentGenerationCost} 创作点`"><Sparkles :size="13" />{{ currentGenerationCost }} 点</span>
             </div>
-            <button class="creation-submit composer-send" :class="{ 'is-listening': voiceListening && voiceTarget === 'creation' }" :type="canSubmitCreation ? 'submit' : 'button'" :disabled="hasCreationInput && !activeCreationModelAvailable" :aria-label="canSubmitCreation ? '开始生成' : hasCreationInput ? '暂无可用模型' : voiceListening && voiceTarget === 'creation' ? '停止语音输入' : '语音输入'" :title="hasCreationInput && !activeCreationModelAvailable ? '暂无可用模型，请联系管理员或添加个人 API 密钥' : undefined" @click="!hasCreationInput && toggleVoice('creation')"><ArrowUp v-if="hasCreationInput" :size="20" /><AudioLines v-else :size="18" /></button>
+            <button class="creation-submit composer-send" :class="{ 'is-listening': voiceListening && voiceTarget === 'creation' }" :type="canSubmitCreation ? 'submit' : 'button'" :disabled="hasCreationInput && !activeCreationModelAvailable" :aria-label="canSubmitCreation ? '开始生成' : hasCreationInput ? activeCreationModelUnavailableMessage : voiceListening && voiceTarget === 'creation' ? '停止语音输入' : '语音输入'" :title="hasCreationInput && !activeCreationModelAvailable ? activeCreationModelUnavailableMessage : undefined" @click="!hasCreationInput && toggleVoice('creation')"><ArrowUp v-if="hasCreationInput" :size="20" /><AudioLines v-else :size="18" /></button>
           </div>
           <Teleport to="body">
             <div v-if="creationMenu" ref="creationOptionsMenu" class="creation-options-menu creation-options-menu--floating" :class="`creation-options-menu--${creationMenu}`" :style="creationMenuStyle">
@@ -166,6 +166,7 @@ const props = defineProps<{
   activeCreationModel: string
   activeCreationModelLabel: string
   activeCreationModelAvailable: boolean
+  activeCreationModelUnavailableMessage: string
   activeImageCapabilities: { supportsMask: boolean }
   creationPluginCapability: PluginCapability
   currentGenerationCost: number

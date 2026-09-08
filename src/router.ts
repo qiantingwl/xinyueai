@@ -52,7 +52,7 @@ export const router = createRouter({
       path: '/admin/:pathMatch(.*)*',
       component: AdminRedirect,
       beforeEnter: () => {
-        window.location.assign(import.meta.env.DEV ? 'http://localhost:5174/admin/' : '/admin/')
+        window.location.assign(import.meta.env.DEV ? 'http://localhost:6001/admin/' : '/admin/')
         return false
       },
     },

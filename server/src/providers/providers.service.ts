@@ -35,6 +35,8 @@ type ProviderInput = {
   metadata?: Record<string, unknown>
 }
 
+type ModelAvailabilityReason = 'NO_CHANNEL' | 'API_KEY_MISSING' | 'CHANNEL_COOLDOWN' | 'HEALTH_CHECK_REQUIRED'
+
 function routeOptionsRecord(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
@@ -306,7 +308,7 @@ const DEFAULT_PROVIDER_TEMPLATES = [
   { key: 'deepseek', name: 'DeepSeek', vendorKey: 'deepseek', type: ProviderType.OPENAI_COMPATIBLE, baseUrl: 'https://api.deepseek.com/v1', authType: ProviderAuthType.BEARER, apiProtocol: 'openai', sortOrder: 50 },
   { key: 'qwen', name: '阿里云百炼', vendorKey: 'qwen', type: ProviderType.OPENAI_COMPATIBLE, baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', authType: ProviderAuthType.BEARER, apiProtocol: 'openai', nativeSearchProvider: 'qwen', sortOrder: 60 },
   { key: 'doubao', name: '火山方舟', vendorKey: 'doubao', type: ProviderType.OPENAI_COMPATIBLE, baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', authType: ProviderAuthType.BEARER, apiProtocol: 'openai', nativeSearchProvider: 'doubao', supportsDiscovery: false, sortOrder: 70 },
-  { key: 'newapi', name: 'NewAPI', vendorKey: 'other', type: ProviderType.NEW_API, baseUrl: '', authType: ProviderAuthType.BEARER, apiProtocol: 'openai', sortOrder: 80 },
+  { key: 'newapi', name: 'NewAPI', vendorKey: 'other', type: ProviderType.NEW_API, baseUrl: '', authType: ProviderAuthType.BEARER, apiProtocol: 'openai', nativeSearchProvider: 'openai', sortOrder: 80 },
   { key: 'sub2api', name: 'Sub2API', vendorKey: 'other', type: ProviderType.SUB2API, baseUrl: '', authType: ProviderAuthType.BEARER, apiProtocol: 'openai', sortOrder: 90 },
   { key: 'openrouter', name: 'OpenRouter', vendorKey: 'other', type: ProviderType.OPENAI_COMPATIBLE, baseUrl: 'https://openrouter.ai/api/v1', authType: ProviderAuthType.BEARER, apiProtocol: 'openai', sortOrder: 100 },
   { key: 'litellm', name: 'LiteLLM', vendorKey: 'other', type: ProviderType.OPENAI_COMPATIBLE, baseUrl: '', authType: ProviderAuthType.BEARER, apiProtocol: 'openai', sortOrder: 110 },
@@ -384,6 +386,22 @@ export class ProvidersService implements OnModuleInit {
 
   private providerHealthy(provider: { type: ProviderType; encryptedApiKey: string; enabled: boolean; lastHealthStatus?: string | null; cooldownUntil?: Date | null } | null | undefined) {
     return Boolean(this.providerPublished(provider) && provider?.lastHealthStatus === 'healthy')
+  }
+
+  private modelAvailabilityReason(
+    provider: { type: ProviderType; encryptedApiKey: string; enabled: boolean; cooldownUntil?: Date | null } | null | undefined,
+    routes: Array<{ enabled?: boolean; provider: { type: ProviderType; encryptedApiKey: string; enabled: boolean; cooldownUntil?: Date | null } }>,
+    routeCount: number,
+  ): ModelAvailabilityReason | undefined {
+    const active = [
+      ...(provider ? [{ enabled: true, provider }] : []),
+      ...routes.map((route) => ({ enabled: route.enabled, provider: route.provider })),
+    ].filter((route) => route.enabled !== false && route.provider.enabled)
+    if (!active.length) return 'NO_CHANNEL'
+    if (active.some((route) => !this.providerReady(route.provider)) && !routeCount) return 'API_KEY_MISSING'
+    if (!routeCount && active.some((route) => route.provider.cooldownUntil && route.provider.cooldownUntil.getTime() > Date.now())) return 'CHANNEL_COOLDOWN'
+    if (!routeCount) return 'HEALTH_CHECK_REQUIRED'
+    return undefined
   }
 
   buildPollinationsImageUrl(baseUrl: string, prompt: string, options: { model: string; width: number; height: number; seed: number }) {
@@ -640,7 +658,7 @@ export class ProvidersService implements OnModuleInit {
     const providerType = template?.type ?? input.type
     const baseUrl = await this.assertProviderEndpoint(input.baseUrl || template?.baseUrl || '', providerType)
     const row = await this.prisma.providerChannel.create({ data: {
-      name: input.name.trim(), templateId: input.templateId || null, type: providerType, baseUrl, encryptedApiKey: this.crypto.encrypt(input.apiKey || ''), apiKeyHint: this.crypto.hint(input.apiKey || ''), authType: template?.authType ?? input.authType, enabled: input.enabled, priority: input.priority, weight: input.weight, timeoutMs: input.timeoutMs, allowUserKeys: providerType !== ProviderType.POLLINATIONS && providerType !== ProviderType.LOCAL_WORKER && input.allowUserKeys, customHeaders: (input.customHeaders ?? template?.customHeaders) as Prisma.InputJsonValue, metadata: metadata as Prisma.InputJsonValue,
+      name: input.name.trim(), template: input.templateId ? { connect: { id: input.templateId } } : undefined, type: providerType, baseUrl, encryptedApiKey: this.crypto.encrypt(input.apiKey || ''), apiKeyHint: this.crypto.hint(input.apiKey || ''), authType: template?.authType ?? input.authType, enabled: input.enabled, priority: input.priority, weight: input.weight, timeoutMs: input.timeoutMs, allowUserKeys: providerType !== ProviderType.POLLINATIONS && providerType !== ProviderType.LOCAL_WORKER && input.allowUserKeys, customHeaders: (input.customHeaders ?? template?.customHeaders) as Prisma.InputJsonValue, metadata: metadata as Prisma.InputJsonValue,
     } })
     return this.publicProvider(row)
   }
@@ -655,20 +673,22 @@ export class ProvidersService implements OnModuleInit {
     const metadata = input.templateId !== undefined
       ? { ...existingMetadata, ...(template ? { apiProtocol: template.apiProtocol, nativeSearchProvider: template.nativeSearchProvider } : {}), ...(input.metadata || {}) }
       : input.metadata
-    const endpointChanged = input.baseUrl !== undefined || input.type !== undefined || (template && template.type !== existing.type)
-    const baseUrl = endpointChanged
-      ? await this.assertProviderEndpoint(input.baseUrl ?? existing.baseUrl, nextType)
+    const normalizedBaseUrl = input.baseUrl !== undefined
+      ? await this.assertProviderEndpoint(input.baseUrl, nextType)
       : existing.baseUrl
+    const endpointChanged = normalizedBaseUrl !== existing.baseUrl || (input.type !== undefined && input.type !== existing.type) || (template && template.type !== existing.type)
+    const baseUrl = endpointChanged
+      ? normalizedBaseUrl
+      : existing.baseUrl
+    const suppliedApiKey = input.apiKey === undefined ? undefined : input.apiKey.trim()
     const row = await this.prisma.providerChannel.update({ where: { id }, data: {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
-      ...(input.templateId !== undefined ? { templateId: input.templateId || null } : {}),
+      ...(input.templateId !== undefined ? { template: input.templateId ? { connect: { id: input.templateId } } : { disconnect: true } } : {}),
       ...(input.type !== undefined || template ? { type: nextType } : {}),
       ...(endpointChanged ? { baseUrl } : {}),
-      // A URL change must not silently reuse a credential against a new
-      // destination. Require an explicit key rotation for the new endpoint.
-      ...(endpointChanged && !input.apiKey ? { encryptedApiKey: '', apiKeyHint: '', lastHealthStatus: null, lastHealthMessage: '渠道地址已变更，请重新配置 API 密钥', cooldownUntil: null } : {}),
-      ...(input.apiKey ? { encryptedApiKey: this.crypto.encrypt(input.apiKey), apiKeyHint: this.crypto.hint(input.apiKey), lastRotatedAt: new Date(), lastHealthStatus: null, lastHealthMessage: '密钥已轮换，等待重新检测', cooldownUntil: null } : {}),
-      ...(input.apiKey === '' ? { encryptedApiKey: '', apiKeyHint: '' } : {}),
+      ...(endpointChanged ? { lastHealthStatus: null, lastHealthMessage: '渠道地址已变更，请重新检测', lastHealthAt: null, cooldownUntil: null } : {}),
+      ...(suppliedApiKey ? { encryptedApiKey: this.crypto.encrypt(suppliedApiKey), apiKeyHint: this.crypto.hint(suppliedApiKey), lastHealthStatus: null, lastHealthMessage: '密钥已轮换，等待重新检测', cooldownUntil: null } : {}),
+      ...(suppliedApiKey === '' ? { encryptedApiKey: '', apiKeyHint: '' } : {}),
       ...(input.authType !== undefined || template ? { authType: template?.authType ?? input.authType } : {}),
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
@@ -948,15 +968,30 @@ export class ProvidersService implements OnModuleInit {
 
   async listModels(capability?: ModelCapability, includeDisabled = false) {
     if (includeDisabled) {
-      return this.prisma.modelPreset.findMany({ where: { ...(capability ? { capability } : {}) }, orderBy: [{ capability: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }], include: { vendor: true, provider: { select: { id: true, name: true, type: true, enabled: true } }, providerRoutes: { orderBy: { createdAt: 'asc' }, include: { provider: { select: { id: true, name: true, type: true, enabled: true, priority: true, weight: true, cooldownUntil: true } } } } } })
+      const models = await this.prisma.modelPreset.findMany({ where: { ...(capability ? { capability } : {}) }, orderBy: [{ capability: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }], include: { vendor: true, provider: { select: { id: true, name: true, type: true, enabled: true, encryptedApiKey: true, lastHealthStatus: true, cooldownUntil: true } }, providerRoutes: { orderBy: { createdAt: 'asc' }, include: { provider: { select: { id: true, name: true, type: true, enabled: true, priority: true, weight: true, cooldownUntil: true, encryptedApiKey: true, lastHealthStatus: true } } } } } })
+      return models.map(({ provider, providerRoutes, ...model }) => {
+        const activeRoutes = providerRoutes.filter((route) => route.enabled)
+        const routeCount = Number(this.providerPublished(provider)) + activeRoutes.filter((route) => this.providerPublished(route.provider)).length
+        const healthyRouteCount = Number(this.providerHealthy(provider)) + activeRoutes.filter((route) => this.providerHealthy(route.provider)).length
+        return {
+          ...model,
+          availability: healthyRouteCount ? 'AVAILABLE' : routeCount ? 'DEGRADED' : 'UNCONFIGURED',
+          availabilityReason: this.modelAvailabilityReason(provider, providerRoutes, routeCount),
+          healthyRouteCount,
+          routeCount,
+          provider: provider ? this.publicProvider(provider) : null,
+          providerRoutes: providerRoutes.map(({ provider: routeProvider, ...route }) => ({ ...route, provider: this.publicProvider(routeProvider) })),
+        }
+      })
     }
     const models = await this.prisma.modelPreset.findMany({ where: { enabled: true, ...(capability ? { capability } : {}) }, orderBy: [{ capability: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }], include: { vendor: true, provider: { select: { id: true, name: true, type: true, enabled: true, encryptedApiKey: true, lastHealthStatus: true, cooldownUntil: true } }, providerRoutes: { where: { enabled: true }, orderBy: { createdAt: 'asc' }, include: { provider: { select: { id: true, name: true, type: true, enabled: true, priority: true, weight: true, cooldownUntil: true, encryptedApiKey: true, lastHealthStatus: true } } } } } })
-    return models.filter((model) => this.providerPublished(model.provider) || model.providerRoutes.some((route) => this.providerPublished(route.provider))).map(({ provider, providerRoutes, ...model }) => {
+    return models.map(({ provider, providerRoutes, ...model }) => {
       const routeCount = Number(this.providerPublished(provider)) + providerRoutes.filter((route) => this.providerPublished(route.provider)).length
       const healthyRouteCount = Number(this.providerHealthy(provider)) + providerRoutes.filter((route) => this.providerHealthy(route.provider)).length
       return {
         ...model,
-        availability: healthyRouteCount ? 'AVAILABLE' : 'DEGRADED',
+        availability: healthyRouteCount ? 'AVAILABLE' : routeCount ? 'DEGRADED' : 'UNCONFIGURED',
+        availabilityReason: this.modelAvailabilityReason(provider, providerRoutes, routeCount),
         healthyRouteCount,
         routeCount,
         options: model.capability === ModelCapability.VIDEO ? this.effectiveVideoOptions(model.options, providerRoutes, provider) : model.options,
@@ -990,7 +1025,7 @@ export class ProvidersService implements OnModuleInit {
       this.prisma.modelPreset.findMany({ where: { enabled: true, ...(capability ? { capability } : {}), ...(policy.restrictModels ? { id: { in: policy.allowedModelIds } } : {}) }, orderBy: [{ capability: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }], include: { vendor: true, provider: { select: { id: true, name: true, type: true, enabled: true, encryptedApiKey: true, lastHealthStatus: true, cooldownUntil: true } }, providerRoutes: { where: { enabled: true }, select: { id: true, providerId: true, options: true, provider: { select: { type: true, enabled: true, encryptedApiKey: true, lastHealthStatus: true, cooldownUntil: true } } } } } }),
       this.prisma.userModel.findMany({ where: { userId, enabled: true, ...(capability ? { capability } : {}) }, orderBy: [{ capability: 'asc' }, { isDefault: 'desc' }, { createdAt: 'asc' }], include: { vendor: true, routes: { where: { enabled: true }, include: { credential: { select: { enabled: true, lastHealthStatus: true, cooldownUntil: true } } } } } }),
     ])
-    const platformModels = models.filter((model) => this.providerPublished(model.provider) || model.providerRoutes.some((route) => this.providerPublished(route.provider))).map((model) => {
+    const platformModels = models.map((model) => {
       const override = policy.costOverrides.get(model.id)
       const effectiveCreditCost = override ?? Math.ceil(model.flatCreditCost * policy.creditRatePercent / 100)
       const routeCount = Number(this.providerPublished(model.provider)) + model.providerRoutes.filter((route) => this.providerPublished(route.provider)).length
@@ -1017,7 +1052,8 @@ export class ProvidersService implements OnModuleInit {
         providerRoutes: providerRoutes.map(({ provider: _provider, ...route }) => route),
         options,
         effectiveCreditCost,
-        availability: healthyRouteCount ? 'AVAILABLE' : 'DEGRADED',
+        availability: healthyRouteCount ? 'AVAILABLE' : routeCount ? 'DEGRADED' : 'UNCONFIGURED',
+        availabilityReason: this.modelAvailabilityReason(model.provider, model.providerRoutes, routeCount),
         healthyRouteCount,
         routeCount,
       }
@@ -1261,12 +1297,18 @@ export class ProvidersService implements OnModuleInit {
     if (!(await this.userPolicy(userId)).allowUserByok) throw new ForbiddenException('当前用户分组或套餐不允许使用个人 API 密钥')
     if (input.providerType === ProviderType.LOCAL_WORKER || existing.providerType === ProviderType.LOCAL_WORKER) throw new BadRequestException('本地 Worker 只能由管理员配置')
     if (input.isDefault) await this.prisma.userApiCredential.updateMany({ where: { userId, id: { not: id } }, data: { isDefault: false } })
-    const row = await this.prisma.userApiCredential.update({ where: { id }, data: {
+    const suppliedApiKey = input.apiKey === undefined ? undefined : input.apiKey.trim()
+    const credentialChanged = input.baseUrl !== undefined || input.providerType !== undefined || input.authType !== undefined || input.customHeaders !== undefined || suppliedApiKey !== undefined
+    const healthReset = { lastHealthStatus: null, lastHealthMessage: '凭据配置已变更，请重新检测', lastHealthAt: null, cooldownUntil: null }
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.userApiCredential.update({ where: { id }, data: {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.templateId !== undefined ? { templateId: input.templateId || null } : {}),
       ...(input.providerType !== undefined ? { providerType: input.providerType } : {}),
       ...(input.baseUrl !== undefined ? { baseUrl: await this.assertUserProviderUrl(input.baseUrl) } : {}),
-      ...(input.apiKey ? { encryptedApiKey: this.crypto.encrypt(input.apiKey), apiKeyHint: this.crypto.hint(input.apiKey) } : {}),
+      ...(credentialChanged ? healthReset : {}),
+      ...(suppliedApiKey ? { encryptedApiKey: this.crypto.encrypt(suppliedApiKey), apiKeyHint: this.crypto.hint(suppliedApiKey), lastRotatedAt: new Date() } : {}),
+      ...(suppliedApiKey === '' ? { encryptedApiKey: '', apiKeyHint: '' } : {}),
       ...(input.authType !== undefined ? { authType: input.authType } : {}),
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
       ...(input.isDefault !== undefined ? { isDefault: input.isDefault } : {}),
@@ -1274,7 +1316,10 @@ export class ProvidersService implements OnModuleInit {
       ...(input.weight !== undefined ? { weight: input.weight } : {}),
       ...(input.customHeaders !== undefined ? { customHeaders: input.customHeaders as Prisma.InputJsonValue } : {}),
       ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt ? new Date(input.expiresAt) : null } : {}),
-    } })
+      } })
+      if (credentialChanged) await tx.userModelRoute.updateMany({ where: { credentialId: id }, data: { lastHealthStatus: null, lastHealthMessage: '凭据配置已变更，请重新检测', lastHealthAt: null, consecutiveFailures: 0, cooldownUntil: null } })
+      return updated
+    })
     return this.publicCredential(row)
   }
 

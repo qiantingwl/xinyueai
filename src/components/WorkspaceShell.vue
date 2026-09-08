@@ -728,7 +728,7 @@ async function loadWorkspaceData() {
     studio.hydrateWorkspace().catch(() => undefined),
     api<UserResponse>('/users/me').catch(() => null), api<NotificationItem[]>('/notifications').catch(() => []),
     api<ModerationCase[]>('/moderation/cases').catch(() => []),
-    api<AvailableModel[]>('/catalog/models').catch(() => []),
+    api<AvailableModel[]>(auth.session?.id ? '/users/me/models' : '/catalog/models').catch(() => []),
     api<Subscription | null>('/subscriptions/me').catch(() => null),
   ])
   if (user?.settings) {

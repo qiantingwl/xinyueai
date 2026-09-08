@@ -37,7 +37,7 @@ export default ({ mode }: { mode: string }) => {
     base: baseUrl,
     publicDir: path.resolve(__dirname, '../public'),
     server: {
-      port: Number(VITE_PORT || 5174),
+      port: Number(VITE_PORT || 6001),
       proxy: apiProxy,
       host: true
     },

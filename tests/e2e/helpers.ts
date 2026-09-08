@@ -1,8 +1,8 @@
 import { expect, type Page } from '@playwright/test'
 
-export const e2eBaseUrl = (process.env.E2E_BASE_URL || 'http://localhost:5173').replace(/\/+$/, '')
-export const e2eAdminUrl = `${(process.env.E2E_ADMIN_URL || 'http://localhost:5174/admin').replace(/\/+$/, '')}/`
-export const e2eApiOrigin = (process.env.E2E_API_ORIGIN || 'http://localhost:3100').replace(/\/+$/, '')
+export const e2eBaseUrl = (process.env.E2E_BASE_URL || 'http://localhost:6001').replace(/\/+$/, '')
+export const e2eAdminUrl = `${(process.env.E2E_ADMIN_URL || 'http://localhost:6001/admin').replace(/\/+$/, '')}/`
+export const e2eApiOrigin = (process.env.E2E_API_ORIGIN || 'http://localhost:6001').replace(/\/+$/, '')
 export const adminEmail = process.env.E2E_ADMIN_EMAIL || ''
 export const adminPassword = process.env.E2E_ADMIN_PASSWORD || ''
 export function getE2EAdminCredentials() {

@@ -11,7 +11,7 @@
       </label>
     </header>
 
-    <div v-if="matchingModels.length" class="model-catalog-picker__body" :class="{ 'has-capabilities': capabilities.length }">
+    <div v-if="models.length || capabilities.length" class="model-catalog-picker__body" :class="{ 'has-capabilities': capabilities.length }">
       <nav v-if="capabilities.length" class="model-catalog-picker__capabilities" aria-label="模型能力">
         <span class="model-catalog-picker__column-title">能力</span>
         <button v-for="item in capabilities" :key="item.key" type="button" :class="{ 'is-active': item.key === activeCapability }" :aria-pressed="item.key === activeCapability" @click="emit('capability-change', item.key)">{{ item.label }}</button>
@@ -42,7 +42,7 @@
               <span class="model-catalog-picker__check" :class="{ 'is-visible': item.key === modelValue }" aria-hidden="true"><Check :size="15" /></span>
             </span>
           </button>
-          <p v-if="!visibleModels.length">当前分类没有匹配的模型</p>
+          <p v-if="!visibleModels.length">{{ emptyModelMessage }}</p>
         </div>
       </div>
     </div>
@@ -58,7 +58,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Check, Search, Sparkles } from 'lucide-vue-next'
-import { agentModelDescription, type CatalogModel } from '../utils/model-catalog'
+import { agentModelDescription, isAgentModelEligible, type CatalogModel } from '../utils/model-catalog'
 import { inferVendor } from '../utils/vendor'
 import ModelBadge from './common/ModelBadge.vue'
 
@@ -71,14 +71,21 @@ const activeVendor = ref('')
 
 const inferredVendor = inferVendor
 
+const capabilityModels = computed(() => {
+  if (!props.activeCapability) return props.models
+  if (props.activeCapability === 'AGENT') return props.models.filter((item) => item.capability === 'CHAT' && isAgentModelEligible(item))
+  return props.models.filter((item) => item.capability === props.activeCapability)
+})
 const matchingModels = computed(() => {
   const keyword = query.value.toLowerCase()
-  if (!keyword) return props.models
-  return props.models.filter((item) => {
+  if (!keyword) return capabilityModels.value
+  return capabilityModels.value.filter((item) => {
     const vendor = inferredVendor(item).label
     return `${item.displayName} ${item.upstreamModel || ''} ${item.description || ''} ${vendor}`.toLowerCase().includes(keyword)
   })
 })
+const activeCapabilityLabel = computed(() => capabilities.value.find((item) => item.key === props.activeCapability)?.label || '')
+const emptyModelMessage = computed(() => query.value ? '当前分类没有匹配的模型' : activeCapabilityLabel.value ? `没有可用的${activeCapabilityLabel.value}` : '当前分类没有匹配的模型')
 const vendorGroups = computed(() => {
   const groups = new Map<string, { key: string; label: string; count: number }>()
   for (const item of matchingModels.value) {

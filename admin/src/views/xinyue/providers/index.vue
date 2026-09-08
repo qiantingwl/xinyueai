@@ -665,10 +665,12 @@
     protocolOptions.find((item) => item.value === value)?.label || value
   const nativeSearchText = (value: string) =>
     nativeSearchOptions.find((item) => item.value === value)?.label || value
+  const providerNeedsKey = (row: Provider) =>
+    !row.hasApiKey && !['POLLINATIONS', 'LOCAL_WORKER'].includes(row.type)
   const healthText = (row: Provider) =>
-    row.lastHealthStatus === 'healthy' ? '正常' : row.lastHealthStatus ? '异常' : '未检测'
+    providerNeedsKey(row) ? '未配置密钥' : row.lastHealthStatus === 'healthy' ? '正常' : row.lastHealthStatus ? '异常' : '未检测'
   const healthType = (row: Provider) =>
-    row.lastHealthStatus === 'healthy' ? 'success' : row.lastHealthStatus ? 'danger' : 'info'
+    providerNeedsKey(row) ? 'warning' : row.lastHealthStatus === 'healthy' ? 'success' : row.lastHealthStatus ? 'danger' : 'info'
   const capabilityText = (value: DiscoveredModel['capability']) =>
     value === 'CHAT'
       ? xt('对话')

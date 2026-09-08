@@ -344,7 +344,7 @@ export class PaymentsService {
     const secrets = this.channelSecrets(channel.encryptedSecrets)
     const configuredWebOrigin = String(process.env.WEB_ORIGIN || '').split(',')[0].trim()
     const baseUrl = String(config.publicBaseUrl || process.env.PUBLIC_BASE_URL || configuredWebOrigin || origin).replace(/\/$/, '')
-    const webOrigin = String(config.webOrigin || process.env.WEB_ORIGIN || 'http://localhost:5173').split(',')[0].replace(/\/$/, '')
+    const webOrigin = String(config.webOrigin || process.env.WEB_ORIGIN || 'http://localhost:6001').split(',')[0].replace(/\/$/, '')
     if (channel.providerKey === 'MANUAL') return { checkoutUrl: String(config.paymentUrl || ''), qrCodeUrl: String(config.qrCodeUrl || ''), instructions: String(config.instructions || '请按页面说明完成付款，到账后由管理员确认。') }
     if (channel.providerKey === 'EXTERNAL') {
       const target = await this.endpointPolicy.assertPublicHttpUrl(String(config.checkoutUrl))
