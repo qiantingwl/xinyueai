@@ -69,7 +69,11 @@ export class PaymentsService {
   async deleteChannel(id: string) {
     const used = await this.prisma.paymentTransaction.count({ where: { channelId: id } })
     if (used) return this.publicChannel(await this.prisma.paymentChannel.update({ where: { id }, data: { enabled: false, isDefault: false } }))
-    await this.prisma.paymentChannel.delete({ where: { id } }).catch(() => { throw new NotFoundException('支付渠道不存在') })
+    await this.prisma.paymentChannel.delete({ where: { id } }).catch((reason) => {
+      if (reason instanceof Prisma.PrismaClientKnownRequestError && reason.code === 'P2003') throw new BadRequestException('渠道仍有关联记录，已改为停用')
+      if (reason instanceof Prisma.PrismaClientKnownRequestError && reason.code === 'P2025') throw new NotFoundException('支付渠道不存在')
+      throw reason
+    })
     return { deleted: true }
   }
 
@@ -307,8 +311,11 @@ export class PaymentsService {
     const order = await this.prisma.rechargeOrder.findUnique({ where: { id: orderId } })
     if (!order) throw new NotFoundException('充值订单不存在')
     if (order.status === 'CANCELLED' || order.status === 'REFUNDED') throw new BadRequestException('充值订单状态不能入账')
-    await this.credits.mutate(order.userId, order.credits, 'PURCHASE', '在线充值到账', `recharge:${order.id}:paid`, { type: 'recharge_order', id: order.id })
-    await this.prisma.rechargeOrder.update({ where: { id: order.id }, data: { status: 'PAID', paidAt: order.paidAt || new Date() } })
+    // 创作点到账与订单状态翻转放进同一事务，避免「已到账但订单仍 PENDING」的中间态
+    await this.prisma.$transaction(async (tx) => {
+      await this.credits.mutateInTransaction(tx, order.userId, order.credits, 'PURCHASE', '在线充值到账', `recharge:${order.id}:paid`, { type: 'recharge_order', id: order.id })
+      await tx.rechargeOrder.update({ where: { id: order.id }, data: { status: 'PAID', paidAt: order.paidAt || new Date() } })
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
   }
 
   private async resolveOrder(userId: string, input: CheckoutInput) {

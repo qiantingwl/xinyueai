@@ -35,7 +35,21 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .vendor-filter {
+    width: 160px;
+  }
+
+  :deep(.is-vendor-group) {
+    background: var(--art-gray-100);
+  }
+
+  :deep(.is-vendor-group td) {
+    font-weight: 600;
   }
 
   .art-table-card :deep(.el-card__body),

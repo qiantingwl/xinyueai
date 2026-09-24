@@ -30,12 +30,9 @@
           <ChevronRight :size="16" />
         </button>
       </div>
-      <div v-else class="support-empty">
-        <LifeBuoy :size="24" />
-        <h3>暂无工单</h3>
-        <p>遇到账号、支付或创作问题时，可以在这里联系人工客服。</p>
+      <EmptyState v-else class="support-empty" :icon="LifeBuoy" title="暂无工单" description="遇到账号、支付或创作问题时，可以在这里联系人工客服。">
         <button type="button" @click="startCreate">创建第一个工单</button>
-      </div>
+      </EmptyState>
     </template>
 
     <form v-else-if="view === 'create'" class="support-form" @submit.prevent="createTicket">
@@ -74,6 +71,9 @@
 import { computed, defineComponent, h, onMounted, ref, type PropType } from 'vue'
 import { ArrowLeft, ChevronRight, CircleAlert, FileText, LifeBuoy, LoaderCircle, Lock, Paperclip, Plus, Send, Trash2, Upload } from 'lucide-vue-next'
 import { api, apiUrl } from '../services/api'
+import { uploadAsset } from '../utils/asset-upload'
+import { formatDay as formatDate, formatDayTime as formatDateTime } from '../utils/datetime'
+import EmptyState from './common/EmptyState.vue'
 
 type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_USER' | 'RESOLVED' | 'CLOSED'
 type Attachment = { id: string; name: string; mimeType: string; size: number; contentUrl: string }
@@ -103,8 +103,6 @@ const createFileInput = ref<HTMLInputElement | null>(null), replyFileInput = ref
 const activeCount = computed(() => tickets.value.filter((item) => !['RESOLVED', 'CLOSED'].includes(item.status)).length)
 const unreadCount = computed(() => tickets.value.filter((item) => item.hasUnread).length)
 
-function formatDate(value: string) { return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(new Date(value)) }
-function formatDateTime(value: string) { return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) }
 function pickFiles(input: HTMLInputElement | null) { input?.click() }
 function startCreate() { error.value = ''; createForm.value = { subject: '', category: categories[0], body: '', attachments: [] }; view.value = 'create' }
 async function backToList() { view.value = 'list'; ticket.value = null; await load() }
@@ -116,7 +114,7 @@ async function uploadFiles(event: Event, target: Attachment[]) {
   input.value = ''
   if (!files.length) return
   uploading.value = true; error.value = ''
-  try { for (const file of files) { const form = new FormData(); form.append('file', file); target.push(await api<Attachment>('/assets/uploads?kind=FILE', { method: 'POST', body: form })) } }
+  try { for (const file of files) { target.push(await uploadAsset<Attachment>(file, { kind: 'FILE' })) } }
   catch (reason) { error.value = reason instanceof Error ? reason.message : '附件上传失败' }
   finally { uploading.value = false }
 }

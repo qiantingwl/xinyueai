@@ -4,7 +4,9 @@ import { randomBytes } from 'crypto'
 import AdmZip = require('adm-zip')
 import { load as loadYaml } from 'js-yaml'
 import { PrismaService } from '../prisma/prisma.service'
+import { ensureDefaultSkillPresets } from './default-skill-presets'
 import { AdminPluginDto, PluginCategoryDto, PrivatePluginDto } from './plugin.dto'
+import { PREINSTALLED_CONFIG_KEY, isPreinstalledPlugin, pluginConfigObject, preinstalledPluginWhere } from './plugin-preinstall'
 
 const forbiddenConfigKeys = /(?:script|code|command|package|dependency|endpoint|webhook|callback|executable|binary|url|uri)/i
 const forbiddenConfigValues = /(?:javascript:|data:text\/html|<script|npm\s+(?:i|install)|pnpm\s+add|yarn\s+add|powershell|cmd\.exe|\/bin\/sh)/i
@@ -13,9 +15,9 @@ const forbiddenConfigValues = /(?:javascript:|data:text\/html|<script|npm\s+(?:i
 export class PluginsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private publicPlugin<T extends { instruction: string; config: unknown; outputRequirements: string }>(plugin: T) {
+  private publicPlugin<T extends { instruction: string; config: unknown; outputRequirements: string; priceCredits: number; ownerId: string | null; visibility: string }>(plugin: T) {
     const { instruction: _instruction, config: _config, outputRequirements: _outputRequirements, ...safe } = plugin
-    return safe
+    return { ...safe, preinstalled: isPreinstalledPlugin(plugin) }
   }
 
   private safeConfig(value?: Record<string, unknown>) {
@@ -133,7 +135,14 @@ export class PluginsService {
     return this.prisma.plugin.findMany({
       where: { visibility: PluginVisibility.OFFICIAL, status: PluginStatus.PUBLISHED, capabilities: capability ? { has: capability } : undefined, category: category ? { slug: category } : undefined, OR: query ? [{ name: { contains: query, mode: 'insensitive' } }, { description: { contains: query, mode: 'insensitive' } }] : undefined },
       orderBy: [{ featured: 'desc' }, { sortOrder: 'asc' }, { installCount: 'desc' }], include: { category: true, installations: { where: { userId }, select: { enabled: true, installedAt: true } } },
-    }).then((rows) => rows.map(({ installations, ...plugin }) => ({ ...this.publicPlugin(plugin), installed: Boolean(installations[0]?.enabled), purchased: Boolean(installations[0]), installedAt: installations[0]?.installedAt || null })))
+    }).then((rows) => rows.map(({ installations, ...plugin }) => {
+      const preinstalledActive = !installations[0] && isPreinstalledPlugin(plugin)
+      return { ...this.publicPlugin(plugin), installed: Boolean(installations[0]?.enabled) || preinstalledActive, purchased: Boolean(installations[0]) || preinstalledActive, installedAt: installations[0]?.installedAt || (preinstalledActive ? plugin.createdAt : null) }
+    }))
+  }
+
+  private preinstalledFor(userId: string, capability?: PluginCapability) {
+    return this.prisma.plugin.findMany({ where: { ...preinstalledPluginWhere(userId), status: PluginStatus.PUBLISHED, capabilities: capability ? { has: capability } : undefined }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], include: { category: true } })
   }
 
   categories(publicOnly = true) {
@@ -141,11 +150,15 @@ export class PluginsService {
   }
 
   async installed(userId: string) {
-    const [officialRows, externalRows] = await Promise.all([
+    const [officialRows, preinstalledRows, externalRows] = await Promise.all([
       this.prisma.pluginInstallation.findMany({ where: { userId, enabled: true, plugin: { visibility: PluginVisibility.OFFICIAL, status: PluginStatus.PUBLISHED } }, orderBy: { updatedAt: 'desc' }, include: { plugin: { include: { category: true } } } }),
+      this.preinstalledFor(userId),
       this.prisma.plugin.findMany({ where: { ownerId: userId, visibility: PluginVisibility.PRIVATE, status: PluginStatus.PUBLISHED }, orderBy: { updatedAt: 'desc' }, include: { category: true } }),
     ])
-    const official = officialRows.map((row) => ({ ...this.publicPlugin(row.plugin), installed: true, owned: false, installedAt: row.installedAt }))
+    const official = [
+      ...officialRows.map((row) => ({ ...this.publicPlugin(row.plugin), installed: true, owned: false, installedAt: row.installedAt })),
+      ...preinstalledRows.map((plugin) => ({ ...this.publicPlugin(plugin), installed: true, owned: false, installedAt: plugin.createdAt })),
+    ]
     const external = externalRows.filter((plugin) => {
       const config = plugin.config && typeof plugin.config === 'object' && !Array.isArray(plugin.config) ? plugin.config as Record<string, unknown> : {}
       return typeof config.externalSource === 'string' && typeof config.externalId === 'string'
@@ -159,15 +172,17 @@ export class PluginsService {
   }
 
   async available(userId: string, capability?: PluginCapability) {
-    const [privatePlugins, installed] = await Promise.all([
+    const [privatePlugins, installed, preinstalled] = await Promise.all([
       // External skills are instruction-only and intentionally reusable across
       // all workspaces, even when their source metadata only declares CHAT.
       this.prisma.plugin.findMany({ where: { ownerId: userId, visibility: PluginVisibility.PRIVATE, status: PluginStatus.PUBLISHED }, orderBy: { updatedAt: 'desc' }, include: { category: true } }),
       this.prisma.pluginInstallation.findMany({ where: { userId, enabled: true, plugin: { visibility: PluginVisibility.OFFICIAL, status: PluginStatus.PUBLISHED, capabilities: capability ? { has: capability } : undefined } }, orderBy: { updatedAt: 'desc' }, include: { plugin: { include: { category: true } } } }),
+      this.preinstalledFor(userId, capability),
     ])
     const availablePrivate = privatePlugins.filter((plugin) => !capability || this.effectiveCapabilities(plugin).includes(capability))
+    const official = [...installed.map((row) => row.plugin), ...preinstalled].sort((left, right) => left.sortOrder - right.sortOrder || left.createdAt.getTime() - right.createdAt.getTime())
     return [
-      ...installed.map((row) => ({ ...this.publicPlugin(row.plugin), capabilities: this.effectiveCapabilities(row.plugin), installed: true })),
+      ...official.map((plugin) => ({ ...this.publicPlugin(plugin), capabilities: this.effectiveCapabilities(plugin), installed: true })),
       ...availablePrivate.map((plugin) => ({ ...this.publicPlugin(plugin), capabilities: this.effectiveCapabilities(plugin), installed: false, owned: true })),
     ]
   }
@@ -194,7 +209,10 @@ export class PluginsService {
 
   async uninstall(userId: string, pluginId: string) {
     const result = await this.prisma.pluginInstallation.updateMany({ where: { userId, pluginId, enabled: true }, data: { enabled: false } })
-    if (!result.count) throw new NotFoundException('尚未安装该插件')
+    if (result.count) return { uninstalled: true }
+    const preinstalled = await this.prisma.plugin.findFirst({ where: { id: pluginId, ...preinstalledPluginWhere(userId) }, select: { id: true } })
+    if (!preinstalled) throw new NotFoundException('尚未安装该插件')
+    await this.prisma.pluginInstallation.createMany({ data: [{ userId, pluginId, enabled: false }], skipDuplicates: true })
     return { uninstalled: true }
   }
 
@@ -241,26 +259,39 @@ export class PluginsService {
   }
 
   async resolveForUse(userId: string, pluginId: string, capability: PluginCapability, role?: UserRole) {
-    const plugin = await this.prisma.plugin.findUnique({ where: { id: pluginId }, include: { installations: { where: { userId, enabled: true }, select: { userId: true } } } })
+    const plugin = await this.prisma.plugin.findUnique({ where: { id: pluginId }, include: { installations: { where: { userId }, select: { enabled: true } } } })
     if (!plugin || plugin.status !== PluginStatus.PUBLISHED) throw new NotFoundException('插件不存在或已停用')
     if (!this.effectiveCapabilities(plugin).includes(capability)) throw new BadRequestException('该插件不支持当前创作类型')
-    const allowed = plugin.visibility === PluginVisibility.PRIVATE ? plugin.ownerId === userId : plugin.visibility === PluginVisibility.OFFICIAL && plugin.installations.length > 0
+    const officialAllowed = plugin.installations.length ? plugin.installations.some((row) => row.enabled) : isPreinstalledPlugin(plugin)
+    const allowed = plugin.visibility === PluginVisibility.PRIVATE ? plugin.ownerId === userId : plugin.visibility === PluginVisibility.OFFICIAL && officialAllowed
     if (!allowed) throw new ForbiddenException('请先安装该插件')
     return { id: plugin.id, name: plugin.name, instruction: plugin.instruction, outputRequirements: plugin.outputRequirements, recommendedModel: plugin.recommendedModel, version: plugin.version, capability }
   }
 
-  adminList() {
-    return this.prisma.plugin.findMany({ where: { visibility: PluginVisibility.OFFICIAL }, orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }], include: { category: true, _count: { select: { installations: true, usages: true } } } })
+  async adminList() {
+    const rows = await this.prisma.plugin.findMany({ where: { visibility: PluginVisibility.OFFICIAL }, orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }], include: { category: true, _count: { select: { installations: true, usages: true } } } })
+    return rows.map((row) => ({ ...row, preinstalled: isPreinstalledPlugin(row) }))
+  }
+
+  restoreDefaults() {
+    return ensureDefaultSkillPresets(this.prisma)
+  }
+
+  private async officialConfig(body: AdminPluginDto, id?: string): Promise<Prisma.InputJsonValue | undefined> {
+    const provided = this.safeConfig(body.config)
+    if (body.preinstalled === undefined) return provided
+    const current = provided !== undefined ? pluginConfigObject(provided) : id ? pluginConfigObject((await this.prisma.plugin.findUnique({ where: { id }, select: { config: true } }))?.config) : {}
+    return { ...current, [PREINSTALLED_CONFIG_KEY]: body.preinstalled } as Prisma.InputJsonValue
   }
 
   async createOfficial(body: AdminPluginDto) {
     await this.validateCategory(body.categoryId, false)
-    return this.prisma.plugin.create({ data: { ...this.pluginData(body), ownerId: null, slug: body.slug, visibility: PluginVisibility.OFFICIAL, status: body.status || PluginStatus.DRAFT, featured: body.featured ?? false, priceCredits: body.priceCredits ?? 0, sortOrder: body.sortOrder ?? 0 } })
+    return this.prisma.plugin.create({ data: { ...this.pluginData(body), config: await this.officialConfig(body), ownerId: null, slug: body.slug, visibility: PluginVisibility.OFFICIAL, status: body.status || PluginStatus.DRAFT, featured: body.featured ?? false, priceCredits: body.priceCredits ?? 0, sortOrder: body.sortOrder ?? 0 } })
   }
 
   async updateOfficial(id: string, body: AdminPluginDto) {
     await this.validateCategory(body.categoryId, false)
-    const result = await this.prisma.plugin.updateMany({ where: { id, visibility: PluginVisibility.OFFICIAL, ownerId: null }, data: { ...this.pluginData(body), slug: body.slug, status: body.status || PluginStatus.DRAFT, featured: body.featured ?? false, priceCredits: body.priceCredits ?? 0, sortOrder: body.sortOrder ?? 0 } })
+    const result = await this.prisma.plugin.updateMany({ where: { id, visibility: PluginVisibility.OFFICIAL, ownerId: null }, data: { ...this.pluginData(body), config: await this.officialConfig(body, id), slug: body.slug, status: body.status || PluginStatus.DRAFT, featured: body.featured ?? false, priceCredits: body.priceCredits ?? 0, sortOrder: body.sortOrder ?? 0 } })
     if (!result.count) throw new NotFoundException('官方插件不存在')
     return this.prisma.plugin.findUniqueOrThrow({ where: { id } })
   }

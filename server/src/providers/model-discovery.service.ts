@@ -87,7 +87,13 @@ const VENDORS = [
   { key: 'xai', name: 'xAI', test: /(^|[\/:_-])(xai|grok)([\/:_-]|$)/i },
   { key: 'deepseek', name: 'DeepSeek', test: /deepseek/i },
   { key: 'qwen', name: 'Qwen', test: /qwen|qwq|tongyi/i },
-  { key: 'doubao', name: 'Doubao', test: /doubao|seedream|seedance|ark-/i },
+  { key: 'doubao', name: 'Doubao', test: /doubao|seedream|seedance|ark-|bytedance|seed-\d/i },
+  { key: 'kimi', name: 'Kimi', test: /kimi|moonshot/i },
+  { key: 'zhipu', name: '智谱 GLM', test: /zhipu|z-ai|glm[-_.]|\bglm\b/i },
+  { key: 'minimax', name: 'MiniMax', test: /minimax/i },
+  { key: 'hunyuan', name: '腾讯混元', test: /hunyuan|(^|[\/:_-])hy[34]([\/:_-]|$)|tencent/i },
+  { key: 'stepfun', name: '阶跃星辰', test: /stepfun|(^|[\/:_-])step[-_.]/i },
+  { key: 'longcat', name: 'LongCat', test: /longcat|meituan/i },
   { key: 'meta', name: 'Meta', test: /meta|llama/i },
   { key: 'mistral', name: 'Mistral AI', test: /mistral|mixtral|codestral|pixtral/i },
   { key: 'cohere', name: 'Cohere', test: /cohere|command-r/i },
@@ -96,7 +102,7 @@ const VENDORS = [
 
 const UNSUPPORTED_PATTERN = /embedding|embed-|rerank|moderation|guard|classifier|whisper|transcri|speech|tts|audio|realtime|search-query|reward|ocr/i
 const VIDEO_PATTERN = /video|sora|veo(?:-|$)|kling|hailuo|minimax.*video|wan(?:\d|[-_]).*video|seedance|vidu|luma.*ray/i
-const IMAGE_PATTERN = /image|dall-e|gpt-image|flux|recraft|ideogram|imagen|seedream|nano[-_ ]?banana|stable[-_ ]?diffusion|sdxl/i
+const IMAGE_PATTERN = /image|imagine|dall-e|gpt-image|flux|recraft|ideogram|imagen|seedream|nano[-_ ]?banana|stable[-_ ]?diffusion|sdxl/i
 
 @Injectable()
 export class ModelDiscoveryService {

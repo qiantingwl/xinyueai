@@ -1,0 +1,105 @@
+/* ── 首页兜底视觉：横幅无配图时的设计款默认卡 ──────────────────────────
+   只在 .jx-banner__slide--fallback（imageUrl 为空）下生效；有配图时完全沿用
+   skin-jixing.css 的原有样式。渐变底色由 StudioPage 按轮播序号内联轮换，
+   这里负责装饰（水印图标 / 光斑 / 网格纹理）与文案排版层级。
+   注意：本文件早于 skin-jixing.css 加载，选择器需用更高优先级覆盖。 */
+
+.chat-ui--jixing .jx-banner__slide.jx-banner__slide--fallback {
+  border-color: transparent;
+}
+
+/* 右上角大号半透明魔法棒水印，避开左下文案区 */
+.chat-ui--jixing .jx-banner__slide--fallback .jx-banner__deco {
+  position: absolute;
+  top: -30px;
+  right: -16px;
+  color: rgba(255, 255, 255, .22);
+  transform: rotate(12deg);
+  pointer-events: none;
+}
+
+/* 光斑：两处径向高光，营造渐变上的体积感（纯 CSS） */
+.chat-ui--jixing .jx-banner__slide--fallback::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(closest-side, rgba(255, 255, 255, .32), transparent 72%) 82% -18% / 240px 240px no-repeat,
+    radial-gradient(closest-side, rgba(255, 255, 255, .16), transparent 72%) 6% 112% / 280px 280px no-repeat;
+  pointer-events: none;
+}
+
+/* 细网格纹理：仅在中右部渐显，避免干扰左下文案 */
+.chat-ui--jixing .jx-banner__slide--fallback::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .07) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: linear-gradient(115deg, transparent 32%, rgba(0, 0, 0, .85) 78%);
+  mask-image: linear-gradient(115deg, transparent 32%, rgba(0, 0, 0, .85) 78%);
+  pointer-events: none;
+}
+
+/* 文案排版：标题加大加粗、描述次之、CTA 反白胶囊，白字 + 底部轻 scrim
+   保证在任意一套渐变上都可读（覆盖 skin-jixing.css 的浅色主题 scrim） */
+.chat-ui--jixing .jx-banner__slide--fallback .jx-banner__copy,
+html[data-studio-theme="light"] .chat-ui--jixing .jx-banner__slide--fallback .jx-banner__copy {
+  z-index: 1;
+  gap: 6px;
+  padding: 24px;
+  background: linear-gradient(transparent, rgba(9, 14, 28, .48));
+  color: #fff;
+}
+
+.chat-ui--jixing .jx-banner__slide--fallback .jx-banner__copy strong {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  text-shadow: 0 1px 10px rgba(9, 14, 28, .35);
+}
+
+.chat-ui--jixing .jx-banner__slide--fallback .jx-banner__copy small {
+  font-size: 13px;
+  opacity: .88;
+}
+
+.chat-ui--jixing .jx-banner__slide--fallback .jx-banner__copy em,
+html[data-studio-theme="light"] .chat-ui--jixing .jx-banner__slide--fallback .jx-banner__copy em {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 6px 15px;
+  background: rgba(255, 255, 255, .96);
+  color: #1e293b;
+  box-shadow: 0 2px 10px rgba(9, 14, 28, .28);
+  transition: transform var(--studio-duration-fast) var(--studio-ease);
+}
+
+.chat-ui--jixing .jx-banner__slide--fallback:hover .jx-banner__copy em {
+  transform: translateX(3px);
+}
+
+/* 轮播圆点在彩色渐变底上的可见性 */
+.chat-ui--jixing .jx-banner:has(.jx-banner__slide--fallback) nav button {
+  background: rgba(255, 255, 255, .5);
+}
+
+.chat-ui--jixing .jx-banner:has(.jx-banner__slide--fallback) nav button.is-active {
+  background: #fff;
+}
+
+/* ── 窄屏适配 ─────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .chat-ui--jixing .jx-banner__slide--fallback .jx-banner__deco svg {
+    width: 96px;
+    height: 96px;
+  }
+
+  .chat-ui--jixing .jx-banner__slide--fallback .jx-banner__copy strong {
+    font-size: 19px;
+  }
+}

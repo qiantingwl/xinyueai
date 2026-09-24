@@ -79,7 +79,7 @@ export const operationsApi = {
       params: {},
       showSuccessMessage: true
     }),
-  restoreCapabilityPresets: (resource: 'assistants' | 'tools') =>
+  restoreCapabilityPresets: (resource: 'assistants' | 'tools' | 'plugins') =>
     request.post<{ added: number; total: number }>({
       url: `/v1/admin/${resource}/restore-defaults`,
       params: {},

@@ -1,6 +1,7 @@
 import { reactive, ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import { api } from '../../services/api'
+import { copyText } from '../../utils/clipboard'
 import type {
   PendingTeamInvitation,
   Team,
@@ -67,7 +68,7 @@ export function useTeamManagement() {
       teamInviteRole.value = 'MEMBER'
       teamInviteId.value = ''
       await reloadTeams()
-      await navigator.clipboard.writeText(result.acceptUrl).catch(() => undefined)
+      await copyText(result.acceptUrl)
       teamMessage.value = result.emailSent
         ? '邀请邮件已发送，邀请链接也已复制'
         : '邀请已创建，链接已复制；配置 SMTP 后可自动发送邮件'

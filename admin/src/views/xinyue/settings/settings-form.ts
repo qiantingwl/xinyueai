@@ -11,6 +11,9 @@ const editableSettingKeys = [
   'sidebarPluginsEnabled',
   'sidebarProjectsEnabled',
   'sidebarAssetsEnabled',
+  'sidebarNav',
+  'workspaceNav',
+  'sectionNav',
   'registrationEnabled',
   'emailLoginEnabled',
   'emailVerifyEnabled',
@@ -29,6 +32,10 @@ const editableSettingKeys = [
   'defaultTheme',
   'defaultLanguage',
   'chatUiPreset',
+  'chatAvatarMotion',
+  'chatAvatarEnabled',
+  'chatAvatarStyle',
+  'chatAvatarColor',
   'chatHomeContent',
   'siteContent',
   'defaultChatModelKey',
@@ -116,9 +123,15 @@ const defaultChatHomeContent: ChatHomeContent = {
       webSearchEnabled: true,
       modelSelectorEnabled: true,
       moreEnabled: true
+    },
+    jixing: {
+      modeEnabled: false,
+      webSearchEnabled: true,
+      modelSelectorEnabled: true,
+      moreEnabled: false
     }
   },
-  quickActions: { gpt: [], doubao: [], qianwen: [], kimi: [] }
+  quickActions: { gpt: [], doubao: [], qianwen: [], kimi: [], jixing: [] }
 }
 
 export function normalizeChatHomeContent(value: unknown): ChatHomeContent {

@@ -54,6 +54,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Boxes, Check, ChevronDown, FileText, FolderOpen, Image as ImageIcon, LibraryBig, LoaderCircle, MousePointer2, RefreshCw, Search, Upload, Video as VideoIcon, X } from 'lucide-vue-next'
 import { api } from '../services/api'
+import { uploadAsset } from '../utils/asset-upload'
 import type { CanvasGenerationKind, CanvasNodeData } from '../types/canvas'
 
 export type CanvasAssetPanelItem = { id: string; kind: CanvasGenerationKind; name: string; mimeType: string; size: number; contentUrl: string; createdAt: string }
@@ -139,11 +140,7 @@ async function upload(event: Event) {
   uploading.value = true
   error.value = ''
   try {
-    const form = new FormData()
-    form.append('file', file)
-    const params = new URLSearchParams({ kind, purpose: 'library' })
-    if (props.projectId) params.set('projectId', props.projectId)
-    const asset = await api<CanvasAssetPanelItem>(`/assets/uploads?${params}`, { method: 'POST', body: form })
+    const asset = await uploadAsset<CanvasAssetPanelItem>(file, { kind, purpose: 'library', projectId: props.projectId })
     assets.value = [asset, ...assets.value.filter((item) => item.id !== asset.id)]
     emit('insert', asset)
   } catch (reason) { error.value = reason instanceof Error ? reason.message : '上传失败' }

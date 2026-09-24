@@ -4,6 +4,7 @@ import { TokenQuotaService } from '../billing/token-quota.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { TerminalSettlementError } from './generation-provider-errors'
 import { currentOutboundExecutionLease } from '../common/outbound-http'
+import { asJsonRecord } from '../common/json-record'
 
 const NON_CHAT_KINDS = new Set<JobKind>([JobKind.IMAGE, JobKind.VIDEO, JobKind.COMMERCE])
 
@@ -26,6 +27,7 @@ export class GenerationSettlementService {
         settlementStatus: true,
         provider: true,
         model: true,
+        conversationId: true,
         options: true,
         pricingSnapshot: true,
         creditCost: true,
@@ -46,7 +48,7 @@ export class GenerationSettlementService {
       throw new TerminalSettlementError('生成任务执行租约已失效，结算已拒绝')
     }
 
-    const options = this.object(job.options)
+    const options = asJsonRecord(job.options)
     const expectedOutputs = job.kind === JobKind.COMMERCE
       ? Math.max(1, Math.min(12, Math.trunc(Number(options.modules || 8))))
       : job.kind === JobKind.IMAGE
@@ -90,14 +92,14 @@ export class GenerationSettlementService {
       if (marked.count !== 1) throw new TerminalSettlementError('任务结算状态发生并发变化')
     }
 
-    const billing = this.object(options.billing)
-    const attemptMetadata = this.object(attempt.metadata)
+    const billing = asJsonRecord(options.billing)
+    const attemptMetadata = asJsonRecord(attempt.metadata)
     const providerRequestId = this.firstString(
       attemptMetadata.providerRequestId,
       attemptMetadata.requestId,
       attemptMetadata.request_id,
     )
-    const baseSnapshot = this.object(job.pricingSnapshot)
+    const baseSnapshot = asJsonRecord(job.pricingSnapshot)
     const pricingSnapshot = {
       ...baseSnapshot,
       kind: job.kind,
@@ -108,7 +110,7 @@ export class GenerationSettlementService {
     } as Prisma.InputJsonValue
 
     try {
-      return await this.tokenQuota.settleGeneration({
+      const settled = await this.tokenQuota.settleGeneration({
         userId: job.userId,
         generationId,
         reservations: [],
@@ -136,17 +138,16 @@ export class GenerationSettlementService {
           idempotencyKey: `job:${generationId}:creation-ledger`,
         },
       })
+      if (job.conversationId) {
+        await this.prisma.conversation.update({ where: { id: job.conversationId }, data: { updatedAt: new Date() } }).catch(() => undefined)
+      }
+      return settled
     } catch (error) {
       if (error instanceof TerminalSettlementError) throw error
       throw new TerminalSettlementError(`非聊天任务结算失败：${error instanceof Error ? error.message : '未知错误'}`)
     }
   }
 
-  private object(value: unknown): Record<string, unknown> {
-    return value && typeof value === 'object' && !Array.isArray(value)
-      ? value as Record<string, unknown>
-      : {}
-  }
 
   private firstString(...values: unknown[]) {
     return values.find((value): value is string => typeof value === 'string' && value.length > 0)

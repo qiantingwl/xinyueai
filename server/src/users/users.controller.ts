@@ -22,14 +22,50 @@ class UpdateSettingsDto {
   @IsOptional() @IsBoolean() temporaryChatDefault?: boolean
   @IsOptional() @IsInt() @Min(0) @Max(3650) dataRetentionDays?: number
   @IsOptional() @IsBoolean() shareUsageAnalytics?: boolean
+  @IsOptional() @IsBoolean() onboarded?: boolean
 }
+
+const userSettingsSelect = {
+  appearance: true,
+  language: true,
+  responseStyle: true,
+  responseDetail: true,
+  replyLanguage: true,
+  customInstructions: true,
+  nickname: true,
+  occupation: true,
+  bio: true,
+  useMemory: true,
+  referenceChats: true,
+  notifications: true,
+  chatHistoryEnabled: true,
+  trainingOptOut: true,
+  temporaryChatDefault: true,
+  dataRetentionDays: true,
+  shareUsageAnalytics: true,
+  onboarded: true,
+} as const
 
 @Controller('users')
 @UseGuards(AuthGuard)
 export class UsersController {
   constructor(private readonly prisma: PrismaService) {}
   @Get('me') async me(@CurrentUser() user: AuthenticatedUser) {
-    return this.prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { id: true, email: true, displayName: true, avatarUrl: true, role: true, createdAt: true, settings: true, creditAccount: { select: { balance: true } }, subscriptions: { where: { status: { in: ['ACTIVE', 'TRIALING'] } }, orderBy: { createdAt: 'desc' }, take: 1, include: { plan: true } }, groupMemberships: { include: { group: { select: { id: true, name: true, color: true } } } } } })
+    return this.prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        avatarUrl: true,
+        role: true,
+        createdAt: true,
+        settings: { select: userSettingsSelect },
+        creditAccount: { select: { balance: true } },
+        subscriptions: { where: { status: { in: ['ACTIVE', 'TRIALING'] } }, orderBy: { createdAt: 'desc' }, take: 1, include: { plan: true } },
+        groupMemberships: { include: { group: { select: { id: true, name: true, color: true } } } },
+      },
+    })
   }
   @Patch('me/settings') async updateSettings(@CurrentUser() user: AuthenticatedUser, @Body() body: UpdateSettingsDto) {
     return this.prisma.userSettings.upsert({ where: { userId: user.id }, update: body, create: { userId: user.id, ...body } })

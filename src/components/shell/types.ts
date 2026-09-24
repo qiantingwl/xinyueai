@@ -1,6 +1,7 @@
 import type { Component } from 'vue'
 import type { PaymentMethodKey, PaymentProviderKey } from '../../constants/payment'
 import type { StudioMode } from '../../types'
+import type { SectionNavPreference, SidebarNavPreference } from '../../utils/sidebar-nav'
 
 export type SettingsSection = 'general' | 'personalization' | 'notifications' | 'data' | 'plan' | 'api' | 'credits' | 'redeem' | 'invite' | 'workspace' | 'teams' | 'support' | 'account'
 
@@ -24,6 +25,7 @@ export interface WorkspaceSettings {
   dataRetentionDays: number
   shareUsageAnalytics: boolean
   redeemCode: string
+  onboarded: boolean
 }
 
 export interface PublicSettings {
@@ -39,9 +41,13 @@ export interface PublicSettings {
   sidebarPluginsEnabled: boolean
   sidebarProjectsEnabled: boolean
   sidebarAssetsEnabled: boolean
+  sidebarNav: SidebarNavPreference
+  workspaceNav: SidebarNavPreference
+  sectionNav: SectionNavPreference
+  imagePromptEnabled: boolean
 }
 
-export interface UserSettingsResponse { appearance?: string; language?: string; responseStyle?: string; responseDetail?: string; replyLanguage?: string; customInstructions?: string; nickname?: string; occupation?: string; bio?: string; useMemory?: boolean; referenceChats?: boolean; notifications?: boolean; chatHistoryEnabled?: boolean; trainingOptOut?: boolean; temporaryChatDefault?: boolean; dataRetentionDays?: number; shareUsageAnalytics?: boolean }
+export interface UserSettingsResponse { appearance?: string; language?: string; responseStyle?: string; responseDetail?: string; replyLanguage?: string; customInstructions?: string; nickname?: string; occupation?: string; bio?: string; useMemory?: boolean; referenceChats?: boolean; notifications?: boolean; chatHistoryEnabled?: boolean; trainingOptOut?: boolean; temporaryChatDefault?: boolean; dataRetentionDays?: number; shareUsageAnalytics?: boolean; onboarded?: boolean }
 export interface UserResponse { settings?: UserSettingsResponse | null; creditAccount?: { balance: number } | null }
 export interface NotificationItem { id: string; title?: string; body?: string; content?: string; readAt?: string | null; createdAt: string }
 export interface ModerationAppeal { id: string; status: 'PENDING' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'CANCELLED'; reason: string; reviewNote: string; createdAt: string; reviewedAt?: string | null }

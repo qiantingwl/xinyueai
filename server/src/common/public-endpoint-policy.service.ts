@@ -121,7 +121,9 @@ export class PublicEndpointPolicyService {
     const lookupHost = normalizedHostname(url)
     let addresses: string[]
     try { addresses = isIP(lookupHost) ? [lookupHost] : (await lookup(lookupHost, { all: true, verbatim: true })).map((item) => item.address) } catch { throw new BadRequestException('工具 Endpoint DNS 解析失败') }
-    if (!addresses.length || addresses.some((address) => isPrivateNetworkAddress(address))) throw new BadRequestException('工具 Endpoint 解析到非公网地址')
+    if (!addresses.length) throw new BadRequestException('工具 Endpoint 解析到非公网地址')
+    const publicAddresses = addresses.filter((address) => !isPrivateNetworkAddress(address))
+    if (!publicAddresses.length) throw new BadRequestException('工具 Endpoint 解析到非公网地址')
     return url
   }
 }

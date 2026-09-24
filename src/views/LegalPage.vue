@@ -48,6 +48,7 @@ import { useRoute } from 'vue-router'
 import { ArrowLeft, ArrowRight } from 'lucide-vue-next'
 import DOMPurify from 'dompurify'
 import { api } from '../services/api'
+import { formatLongDay } from '../utils/datetime'
 
 type ContentPage = { slug: string; title: string; category: string; summary: string; contentHtml: string; publishedAt?: string | null; updatedAt: string }
 type ContentSummary = Pick<ContentPage, 'slug' | 'title' | 'category'>
@@ -104,5 +105,5 @@ function parseSections(html: string): Section[] {
 
 function slugify(value: string) { return value.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-|-$/g, '') || 'section' }
 function uniqueSectionId(base: string, rows: Section[]) { let id = base; let index = 2; while (rows.some((row) => row.id === id)) id = `${base}-${index++}`; return id }
-function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('zh-CN', { dateStyle: 'long' }).format(date) }
+function formatDate(value: string) { return formatLongDay(value, value) }
 </script>

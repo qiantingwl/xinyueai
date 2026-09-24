@@ -59,6 +59,7 @@ export interface CanvasNodeData {
   status?: CanvasGenerationStatus
   error?: string
   creditCost?: number
+  fontSize?: number
   dramaStage?: CanvasDramaStage
   dramaRole?: CanvasDramaRole
   episodeId?: string
@@ -149,4 +150,34 @@ export interface CanvasRecord extends Omit<CanvasSummary, 'nodeCount' | 'edgeCou
 
 export function emptyCanvasDocument(): CanvasDocumentPayload {
   return { version: 1, viewport: { x: 0, y: 0, zoom: 1 }, background: 'lines', nodes: [], edges: [] }
+}
+
+export function canvasDocumentFromStudioAssets(
+  assets: Array<{ id: string; title?: string; contentUrl?: string; mimeType?: string; prompt?: string; kind?: string }>,
+  prompt = '',
+): CanvasDocumentPayload {
+  const nodes = assets.filter((asset) => asset.contentUrl).map((asset, index) => {
+    const isVideo = asset.kind === 'video' || asset.kind === 'VIDEO'
+    const type: CanvasNodeKind = isVideo ? 'VIDEO' : 'IMAGE'
+    const title = (asset.title || prompt || (isVideo ? '生成视频' : '生成图片')).replace(/\s+/g, ' ').trim().slice(0, 120)
+    return {
+      id: `gen-${index + 1}`,
+      type,
+      title,
+      position: { x: 80 + index * 360, y: 80 },
+      size: { width: 320, height: isVideo ? 240 : 320 },
+      data: {
+        kind: type,
+        title,
+        content: '',
+        url: asset.contentUrl,
+        assetId: asset.id,
+        mimeType: asset.mimeType,
+        prompt: (asset.prompt || prompt || '').slice(0, 20_000),
+        generationKind: type,
+        status: 'SUCCEEDED' as const,
+      },
+    }
+  })
+  return { version: 1, viewport: { x: 0, y: 0, zoom: 1 }, background: 'lines', nodes, edges: [] }
 }

@@ -100,9 +100,12 @@ export class AdminOperationsController {
     const group = await this.prisma.userGroup.findFirst({ where: { id, enabled: true } })
     if (!group) throw new BadRequestException('只能将已启用的分组设为默认分组')
     const before = await this.prisma.systemSetting.upsert({ where: { id: 'global' }, update: {}, create: { id: 'global' } })
-    await this.prisma.systemSetting.update({ where: { id: 'global' }, data: { defaultUserGroupId: group.id } })
     const users = await this.prisma.user.findMany({ where: { role: 'USER', groupMemberships: { none: {} } }, select: { id: true } })
-    if (users.length) await this.prisma.userGroupMember.createMany({ data: users.map((user) => ({ groupId: group.id, userId: user.id })), skipDuplicates: true })
+    // 切换默认分组和回填存量用户必须同生共死，否则会出现「默认分组已切换但存量用户无分组」
+    await this.prisma.$transaction(async (tx) => {
+      await tx.systemSetting.update({ where: { id: 'global' }, data: { defaultUserGroupId: group.id } })
+      if (users.length) await tx.userGroupMember.createMany({ data: users.map((user) => ({ groupId: group.id, userId: user.id })), skipDuplicates: true })
+    })
     await this.audit(admin.id, request, 'group.default.update', 'group', group.id, { defaultUserGroupId: before.defaultUserGroupId }, { defaultUserGroupId: group.id, assignedUsers: users.length })
     return { id: group.id, name: group.name, assignedUsers: users.length }
   }
@@ -166,27 +169,40 @@ export class AdminOperationsController {
 
   private async ensureDefaultGroup(assignExistingUsers = false) {
     const settings = await this.prisma.systemSetting.upsert({ where: { id: 'global' }, update: {}, create: { id: 'global' } })
-    let group = settings.defaultUserGroupId ? await this.prisma.userGroup.findUnique({ where: { id: settings.defaultUserGroupId } }) : null
-    if (!group) group = await this.prisma.userGroup.upsert({ where: { name: '默认用户' }, update: { enabled: true }, create: { name: '默认用户', description: '所有新注册用户的基础权限与计费策略', color: '#397157', enabled: true } })
-    if (!group.enabled) group = await this.prisma.userGroup.update({ where: { id: group.id }, data: { enabled: true } })
-    if (settings.defaultUserGroupId !== group.id) await this.prisma.systemSetting.update({ where: { id: 'global' }, data: { defaultUserGroupId: group.id } })
-    if (assignExistingUsers) {
-      const users = await this.prisma.user.findMany({ where: { role: 'USER', groupMemberships: { none: {} } }, select: { id: true } })
-      if (users.length) await this.prisma.userGroupMember.createMany({ data: users.map((user) => ({ groupId: group!.id, userId: user.id })), skipDuplicates: true })
-    }
-    return group
+    // 分组兜底、启用、写默认设置、回填成员是一套半初始化敏感操作，整体包进事务
+    return this.prisma.$transaction(async (tx) => {
+      let group = settings.defaultUserGroupId ? await tx.userGroup.findUnique({ where: { id: settings.defaultUserGroupId } }) : null
+      if (!group) group = await tx.userGroup.upsert({ where: { name: '默认用户' }, update: { enabled: true }, create: { name: '默认用户', description: '所有新注册用户的基础权限与计费策略', color: '#397157', enabled: true } })
+      if (!group.enabled) group = await tx.userGroup.update({ where: { id: group.id }, data: { enabled: true } })
+      if (settings.defaultUserGroupId !== group.id) await tx.systemSetting.update({ where: { id: 'global' }, data: { defaultUserGroupId: group.id } })
+      if (assignExistingUsers) {
+        const users = await tx.user.findMany({ where: { role: 'USER', groupMemberships: { none: {} } }, select: { id: true } })
+        if (users.length) {
+          const groupId = group.id
+          await tx.userGroupMember.createMany({ data: users.map((user) => ({ groupId, userId: user.id })), skipDuplicates: true })
+        }
+      }
+      return group
+    })
   }
 
   @Post('users/bulk/credits')
   async bulkCredits(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Body() body: BulkCreditsDto) {
     const users = await this.prisma.user.findMany({ where: { id: { in: body.userIds }, role: 'USER' }, select: { id: true } })
+    // 每人一次 Serializable 事务，量级必须有上限；逐人失败不再中断其余用户
+    if (users.length > 1000) throw new BadRequestException('单次批量调整最多 1000 个用户，请分批操作')
     let updated = 0
+    const failed: Array<{ userId: string; reason: string }> = []
     for (const user of users) {
-      await this.credits.mutate(user.id, body.amount, 'ADJUST', body.reason, `admin-bulk:${admin.id}:${user.id}:${Date.now()}`)
-      updated += 1
+      try {
+        await this.credits.mutate(user.id, body.amount, 'ADJUST', body.reason, `admin-bulk:${admin.id}:${user.id}:${Date.now()}`)
+        updated += 1
+      } catch (reason) {
+        failed.push({ userId: user.id, reason: reason instanceof Error ? reason.message : '调整失败' })
+      }
     }
-    await this.audit(admin.id, request, 'users.bulk.credits', 'user', undefined, undefined, { userIds: users.map((user) => user.id), amount: body.amount, reason: body.reason, count: updated })
-    return { updated }
+    await this.audit(admin.id, request, 'users.bulk.credits', 'user', undefined, undefined, { userIds: users.map((user) => user.id), amount: body.amount, reason: body.reason, count: updated, failedCount: failed.length })
+    return { updated, failed }
   }
 
   @Get('credits/ledger')

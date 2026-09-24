@@ -12,6 +12,7 @@ import type {
   StudioAsset
 } from '../../types'
 import { createClientId } from '../../utils/client-id'
+import { formatDayTime as formatDate } from '../../utils/datetime'
 
 type AssistantOption = { id: string; name: string; description: string; defaultModel?: string }
 type ProjectTeam = {
@@ -85,15 +86,6 @@ export function useStudioProjectWorkspace(options: Options) {
       manageableProjectTeams.value.some((team) => team.id === assetTeamTarget.value?.teamId)
     )
   ))
-
-  function formatDate(value: number) {
-    return new Intl.DateTimeFormat('zh-CN', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(value)
-  }
 
   function closeProjectDetails() {
     projectDetailOpen.value = false

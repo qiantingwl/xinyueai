@@ -2,7 +2,7 @@
   <div class="dashboard-page">
     <header class="dashboard-heading">
       <div
-        ><h1>{{ xt('分析页') }}</h1
+        ><h1>{{ xt('经营分析') }}</h1
         ><p>{{ xt('用量、成本和渠道表现的经营分析') }}</p></div
       >
       <div class="heading-actions">
@@ -77,21 +77,24 @@
               prop="label"
               :label="xt('模型')"
               min-width="160"
-              show-overflow-tooltip
-            /><ElTableColumn prop="jobs" :label="xt('任务')" width="80" sortable /><ElTableColumn
+              show-overflow-tooltip /><ElTableColumn
+              prop="jobs"
+              :label="xt('任务')"
+              width="80"
+              sortable /><ElTableColumn
               prop="outputs"
               :label="xt('输出')"
-              width="80"
-            /><ElTableColumn :label="xt('收入')" width="100"
+              width="80" /><ElTableColumn :label="xt('收入')" width="100"
               ><template #default="{ row }">{{
-                moneyMicros(row.revenueMicros)
+                formatMicrosCny(row.revenueMicros)
               }}</template></ElTableColumn
             ><ElTableColumn :label="xt('毛利率')" width="100"
               ><template #default="{ row }">{{ percent(row.marginRate) }}</template></ElTableColumn
-            ></ElTable
-          ></section
-        ></ElCol
-      >
+            ><template #empty
+              ><ElEmpty
+                :description="xt('暂无模型用量')"
+                :image-size="72" /></template></ElTable></section
+      ></ElCol>
       <ElCol :xs="24" :lg="12"
         ><section class="art-card table-card"
           ><div class="card-heading"
@@ -106,7 +109,7 @@
               ><div class="provider-line"
                 ><strong>{{ row.label }}</strong
                 ><span
-                  >{{ row.jobs }} {{ xt('个任务') }} · {{ moneyMicros(row.costMicros) }}</span
+                  >{{ row.jobs }} {{ xt('个任务') }} · {{ formatMicrosCny(row.costMicros) }}</span
                 ></div
               ><ElProgress
                 :percentage="providerPercent(row.jobs)"
@@ -155,10 +158,12 @@
   } from '@/api/xinyue/dashboard'
   import { xinyueLocale, xinyueText as xt } from '@/locales/xinyue'
   import { router } from '@/router'
+  import { useXinyueAsync } from '@/hooks'
+  import { formatMicrosCny } from '@/utils/xinyue/formatters'
 
   defineOptions({ name: 'Analysis' })
   const days = ref(30)
-  const loading = ref(false)
+  const { loading, withLoading } = useXinyueAsync()
   const report = ref<UsageReport | null>(null)
   const overview = ref<Overview | null>(null)
   const dateLabels = computed(() => report.value?.daily.map((item) => item.date.slice(5)) || [])
@@ -175,7 +180,6 @@
         report.value?.daily.map((item) => Number((item.costMicros / 1_000_000).toFixed(2))) || []
     }
   ])
-  const moneyMicros = (value: number) => `¥${(value / 1_000_000).toFixed(2)}`
   const percent = (value: number | null) => (value === null ? '-' : `${value.toFixed(1)}%`)
   const providerPercent = (value: number) => {
     const max = Math.max(...(report.value?.providers || []).map((row) => row.jobs), 1)
@@ -191,39 +195,36 @@
     },
     {
       label: xt('平台收入'),
-      value: moneyMicros(report.value?.summary.revenueMicros || 0),
+      value: formatMicrosCny(report.value?.summary.revenueMicros || 0),
       note: `${xt('毛利率')} ${percent(report.value?.summary.marginRate ?? null)}`,
       icon: 'ri:money-cny-circle-line',
       tone: 'blue'
     },
     {
       label: xt('上游成本'),
-      value: moneyMicros(report.value?.summary.costMicros || 0),
+      value: formatMicrosCny(report.value?.summary.costMicros || 0),
       note: `${report.value?.summary.credits || 0} ${xt('点消耗')}`,
       icon: 'ri:wallet-3-line',
       tone: 'orange'
     },
     {
-      label: 'Token 用量',
+      label: xt('Token 用量'),
       value: new Intl.NumberFormat(xinyueLocale()).format(
         (report.value?.summary.inputTokens || 0) + (report.value?.summary.outputTokens || 0)
       ),
-      note: `缓存 ${new Intl.NumberFormat(xinyueLocale()).format(report.value?.summary.cachedInputTokens || 0)} · 推理 ${new Intl.NumberFormat(xinyueLocale()).format(report.value?.summary.reasoningTokens || 0)}`,
+      note: `${xt('缓存')} ${new Intl.NumberFormat(xinyueLocale()).format(report.value?.summary.cachedInputTokens || 0)} · ${xt('推理')} ${new Intl.NumberFormat(xinyueLocale()).format(report.value?.summary.reasoningTokens || 0)}`,
       icon: 'ri:image-2-line',
       tone: 'purple'
     }
   ])
 
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       ;[report.value, overview.value] = await Promise.all([
         xinyueApi.usageReport(days.value),
         xinyueApi.overview()
       ])
-    } finally {
-      loading.value = false
-    }
+    })
   }
   const go = (path: string) => router.push(path)
   function exportCsv() {

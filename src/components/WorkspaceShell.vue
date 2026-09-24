@@ -39,6 +39,7 @@
         :archive-conversation="archiveConversation"
         :delete-conversation="deleteConversation"
       />
+      <p v-if="studio.temporaryChat && activeMode !== 'chat'" class="temporary-chat-banner" role="status">临时会话进行中，这次内容不会进入历史记录。</p>
       <slot />
     </main>
 
@@ -68,18 +69,18 @@
         @select="selectSettingsSection"
       >
         <GeneralSection v-if="settingsSection === 'general'" :settings="settings" />
+        <NotificationsSection
+          v-if="settingsSection === 'general'"
+          :settings="settings"
+          :notifications="notifications"
+          :unread-count="unreadCount"
+          :mark-all-read="markAllRead"
+        />
         <PersonalizationSection
           v-else-if="settingsSection === 'personalization'"
           :settings="settings"
           :settings-message="settingsMessage"
           :save-settings="saveSettings"
-        />
-        <NotificationsSection
-          v-else-if="settingsSection === 'notifications'"
-          :settings="settings"
-          :notifications="notifications"
-          :unread-count="unreadCount"
-          :mark-all-read="markAllRead"
         />
         <DataSection
           v-else-if="settingsSection === 'data'"
@@ -146,7 +147,7 @@
           :delete-private-model="deletePrivateModel"
         />
         <CreditsSection
-          v-else-if="settingsSection === 'credits'"
+          v-if="settingsSection === 'plan'"
           :public-settings="publicSettings"
           :recharge-packages="rechargePackages"
           :creating-order="creatingOrder"
@@ -157,7 +158,7 @@
           :format-money="formatMoney"
         />
         <RedeemSection
-          v-else-if="settingsSection === 'redeem'"
+          v-if="settingsSection === 'plan'"
           :settings="settings"
           :redeeming="redeeming"
           :redeem-message="redeemMessage"
@@ -165,7 +166,7 @@
           :redeem-credits="redeemCredits"
         />
         <InviteSection
-          v-else-if="settingsSection === 'invite'"
+          v-if="settingsSection === 'plan'"
           :invite-info="inviteInfo"
           :invite-copied="inviteCopied"
           :copy-invite="copyInvite"
@@ -226,7 +227,7 @@
         />
         <SupportCenter v-else-if="settingsSection === 'support'" />
         <AccountSection
-          v-else
+          v-else-if="settingsSection === 'account'"
           v-model:deletion-reason="deletionReason"
           :account-deletion="accountDeletion"
           :deletion-busy="deletionBusy"
@@ -293,6 +294,13 @@
         :save-private-model="savePrivateModel"
         @close="privateModelEditor = null"
       />
+      <WelcomeOnboarding
+        v-if="showOnboarding"
+        :settings="settings"
+        :site-name="catalog.settings.siteName || 'Xinyue AI'"
+        :save-settings="saveSettings"
+        @complete="showOnboarding = false"
+      />
     </Teleport>
   </div>
 </template>
@@ -306,11 +314,7 @@ import type { PaymentMethodKey } from '../constants/payment'
 import {
   Archive,
   ArchiveRestore,
-  Bell,
   BookOpen,
-  CircleGauge,
-  CirclePlus,
-  Gift,
   KeyRound,
   LifeBuoy,
   Pencil,
@@ -326,6 +330,7 @@ import {
   WalletCards,
 } from 'lucide-vue-next'
 import SupportCenter from './SupportCenter.vue'
+import { paymentStatusTitleText } from './shell/labels'
 import ShellSidebar from './shell/ShellSidebar.vue'
 import ShellHeader from './shell/ShellHeader.vue'
 import SettingsDialog from './shell/settings/SettingsDialog.vue'
@@ -341,6 +346,7 @@ import InviteSection from './shell/settings/sections/InviteSection.vue'
 import WorkspaceSection from './shell/settings/sections/WorkspaceSection.vue'
 import TeamsSection from './shell/settings/sections/TeamsSection.vue'
 import AccountSection from './shell/settings/sections/AccountSection.vue'
+import WelcomeOnboarding from './shell/WelcomeOnboarding.vue'
 import UpgradeDialog from './shell/billing/UpgradeDialog.vue'
 import CheckoutDialog from './shell/billing/CheckoutDialog.vue'
 import ApiKeyDialog from './shell/ApiKeyDialog.vue'
@@ -352,9 +358,11 @@ import { useStudioStore } from '../stores/studio'
 import { api, apiUrl } from '../services/api'
 import { safeHttpNavigationUrl } from '../utils/safe-url'
 import { readStoredSettings, updateStoredSettings, writeStoredSettings } from '../utils/settings-storage'
+import { emptySectionNav, emptySidebarNav, parseSectionNav, parseSidebarNav } from '../utils/sidebar-nav'
 import { useTeamManagement } from '../composables/shell/useTeamManagement'
 import { useKnowledgeBases } from '../composables/shell/useKnowledgeBases'
 import { useConversationActions } from '../composables/shell/useConversationActions'
+import { useCopyFeedback } from '../composables/useCopyFeedback'
 import type {
   ApiCredential,
   AssistantToolBinding,
@@ -458,7 +466,7 @@ const settingsMessage = ref('')
 const redeemMessage = ref('')
 const redeemError = ref(false)
 const redeeming = ref(false)
-const inviteCopied = ref(false)
+const { copied: inviteCopied, copy: copyInviteLink } = useCopyFeedback()
 const {
   teams, pendingTeamInvitations, teamDraft, teamInviteId, teamInviteEmail, teamInviteRole,
   teamBusy, teamMessage, teamError, expandedTeamId, teamResources, teamLedgerOpenId,
@@ -503,6 +511,10 @@ const publicSettings = reactive<PublicSettings>({
   sidebarPluginsEnabled: true,
   sidebarProjectsEnabled: true,
   sidebarAssetsEnabled: true,
+  sidebarNav: emptySidebarNav(),
+  workspaceNav: emptySidebarNav(),
+  sectionNav: emptySectionNav(),
+  imagePromptEnabled: true,
 })
 const rechargePackages = ref<RechargePackage[]>([])
 const rechargeOrders = ref<RechargeOrder[]>([])
@@ -548,7 +560,12 @@ const dataActionMessage = ref('')
 const dataActionError = ref(false)
 const unreadCount = computed(() => notifications.value.filter((item) => !item.readAt).length)
 const showUpgradeEntry = computed(() => publicSettings.subscriptionsEnabled || publicSettings.trialEnabled || subscriptionPlans.value.length > 0)
-watch(teams, (rows) => rows.forEach((team) => team.members.forEach((member) => { teamQuotaDrafts[`${team.id}:${member.userId}`] = member.monthlyCreditLimit === null ? '' : String(member.monthlyCreditLimit) })), { deep: true, immediate: true })
+// 浅层监听且只补缺失的草稿：后台重新拉取团队列表时不能把用户正在输入的配额草稿冲掉
+watch(teams, (rows) => rows.forEach((team) => team.members.forEach((member) => {
+  const key = `${team.id}:${member.userId}`
+  if (key in teamQuotaDrafts) return
+  teamQuotaDrafts[key] = member.monthlyCreditLimit === null ? '' : String(member.monthlyCreditLimit)
+})), { immediate: true })
 const eligiblePaymentChannels = computed(() => paymentIntent.value ? paymentChannels.value.filter((item) => item.minAmountCents <= paymentIntent.value!.amountCents && (!item.maxAmountCents || item.maxAmountCents >= paymentIntent.value!.amountCents)) : [])
 const availablePaymentCoupons = computed(() => {
   const planId = paymentIntent.value?.orderType === 'SUBSCRIPTION' ? paymentIntent.value.productId : ''
@@ -556,7 +573,7 @@ const availablePaymentCoupons = computed(() => {
 })
 const selectedPaymentChannel = computed(() => eligiblePaymentChannels.value.find((item) => item.id === selectedPaymentChannelId.value) || null)
 const paymentInstructions = computed(() => String(paymentTransaction.value?.metadata?.instructions || ''))
-const paymentStatusTitle = computed(() => ({ PENDING: '等待完成付款', PAID: '付款已确认，正在发放权益', COMPLETED: '支付完成，权益已到账', FAILED: '支付或权益入账失败', CANCELLED: '交易已取消', EXPIRED: '交易已过期', REFUNDED: '交易已退款' }[paymentTransaction.value?.status || ''] || '正在确认交易'))
+const paymentStatusTitle = computed(() => paymentStatusTitleText[paymentTransaction.value?.status || ''] || '正在确认交易')
 const storedSettings = readStoredSettings()
 const storedLanguage = storedSettings.language === 'English' ? 'en' : storedSettings.language === '中文' ? 'zh-CN' : storedSettings.language
 const storedAppearance = storedSettings.appearance === 'light' ? '浅色' : storedSettings.appearance === 'dark' ? '深色' : storedSettings.appearance === 'system' ? '跟随系统' : storedSettings.appearance
@@ -580,22 +597,27 @@ const settings = reactive<WorkspaceSettings>({
   dataRetentionDays: storedSettings.dataRetentionDays ?? 0,
   shareUsageAnalytics: storedSettings.shareUsageAnalytics ?? false,
   redeemCode: '',
+  onboarded: storedSettings.onboarded !== false,
 })
+const showOnboarding = ref(false)
 const settingsNav = computed(() => [
   { id: 'general' as const, label: t('settings.general'), icon: Sun },
   { id: 'personalization' as const, label: t('settings.personalization'), icon: Sparkles },
-  { id: 'notifications' as const, label: t('settings.notifications'), icon: Bell },
   { id: 'data' as const, label: t('settings.data'), icon: SlidersHorizontal },
   { id: 'plan' as const, label: '套餐与账单', icon: WalletCards },
   { id: 'api' as const, label: t('settings.api'), icon: KeyRound },
-  { id: 'credits' as const, label: t('settings.credits'), icon: CircleGauge },
-  { id: 'redeem' as const, label: t('settings.redeem'), icon: CirclePlus },
-  { id: 'invite' as const, label: t('settings.invite'), icon: Gift },
   { id: 'workspace' as const, label: '知识与工具', icon: BookOpen },
   { id: 'teams' as const, label: '团队空间', icon: Users },
   { id: 'support' as const, label: '帮助与客服', icon: LifeBuoy },
   { id: 'account' as const, label: t('settings.account'), icon: UserRound },
 ])
+const settingsAliases: Record<string, SettingsSection> = {
+  notifications: 'general',
+  sidebar: 'general',
+  credits: 'plan',
+  redeem: 'plan',
+  invite: 'plan',
+}
 
 function applyTheme() {
   document.documentElement.dataset.studioTheme = settings.appearance === '浅色' ? 'light' : settings.appearance === '深色' ? 'dark' : window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
@@ -605,7 +627,12 @@ function applyTheme() {
 
 watch(() => [settings.appearance, settings.language], applyTheme, { immediate: true })
 let settingsTimer = 0
-watch(settings, () => {
+// 监听源剔除 redeemCode：它是兑换框的临时输入，每次按键都会触发本监听，
+// 若不剔除则每个字符都会写一次 localStorage 并调度一次服务器保存。
+watch(() => {
+  const { redeemCode: _redeemCode, ...persisted } = settings
+  return persisted
+}, () => {
   writeStoredSettings({ ...settings, redeemCode: '' })
   if (!settingsHydrated.value) return
   window.clearTimeout(settingsTimer)
@@ -649,8 +676,15 @@ onMounted(async () => {
     await router.replace({ query })
     openSettings('teams')
   }
-  const requestedSection = String(route.query.settings || '') as SettingsSection
-  if (settingsNav.value.some((item) => item.id === requestedSection)) openSettings(requestedSection)
+  const requestedSection = (settingsAliases[String(route.query.settings || '')] || String(route.query.settings || '')) as SettingsSection
+  if (settingsNav.value.some((item) => item.id === requestedSection)) {
+    openSettings(requestedSection)
+    // 深链参数消费后立即从 URL 移除：否则地址栏一直带着 ?settings=xxx，
+    // 刷新、退出再登录（redirect 保留完整路径）都会重复自动打开设置抽屉
+    const consumedQuery = { ...route.query }
+    delete consumedQuery.settings
+    void router.replace({ query: consumedQuery })
+  }
 })
 onUnmounted(() => {
   document.body.classList.remove('has-workspace')
@@ -662,7 +696,7 @@ onUnmounted(() => {
 
 function openSettings(section: SettingsSection) {
   document.dispatchEvent(new Event('xinyue:close-popovers'))
-  settingsSection.value = section
+  settingsSection.value = settingsAliases[section] || section
   settingsOpen.value = true
   accountOpen.value = false
   mobileOpen.value = false
@@ -684,7 +718,7 @@ function openTeamSettings() {
 }
 
 function selectSettingsSection(section: SettingsSection) {
-  settingsSection.value = section
+  settingsSection.value = settingsAliases[section] || section
   scrollActiveSetting('smooth')
 }
 
@@ -705,6 +739,7 @@ function settingsPayload() {
     bio: settings.bio, useMemory: settings.useMemory, referenceChats: settings.referenceChats, notifications: settings.notifications,
     chatHistoryEnabled: settings.chatHistoryEnabled, trainingOptOut: settings.trainingOptOut, temporaryChatDefault: settings.temporaryChatDefault,
     dataRetentionDays: settings.dataRetentionDays, shareUsageAnalytics: settings.shareUsageAnalytics,
+    onboarded: settings.onboarded !== false,
   }
 }
 
@@ -722,17 +757,21 @@ async function loadWorkspaceData() {
     api<ExternalNavLinkItem[]>('/catalog/external-links').catch(() => []),
   ])
   Object.assign(publicSettings, catalogSettings)
+  publicSettings.sidebarNav = parseSidebarNav(catalogSettings.sidebarNav)
+  publicSettings.workspaceNav = parseSidebarNav(catalogSettings.workspaceNav)
+  publicSettings.sectionNav = parseSectionNav(catalogSettings.sectionNav)
   externalLinks.value = links
   if (!auth.session?.id) return
   const [, user, notices, cases, models, subscription] = await Promise.all([
     studio.hydrateWorkspace().catch(() => undefined),
     api<UserResponse>('/users/me').catch(() => null), api<NotificationItem[]>('/notifications').catch(() => []),
     api<ModerationCase[]>('/moderation/cases').catch(() => []),
-    api<AvailableModel[]>('/catalog/models').catch(() => []),
+    api<AvailableModel[]>(auth.session?.id ? '/users/me/models' : '/catalog/models').catch(() => []),
     api<Subscription | null>('/subscriptions/me').catch(() => null),
   ])
   if (user?.settings) {
     hydrateSettings(user.settings)
+    showOnboarding.value = user.settings.onboarded === false
     const pending = storedSettings.pendingServerSync
     if (pending?.changedAt && Date.now() - pending.changedAt < 5 * 60 * 1000) {
       if (pending.appearance) settings.appearance = pending.appearance === 'light' ? '浅色' : pending.appearance === 'system' ? '跟随系统' : '深色'
@@ -1124,6 +1163,7 @@ function hydrateSettings(value: UserSettingsResponse) {
   settings.temporaryChatDefault = value.temporaryChatDefault ?? settings.temporaryChatDefault
   settings.dataRetentionDays = value.dataRetentionDays ?? settings.dataRetentionDays
   settings.shareUsageAnalytics = value.shareUsageAnalytics ?? settings.shareUsageAnalytics
+  settings.onboarded = value.onboarded !== false
   if (!studio.currentConversationId) studio.temporaryChat = settings.temporaryChatDefault || !settings.chatHistoryEnabled
 }
 
@@ -1164,8 +1204,12 @@ async function redeemCredits() {
   if (!settings.redeemCode.trim()) return
   redeeming.value = true; redeemMessage.value = ''; redeemError.value = false
   try {
-    const result = await api<{ redeemed: boolean; credits?: number }>('/credits/redeem', { method: 'POST', body: JSON.stringify({ code: settings.redeemCode }) })
-    if (!result.redeemed) { redeemError.value = true; redeemMessage.value = '兑换码无效或已失效'; return }
+    const result = await api<{ redeemed: boolean; credits?: number; reason?: string }>('/credits/redeem', { method: 'POST', body: JSON.stringify({ code: settings.redeemCode }) })
+    if (!result.redeemed) {
+      redeemError.value = true
+      redeemMessage.value = result.reason === 'ALREADY_REDEEMED' ? '你已经兑换过该兑换码' : '兑换码无效或已失效'
+      return
+    }
     studio.credits += result.credits || 0; redeemMessage.value = `兑换成功，已增加 ${result.credits || 0} 创作点`; settings.redeemCode = ''
     await loadWorkspaceData()
   } catch { redeemError.value = true; redeemMessage.value = '兑换失败，请稍后重试' }
@@ -1173,19 +1217,21 @@ async function redeemCredits() {
 }
 
 function copyInvite() {
-  if (!inviteInfo.url) return
-  navigator.clipboard?.writeText(inviteInfo.url).catch(() => undefined)
-  inviteCopied.value = true
-  window.setTimeout(() => { inviteCopied.value = false }, 1600)
+  if (inviteInfo.url) void copyInviteLink(inviteInfo.url)
 }
 
 function handleConversationMenuOutside(event: PointerEvent) {
-  if (!conversationMenuId.value || conversationMenuElement.value?.contains(event.target as Node)) return
-  closeConversationMenu()
+  const target = event.target as HTMLElement | null
+  if (conversationMenuId.value && !conversationMenuElement.value?.contains(target as Node)) closeConversationMenu()
+  if (accountOpen.value && !target?.closest('.workspace-account-wrap')) accountOpen.value = false
+  if (chatActionsOpen.value && !target?.closest('.workspace-chat-more-wrap')) chatActionsOpen.value = false
 }
 
 function handleConversationMenuKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') closeConversationMenu()
+  if (event.key !== 'Escape') return
+  closeConversationMenu()
+  accountOpen.value = false
+  chatActionsOpen.value = false
 }
 
 async function exportAccountData() {

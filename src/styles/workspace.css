@@ -1,6 +1,8 @@
 @import './workspace/foundation.css';
 @import './workspace/auth.css';
 @import './workspace/shell.css';
+@import './workspace/thread.css';
 @import './workspace/settings.css';
 @import './workspace/chat.css';
 @import './workspace/polish.css';
+@import './workspace/home-fallback.css';

@@ -18,6 +18,7 @@ import { TokenQuotaService } from '../billing/token-quota.service'
 import { runWithOutboundSignal } from '../common/outbound-http'
 import { GenerationSettlementService } from './generation-settlement.service'
 import { GenerationReconciliationService } from './generation-reconciliation.service'
+import { parseQuotaReservationRefs } from './chat-billing'
 
 const RESERVATION_CREATION_GRACE_MS = 5_000
 const DEFAULT_STALE_LEASE_REAPER_INTERVAL_MS = 30_000
@@ -444,18 +445,7 @@ export class GenerationsProcessor extends WorkerHost implements OnModuleInit, On
       return task
     }
 
-    const listedOptionReservations = Array.isArray(billing.quotaReservations)
-      ? billing.quotaReservations.flatMap((item) => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) return []
-        const row = item as Record<string, unknown>
-        if (typeof row.quotaId !== 'string') return []
-        return [{ reservationId: typeof row.reservationId === 'string' ? row.reservationId : undefined, quotaId: row.quotaId }]
-      })
-      : []
-    const optionReservations = [...listedOptionReservations]
-    if (typeof billing.quotaId === 'string' && !optionReservations.some((reservation) => reservation.quotaId === billing.quotaId)) {
-      optionReservations.push({ reservationId: undefined, quotaId: billing.quotaId })
-    }
+    const optionReservations = parseQuotaReservationRefs(billing, { includeQuotaIdAlways: true })
     const expectedRaw = billing.expectedReservationCount ?? pricingSnapshot.expectedReservationCount
     const expectedCount = expectedRaw === undefined
       ? optionReservations.length
@@ -552,17 +542,7 @@ export class GenerationsProcessor extends WorkerHost implements OnModuleInit, On
   private async releaseTokenReservation(task: ReleasableGeneration): Promise<boolean> {
     const options = task.options && typeof task.options === 'object' && !Array.isArray(task.options) ? task.options as Record<string, unknown> : {}
     const billing = options.billing && typeof options.billing === 'object' && !Array.isArray(options.billing) ? options.billing as Record<string, unknown> : {}
-    const optionReservations = Array.isArray(billing.quotaReservations)
-      ? billing.quotaReservations.flatMap((item) => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) return []
-        const row = item as Record<string, unknown>
-        if (typeof row.quotaId !== 'string') return []
-        return [{ reservationId: typeof row.reservationId === 'string' ? row.reservationId : undefined, quotaId: row.quotaId }]
-      })
-      : []
-    if (typeof billing.quotaId === 'string' && !optionReservations.some((reservation) => reservation.quotaId === billing.quotaId)) {
-      optionReservations.push({ reservationId: undefined, quotaId: billing.quotaId })
-    }
+    const optionReservations = parseQuotaReservationRefs(billing, { includeQuotaIdAlways: true })
     let databaseLookupSucceeded = true
     let databaseReservations: Awaited<ReturnType<TokenQuotaService['reservationsForGeneration']>> = []
     try {

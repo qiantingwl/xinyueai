@@ -3,7 +3,7 @@ import { extname, join, relative } from 'node:path'
 import { parse as parseSfc } from '@vue/compiler-sfc'
 import { NodeTypes, parse as parseTemplate } from '@vue/compiler-dom'
 
-const roots = ['src', join('admin', 'src', 'views', 'xinyue')]
+const roots = ['src', join('admin', 'src', 'views', 'xinyue'), join('admin', 'src', 'views', 'article')]
 const actionElements = new Set(['button', 'a', 'ElButton', 'NButton', 'RouterLink'])
 const uploadElements = new Set(['ElUpload', 'NUpload'])
 const delegatedActionElements = new Set(['ElDropdown'])

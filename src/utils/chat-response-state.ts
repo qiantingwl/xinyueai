@@ -29,6 +29,32 @@ export function summarizeChatReasoning(reasoning?: string) {
   return value.length > 320 ? `${value.slice(0, 320)}…` : value
 }
 
+function withThinkingTime(label: '思考中' | '已思考' | '正在搜索', elapsedSeconds?: number) {
+  const seconds = Math.max(0, Math.round(Number(elapsedSeconds || 0)))
+  return seconds > 0 ? `${label}（用时 ${seconds} 秒）` : label
+}
+
+/** 豆包检索摘要 / DeepSeek「已思考（用时 Xs）」一行标题 */
+export function chatProcessHeadline(
+  message: Message,
+  options: { isStreaming?: boolean; elapsedSeconds?: number } = {},
+) {
+  const search = message.webSearch
+  if (search) {
+    if (search.status === 'searching' || (options.isStreaming && search.status !== 'completed' && search.status !== 'failed')) {
+      return withThinkingTime('正在搜索', options.elapsedSeconds)
+    }
+    const queries = search.queries.length
+    const sources = search.sources.length
+    if (queries && sources) return `搜索 ${queries} 个关键词，参考 ${sources} 篇资料`
+    if (queries) return `搜索 ${queries} 个关键词`
+    if (sources) return `参考 ${sources} 篇资料`
+    return search.status === 'failed' ? '搜索未完成' : '已搜索'
+  }
+  if (options.isStreaming && !message.content.trim()) return withThinkingTime('思考中', options.elapsedSeconds)
+  return withThinkingTime('已思考', options.elapsedSeconds)
+}
+
 export function resolveChatResponseState(
   message: Message,
   activity: ChatResponseActivity
@@ -42,20 +68,21 @@ export function resolveChatResponseState(
   const isProcessRunning = isStreaming || message.webSearch?.status === 'searching'
   const shouldRender = Boolean(message.content.trim())
   const isPending = isStreaming && !shouldRender && !message.reasoning?.trim()
-  const hasProcess = Boolean(isStreaming || message.webSearch || reasoningSummary)
+  const hasHiddenReasoning = Number(message.reasoningTokens || 0) > 0
+  const hasProcess = Boolean(isStreaming || message.webSearch || reasoningSummary || hasHiddenReasoning)
 
   let phase: ChatResponsePhase = 'done'
   if (isProcessRunning) {
     if (message.webSearch?.status === 'searching') phase = 'search'
+    else if (shouldRender) phase = 'answer'
     else if (message.reasoning?.trim()) phase = 'reasoning'
-    else phase = shouldRender ? 'answer' : 'thinking'
+    else phase = 'thinking'
   }
 
-  const processTitle = message.webSearch?.status === 'searching'
-    ? '正在思考与检索'
-    : isStreaming
-      ? message.reasoning?.trim() ? '正在组织回答' : '正在思考'
-      : message.webSearch ? '思考与检索' : '思考过程'
+  const processTitle = chatProcessHeadline(message, {
+    isStreaming: isProcessRunning,
+    elapsedSeconds: message.thinkingSeconds,
+  })
 
   const processStatus = isProcessRunning
     ? '实时更新'

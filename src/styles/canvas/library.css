@@ -55,14 +55,14 @@
   padding: 0 17px;
 }
 .canvas-page .canvas-primary-button {
-  background: var(--studio-inverse-bg);
-  border-color: var(--studio-inverse-bg);
-  color: var(--studio-inverse-text);
+  background: var(--studio-brand);
+  border-color: var(--studio-brand);
+  color: #fff;
 }
 .canvas-page .canvas-primary-button:hover {
-  background: var(--studio-control-hover);
-  border-color: var(--studio-control-hover);
-  color: var(--studio-text);
+  background: var(--studio-brand-hover);
+  border-color: var(--studio-brand-hover);
+  color: #fff;
 }
 .canvas-page .canvas-secondary-button {
   background: transparent;

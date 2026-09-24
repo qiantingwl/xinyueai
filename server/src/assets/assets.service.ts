@@ -2,9 +2,11 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException, 
 import { AssetKind, Prisma } from '@prisma/client'
 import { createHash, randomUUID } from 'node:crypto'
 import { extname, join } from 'node:path'
+import { StringDecoder } from 'node:string_decoder'
 import { PrismaService } from '../prisma/prisma.service'
 import { ResourceAccessService } from '../common/resource-access.service'
 import { ObjectStorageService, type StorageLocation } from './object-storage.service'
+import { OfficeTextService } from './office-text.service'
 
 type StoredFile = {
   stream: NodeJS.ReadableStream
@@ -47,7 +49,7 @@ export function assetDisposition(mimeType: string, name: string) {
 
 @Injectable()
 export class AssetsService {
-  constructor(private readonly storage: ObjectStorageService, private readonly prisma: PrismaService, private readonly access: ResourceAccessService) {}
+  constructor(private readonly storage: ObjectStorageService, private readonly prisma: PrismaService, private readonly access: ResourceAccessService, private readonly officeText: OfficeTextService) {}
 
   private makeObjectKey(userId: string, name: string, generated = false) {
     const extension = extname(name).toLowerCase().replace(/[^a-z0-9.]/g, '').slice(0, 12)
@@ -124,13 +126,56 @@ export class AssetsService {
     return this.readAsset(asset)
   }
 
+  async streamForUser(userId: string, id: string) {
+    const asset = await this.access.assertAssetReadable(userId, id)
+    return this.streamAsset(asset)
+  }
+
+  /** Reads at most `maxBytes` of a textual asset, stopping the transfer once the budget is spent so
+   *  indexing a large document never costs the whole file in memory. Word and Excel files are
+   *  unzipped in full by their parsers, so they go through `OfficeTextService` budgets instead. */
+  async readTextExcerptForUser(userId: string, id: string, maxBytes: number) {
+    const asset = await this.access.assertAssetReadable(userId, id)
+    const mimeType = asset.mimeType
+    if (this.officeText.kind(asset.name, mimeType)) {
+      const file = await this.storage.read(this.assetLocation(asset), asset.objectKey)
+      const extracted = await this.officeText.extract(file, asset.name, mimeType)
+      return { mimeType, text: extracted.text.slice(0, maxBytes), truncated: extracted.truncated || extracted.text.length > maxBytes }
+    }
+    if (!mimeType.startsWith('text/') && mimeType !== 'application/json') return { mimeType, text: '', truncated: false }
+    const { stream } = await this.storage.readStream(this.assetLocation(asset), asset.objectKey)
+    const decoder = new StringDecoder('utf8')
+    let text = ''
+    let consumed = 0
+    let truncated = false
+    for await (const chunk of stream) {
+      const buffer = Buffer.from(chunk as Uint8Array)
+      const room = maxBytes - consumed
+      if (buffer.byteLength >= room) {
+        text += decoder.write(buffer.subarray(0, room))
+        truncated = buffer.byteLength > room
+        stream.destroy()
+        break
+      }
+      text += decoder.write(buffer)
+      consumed += buffer.byteLength
+    }
+    return { mimeType, text, truncated }
+  }
+
   async readForAdmin(id: string) {
     const asset = await this.prisma.asset.findFirst({ where: { id, deletedAt: null } })
     if (!asset) throw new NotFoundException('文件不存在')
     return this.readAsset(asset)
   }
 
-  async readPublicChatHomeImage(id: string) {
+  async streamForAdmin(id: string) {
+    const asset = await this.prisma.asset.findFirst({ where: { id, deletedAt: null } })
+    if (!asset) throw new NotFoundException('文件不存在')
+    return this.streamAsset(asset)
+  }
+
+  private async findPublicChatHomeImage(id: string) {
     const asset = await this.prisma.asset.findFirst({
       where: {
         id,
@@ -140,12 +185,50 @@ export class AssetsService {
       },
     })
     if (!asset) throw new NotFoundException('首页图片不存在')
-    return this.readAsset(asset)
+    return asset
+  }
+
+  async readPublicChatHomeImage(id: string) {
+    return this.readAsset(await this.findPublicChatHomeImage(id))
+  }
+
+  async streamPublicChatHomeImage(id: string) {
+    return this.streamAsset(await this.findPublicChatHomeImage(id))
+  }
+
+  private async findPublicInspirationAsset(id: string, expectedKind: AssetKind) {
+    const asset = await this.prisma.asset.findFirst({
+      where: {
+        id,
+        deletedAt: null,
+        kind: expectedKind,
+      },
+    })
+    if (!asset) throw new NotFoundException('资源不存在')
+    const mime = asset.mimeType.toLowerCase()
+    const allowed = expectedKind === AssetKind.IMAGE
+      ? rasterMimeTypes.has(mime) || mime === 'image/svg+xml'
+      : videoMimeTypes.has(mime)
+    if (!allowed) throw new NotFoundException('资源类型不支持公开访问')
+    return asset
+  }
+
+  async readPublicInspirationAsset(id: string, expectedKind: AssetKind = AssetKind.IMAGE) {
+    return this.readAsset(await this.findPublicInspirationAsset(id, expectedKind))
+  }
+
+  async streamPublicInspirationAsset(id: string, expectedKind: AssetKind = AssetKind.IMAGE) {
+    return this.streamAsset(await this.findPublicInspirationAsset(id, expectedKind))
   }
 
   private async readAsset(asset: { objectKey: string; storageDriver: string; storageBucket: string; mimeType: string; name: string; kind?: AssetKind }) {
     const file = await this.storage.read(this.assetLocation(asset), asset.objectKey)
     return { file, mimeType: asset.mimeType, name: asset.name, kind: asset.kind }
+  }
+
+  private async streamAsset(asset: { objectKey: string; storageDriver: string; storageBucket: string; mimeType: string; name: string; kind?: AssetKind }) {
+    const { stream, size } = await this.storage.readStream(this.assetLocation(asset), asset.objectKey)
+    return { stream, size, mimeType: asset.mimeType, name: asset.name, kind: asset.kind }
   }
 
   async remove(userId: string, id: string) {

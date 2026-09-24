@@ -44,6 +44,8 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Archive, ArchiveRestore, Check, Folder, Lightbulb, LoaderCircle, MessageSquare, Plus, Search, Settings2, Trash2, X } from 'lucide-vue-next'
 import WorkspaceSectionTabs from '../WorkspaceSectionTabs.vue'
+import { useEscapeClose } from '../../composables/useEscapeClose'
+import { formatDayTime as formatDate } from '../../utils/datetime'
 import { useAuthStore } from '../../stores/auth'
 import { useStudioStore } from '../../stores/studio'
 import type { Project } from '../../types'
@@ -67,7 +69,6 @@ const activeProjectCount = computed(() => store.projects.filter((project) => !pr
 const archivedProjectCount = computed(() => store.projects.filter((project) => project.archived).length)
 const filteredArchivedConversations = computed(() => store.archivedConversations.filter((conversation) => conversation.title.toLowerCase().includes(projectSearch.value.trim().toLowerCase())))
 
-function formatDate(value: number) { return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(value) }
 function requireAuth(redirect: string) { if (auth.isAuthenticated) return true; void router.push(`/login?redirect=${encodeURIComponent(redirect)}`); return false }
 function selectCurrentProject(project: Project) { store.selectProject(project.id); projectNotice.value = `已切换到项目“${project.name}”，后续对话、上传和生成内容会归入该项目。`; window.setTimeout(() => { projectNotice.value = '' }, 3600) }
 async function openArchivedConversation(conversationId: string) { await store.openConversation(conversationId); await router.push('/chat') }
@@ -83,5 +84,6 @@ async function toggleProjectArchive(projectId: string, archived: boolean) {
 }
 async function deleteProject(projectId: string, name: string) { if (!window.confirm(`确认删除“${name}”？此操作无法撤销。`)) return; try { await store.deleteProject(projectId) } catch (reason) { store.lastError = reason instanceof Error ? reason.message : '项目删除失败' } }
 function closeProjectModal() { projectModalOpen.value = false; projectName.value = ''; projectBrief.value = ''; projectError.value = ''; projectAdvanced.value = false }
+useEscapeClose(() => { if (projectModalOpen.value) closeProjectModal() })
 async function createProject() { if (!requireAuth('/workspace?tab=projects')) return; if (!projectName.value.trim()) { projectError.value = '请输入项目名称'; return } try { await store.createProject(projectName.value, projectBrief.value); closeProjectModal() } catch (reason) { projectError.value = reason instanceof Error ? reason.message : '项目创建失败' } }
 </script>

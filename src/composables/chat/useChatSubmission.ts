@@ -14,12 +14,14 @@ interface ChatSubmissionState {
   activeCapability: Ref<ChatCapability>
   activeCapabilityModel: Readonly<Ref<string>>
   capabilityModelAvailable: Readonly<Ref<boolean>>
+  activeCapabilityModelUnavailableMessage: Readonly<Ref<string>>
   model: Readonly<Ref<string>>
   assistantId: Readonly<Ref<string>>
   pluginId: Readonly<Ref<string>>
   webSearchEnabled: Readonly<Ref<boolean>>
   responseMode: Readonly<Ref<'fast' | 'expert'>>
   pendingRecommendationSource: Ref<PendingRecommendationSource | null>
+  displayedModelCapability?: Readonly<Ref<ChatCapability | 'COMMERCE' | undefined>>
 }
 
 interface ChatSendInput {
@@ -54,7 +56,9 @@ interface ChatSubmissionActions {
   shouldRestoreDraft: (reason: unknown) => boolean
 }
 
-export function inferChatSubmissionCapability(content: string, current: ChatCapability): ChatCapability {
+export function inferChatSubmissionCapability(content: string, current: ChatCapability, displayedCapability?: ChatCapability | 'COMMERCE' | ''): ChatCapability {
+  if (current === 'AGENT') return current
+  if (displayedCapability === 'IMAGE' || displayedCapability === 'VIDEO') return displayedCapability
   if (current !== 'CHAT') return current
   if (/(生成|画|绘制|制作|设计|创建).{0,12}(图片|图像|海报|插画|头像)/i.test(content)) return 'IMAGE'
   if (/(生成|制作|创建|拍|剪).{0,12}(视频|短片|动画)/i.test(content)) return 'VIDEO'
@@ -79,9 +83,13 @@ export function useChatSubmission(state: ChatSubmissionState, actions: ChatSubmi
     if (!content) return
 
     await actions.loadModels()
-    state.activeCapability.value = inferChatSubmissionCapability(content, state.activeCapability.value)
+    state.activeCapability.value = inferChatSubmissionCapability(
+      content,
+      state.activeCapability.value,
+      state.displayedModelCapability?.value,
+    )
     if (!state.capabilityModelAvailable.value) {
-      actions.setError(unavailableChatCapabilityMessage(state.activeCapability.value))
+      actions.setError(state.activeCapabilityModelUnavailableMessage.value || unavailableChatCapabilityMessage(state.activeCapability.value))
       return
     }
 
@@ -110,7 +118,7 @@ export function useChatSubmission(state: ChatSubmissionState, actions: ChatSubmi
         )
       } else {
         await actions.sendChat(content, {
-          model: state.activeCapability.value === 'AGENT' ? state.activeCapabilityModel.value : state.model.value,
+          model: state.activeCapability.value === 'AGENT' ? state.activeCapabilityModel.value : (state.activeCapabilityModel.value || state.model.value),
           assistantId: state.assistantId.value || undefined,
           pluginId: state.pluginId.value || undefined,
           assetIds: pendingAttachments.map((asset) => asset.id),

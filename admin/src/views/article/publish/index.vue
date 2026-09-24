@@ -90,13 +90,13 @@
   import { contentApi as xinyueApi } from '@/api/xinyue/content'
   import { router } from '@/router'
   import { xinyueText as xt } from '@/locales/xinyue'
+  import { useXinyueAsync } from '@/hooks'
 
   defineOptions({ name: 'ArticlePublish' })
   const route = useRoute()
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
   const id = computed(() => String(route.query.id || ''))
   const isEdit = computed(() => Boolean(id.value))
-  const loading = ref(false)
-  const saving = ref(false)
   const categories = ['法律与品牌', '产品公告', '使用帮助', '品牌资料']
   const form = reactive({
     title: '',
@@ -120,8 +120,7 @@
 
   async function load() {
     if (!isEdit.value) return
-    loading.value = true
-    try {
+    await withLoading(async () => {
       const item = await xinyueApi.contentPage(id.value)
       Object.assign(form, {
         title: item.title,
@@ -133,21 +132,16 @@
         published: item.published,
         sortOrder: item.sortOrder
       })
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   async function save(published: boolean) {
     if (!validate()) return
-    saving.value = true
-    try {
+    await withSaving(async () => {
       await xinyueApi.saveContentPage({ ...form, published }, id.value || undefined)
       ElMessage.success(published ? xt('内容已发布') : xt('草稿已保存'))
-      router.push({ name: 'ArticleList' })
-    } finally {
-      saving.value = false
-    }
+      router.push({ name: 'PublicContentPages' })
+    })
   }
 
   onMounted(load)

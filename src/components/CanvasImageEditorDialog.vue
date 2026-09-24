@@ -61,12 +61,14 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Check, CircleAlert, Crop, Eraser, LoaderCircle, Paintbrush, Trash2, Undo2, X } from 'lucide-vue-next'
 import { apiUrl } from '../services/api'
+import { useEscapeClose } from '../composables/useEscapeClose'
 
 type CropHandle = 'move' | 'nw' | 'ne' | 'sw' | 'se'
 type CropRect = { x: number; y: number; width: number; height: number }
 
 const props = defineProps<{ src: string; mode: 'crop' | 'mask'; busy?: boolean }>()
 const emit = defineEmits<{ close: []; apply: [payload: { blob: Blob; name: string; purpose: 'library' | 'mask' }] }>()
+useEscapeClose(() => emit('close'))
 const dialogId = `canvas-image-editor-${Math.random().toString(36).slice(2)}`
 const stage = ref<HTMLDivElement | null>(null)
 const imageElement = ref<HTMLImageElement | null>(null)

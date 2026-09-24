@@ -7,6 +7,7 @@ import { CurrentUser, AuthenticatedUser } from '../common/request-user'
 import { AdminGuard } from '../admin/admin.guard'
 import { PrismaService } from '../prisma/prisma.service'
 import { DEFAULT_PROMPT_TEMPLATES } from './default-prompt-templates'
+import { Public } from '../auth/public.decorator'
 
 class PromptTemplateDto {
   @IsString() @MinLength(1) @MaxLength(100) title!: string
@@ -30,6 +31,7 @@ class PromptTemplateUpdateDto {
 
 class ReorderPromptTemplatesDto { @IsArray() ids!: string[] }
 
+@Public()
 @Controller('prompt-templates')
 export class PromptTemplatesController {
   constructor(private readonly prisma: PrismaService) {}

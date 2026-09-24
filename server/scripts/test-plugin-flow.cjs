@@ -17,7 +17,7 @@ async function session(userId) {
 }
 
 async function request(path, token, init = {}, expected = 200) {
-  const response = await fetch(`${baseUrl}${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Cookie: `flux_session=${token}` } : {}), ...init.headers } })
+  const response = await fetch(`${baseUrl}${path}`, { ...init, headers: { 'X-Xinyue-Request': '1', ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Cookie: `flux_session=${token}` } : {}), ...init.headers } })
   const text = await response.text()
   let body = null
   try { body = text ? JSON.parse(text) : null } catch { body = text }

@@ -106,6 +106,10 @@ export class WorksService {
     if (!work.currentVersion.assets.length) throw new BadRequestException('作品至少需要一个素材')
     await this.moderation.inspect(userId, ModerationSource.WORK, [work.currentVersion.title, work.currentVersion.description, work.currentVersion.publicPrompt, ...work.currentVersion.tags].join('\n'), { workId: id, versionId: work.currentVersion.id })
     await this.prisma.publishedWorkVersion.update({ where: { id: work.currentVersion.id }, data: { moderationStatus: 'PENDING', submittedAt: new Date(), rejectionReason: '' } })
+    const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+    if (account?.role === 'ADMIN' || account?.role === 'SUPER_ADMIN') {
+      return this.review(userId, id, 'APPROVED')
+    }
     return this.getMine(userId, id)
   }
 
@@ -282,6 +286,7 @@ export class WorksService {
     const authorDisplay = input.authorDisplay || WorkAuthorDisplay.PROFILE
     const customAuthor = input.customAuthor?.trim().slice(0, 80) || ''
     if (authorDisplay === 'CUSTOM' && !customAuthor) throw new BadRequestException('请输入展示作者名')
+    const publicPrompt = input.publicPrompt?.trim().slice(0, 10000) || ''
     return {
       assetIds,
       data: {
@@ -292,7 +297,7 @@ export class WorksService {
         visibility: input.visibility || WorkVisibility.PRIVATE,
         authorDisplay,
         customAuthor,
-        publicPrompt: input.publicPrompt?.trim().slice(0, 10000) || '',
+        publicPrompt,
       },
     }
   }

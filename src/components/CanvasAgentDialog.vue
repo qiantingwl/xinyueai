@@ -71,19 +71,22 @@
     </section>
     <Teleport to="body">
       <div v-if="modelPickerOpen" class="canvas-agent-model-picker canvas-agent-model-picker--floating" :style="modelPickerStyle" @click.stop>
-        <ModelCatalogPicker v-model="model" :models="agentModels" title="选择 Agent 模型" description-mode="agent" @select="modelPickerOpen = false" />
+        <ModelCatalogPicker v-model="model" :models="agentModels" title="选择 Agent 模型" description-mode="agent" @select="modelPickerOpen = false" @close="modelPickerOpen = false" />
       </div>
     </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Bot, Check, CheckCircle2, ChevronDown, CircleAlert, Clock3, Globe2, LoaderCircle, Network, Paperclip, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-vue-next'
 import { api, streamApiEvents } from '../services/api'
+import { uploadAsset } from '../utils/asset-upload'
 import type { CanvasAgentOperation, CanvasAgentOperationType, CanvasDocumentPayload } from '../types/canvas'
 import { agentModelDescription, isAgentModelEligible, type CatalogModel } from '../utils/model-catalog'
+import { agentTaskStatusText, withOverrides } from '../utils/status-labels'
 import ModelCatalogPicker from './ModelCatalogPicker.vue'
+import { useEscapeClose } from '../composables/useEscapeClose'
 
 type AgentStep = { id: string; title: string; detail?: string | null; status: string }
 type AgentEvent = { id: string; type: string; title: string; detail?: string | null; createdAt?: string }
@@ -99,10 +102,12 @@ const agentModels = computed(() => props.models.filter(isAgentModelEligible))
 const goal = ref(props.initialGoal)
 const model = ref(props.initialModel && agentModels.value.some((item) => item.key === props.initialModel) ? props.initialModel : agentModels.value.find((item) => item.isDefault)?.key || agentModels.value[0]?.key || '')
 const modelPickerOpen = ref(false)
+// 模型选择器浮在对话框之上，Esc 先关它，再关对话框。
+useEscapeClose(close, { enabled: () => !modelPickerOpen.value })
 const modelTrigger = ref<HTMLButtonElement | null>(null)
 const modelPickerStyle = ref({ top: '12px', left: '12px' })
 const selectedModel = computed(() => agentModels.value.find((item) => item.key === model.value))
-const webSearchEnabled = ref(true)
+const webSearchEnabled = ref(false)
 const running = ref(false)
 const error = ref('')
 const task = ref<AgentTask | null>(null)
@@ -121,13 +126,33 @@ const mentionCandidates = computed(() => {
   const query = mentionQuery.value.trim().toLowerCase()
   return props.document.nodes.filter((node) => !query || `${node.title} ${node.type} ${node.data.content || ''}`.toLowerCase().includes(query)).slice(0, 8)
 })
-const statusLabel = computed(() => ({ DRAFT: '准备任务', QUEUED: '等待执行', RUNNING: '正在分析画布', WAITING_APPROVAL: '等待审批', SUCCEEDED: '计划已完成', PARTIAL: '计划部分完成', FAILED: '执行失败', CANCELLED: '已停止' } as Record<string, string>)[task.value?.status || 'DRAFT'] || '处理中')
+// 画布 Agent 的文案刻意比通用任务更具体（如「正在分析画布」），其余状态沿用统一文案。
+const canvasAgentStatusText = withOverrides(agentTaskStatusText, {
+  DRAFT: '准备任务',
+  QUEUED: '等待执行',
+  RUNNING: '正在分析画布',
+  WAITING_APPROVAL: '等待审批',
+  SUCCEEDED: '计划已完成',
+  PARTIAL: '计划部分完成',
+  FAILED: '执行失败',
+})
+const statusLabel = computed(() => canvasAgentStatusText[task.value?.status || 'DRAFT'] || '处理中')
 const terminalFailure = computed(() => Boolean(task.value && ['FAILED', 'CANCELLED'].includes(task.value.status)))
 const activeStep = computed(() => task.value?.steps?.find((step) => step.status === 'RUNNING') || task.value?.steps?.find((step) => step.status === 'PENDING') || null)
 const timelineEvents = computed(() => (task.value?.agentRun?.events || []).slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))).slice(-14))
 const pendingToolCalls = computed(() => (task.value?.agentRun?.toolCalls || []).filter((call) => call.requiresApproval && call.approvalStatus === 'PENDING'))
 
-onMounted(() => { if (props.initialTaskId) void loadExistingTask(props.initialTaskId) })
+onMounted(() => {
+  document.addEventListener('pointerdown', closeModelPickerOnOutside)
+  if (props.initialTaskId) void loadExistingTask(props.initialTaskId)
+})
+onBeforeUnmount(() => { document.removeEventListener('pointerdown', closeModelPickerOnOutside) })
+
+function closeModelPickerOnOutside(event: PointerEvent) {
+  const target = event.target as HTMLElement | null
+  if (target?.closest('.canvas-agent-model-trigger, .canvas-agent-model-picker')) return
+  modelPickerOpen.value = false
+}
 
 async function loadExistingTask(taskId: string) {
   try {
@@ -168,7 +193,7 @@ function handleGoalInput(event: Event) {
 }
 
 function handleGoalKeydown(event: KeyboardEvent) {
-  if (!mentionOpen.value) return
+  if (!mentionOpen.value || event.isComposing) return
   if (event.key === 'Escape') { event.preventDefault(); mentionOpen.value = false; return }
   if (event.key === 'Enter' || event.key === 'Tab') {
     const first = mentionCandidates.value[0]
@@ -218,11 +243,7 @@ async function uploadFiles(files: File[]) {
   try {
     for (const file of accepted) {
       const kind = file.type.startsWith('video/') ? 'VIDEO' : 'IMAGE'
-      const form = new FormData()
-      form.append('file', file)
-      const params = new URLSearchParams({ kind, purpose: 'attachment' })
-      if (props.projectId) params.set('projectId', props.projectId)
-      const asset = await api<{ id: string; name?: string; contentUrl?: string }>(`/assets/uploads?${params}`, { method: 'POST', body: form })
+      const asset = await uploadAsset<{ id: string; name?: string; contentUrl?: string }>(file, { kind, purpose: 'attachment', projectId: props.projectId })
       attachments.value.push({ id: asset.id, name: asset.name || file.name, kind, contentUrl: asset.contentUrl || `/v1/assets/${asset.id}/content` })
     }
   } catch (reason) {
@@ -257,6 +278,7 @@ async function runAgent() {
     task.value = created
     task.value = await api<AgentTask>(`/agent-tasks/${created.id}/run`, { method: 'POST' })
     const completed = await followTask(created.id)
+    if (completed.status === 'RUNNING') throw new Error('Agent 仍在执行，已超出前端等待时间；可稍后在「历史」中查看结果')
     if (!['SUCCEEDED', 'PARTIAL'].includes(completed.status)) throw new Error(completed.errorMessage || 'Agent 未能完成画布分析')
     result.value = parseResult(completed.agentRun?.finalAnswer || '')
   } catch (reason) {
@@ -267,7 +289,8 @@ async function runAgent() {
 async function followTask(taskId: string) {
   let latest = task.value
   let lastError: unknown
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  // Agent 编排含多轮 LLM 调用，常需 1-3 分钟：轮询放宽到 ~5 分钟，避免前端过早误报失败
+  for (let attempt = 0; attempt < 60; attempt += 1) {
     try {
       const streamed = await streamApiEvents<AgentTask>(`/agent-tasks/${taskId}/events`, (current) => { task.value = current; latest = current })
       latest = streamed
@@ -284,7 +307,7 @@ async function followTask(taskId: string) {
     } catch (reason) {
       lastError = reason
     }
-    if (attempt < 5) await new Promise<void>((resolve) => window.setTimeout(resolve, Math.min(900 + attempt * 700, 3800)))
+    await new Promise<void>((resolve) => window.setTimeout(resolve, Math.min(1500 + attempt * 250, 5000)))
   }
   if (latest) return latest
   throw (lastError instanceof Error ? lastError : new Error('无法读取 Agent 任务状态'))
@@ -335,6 +358,7 @@ async function retryTask() {
   try {
     task.value = await api<AgentTask>(`/agent-tasks/${task.value.id}/retry`, { method: 'POST' })
     const completed = await followTask(task.value.id)
+    if (completed.status === 'RUNNING') throw new Error('Agent 仍在执行，已超出前端等待时间；可稍后在「历史」中查看结果')
     if (!['SUCCEEDED', 'PARTIAL'].includes(completed.status)) throw new Error(completed.errorMessage || 'Agent 未能完成画布分析')
     result.value = parseResult(completed.agentRun?.finalAnswer || '')
   } catch (reason) {

@@ -29,12 +29,17 @@ const LOGO_MAP: Array<[RegExp, string, boolean, string?]> = [
   [/anthropic|claude/, 'claude', true],
   [/google|gemini/, 'gemini', true],
   [/xai|grok/, 'grok', false],
+  [/zhipu|智谱|\bglm\b/, 'zhipu', true],
+  [/minimax/, 'minimax', true],
+  [/hunyuan|混元|tencent/, 'hunyuan', true],
+  [/stepfun|阶跃/, 'stepfun', true],
+  [/longcat/, 'longcat', true],
 ]
 
 const vendor = computed(() => inferVendor(props.model))
 const color = computed(() => vendorColor(vendor.value.key))
 const logoMatch = computed(() => {
-  const hay = `${vendor.value.key} ${vendor.value.label}`.toLowerCase()
+  const hay = `${vendor.value.key} ${vendor.value.label} ${props.model.displayName || ''} ${props.model.upstreamModel || ''}`.toLowerCase()
   return LOGO_MAP.find(([re]) => re.test(hay))
 })
 const logoFile = computed(() => {

@@ -47,15 +47,15 @@
   box-shadow: 0 18px 42px rgba(43, 56, 73, .14);
   padding: 12px;
   top: calc(100% + 16px);
-  width: min(500px, calc(100vw - 32px));
+  width: max(100%, 408px);
   z-index: 70;
 }
 .canvas-node-prompt-composer textarea { background: #f5f7fa; border-color: #edf0f3; border-radius: 14px; }
-.canvas-node-model-select { display: inline-flex; max-width: 190px; }
-.canvas-node-model-select select { background: #fff; border-color: #e1e6ed; border-radius: 9px; height: 34px; max-width: 190px; padding: 0 28px 0 10px; }
-.canvas-node-model-select select:disabled { color: #98a3b2; cursor: not-allowed; }
+.canvas-node-model-select button { background: #fff; border-color: #e1e6ed; height: 32px; }
+.canvas-node-generation-summary { background: #fff; border-color: #e1e6ed; }
 .canvas-node-hover-toolbar { border-radius: 18px; min-height: 48px; padding: 3px; }
 .canvas-node-hover-toolbar button { height: 38px; width: 38px; }
+.canvas-node-extend { background: #fff; border-color: #dbe3eb; }
 
 /* Image tools follow the reference surface: large preview cards in one row. */
 .canvas-image-tool-grid {
@@ -166,7 +166,7 @@
 .canvas-shortcut-dialog > footer { display: flex; justify-content: flex-end; padding-top: 16px; }
 .canvas-shortcut-dialog > footer button { background: var(--studio-text); border: 0; border-radius: 7px; color: var(--canvas-panel); height: 34px; padding: 0 16px; }
 
-.canvas-node-panel-toolbar select { background: var(--canvas-panel-muted); border: 1px solid var(--canvas-border); border-radius: 6px; color: var(--studio-text); font-size: 10px; height: 34px; max-width: 72px; padding: 0 5px; }
+.canvas-node-panel-toolbar select { appearance: none; background: var(--canvas-panel-muted) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 6px center; border: 1px solid var(--canvas-border); border-radius: 6px; color: var(--studio-text); font-size: 10px; height: 34px; max-width: 88px; padding: 0 20px 0 7px; }
 .canvas-assets-panel-toolbar > .canvas-node-select-toggle { gap: 4px; padding: 0 8px; width: auto; }
 .canvas-assets-panel-toolbar > .canvas-node-select-toggle.is-active { background: var(--canvas-accent-soft); border-color: var(--canvas-accent); color: var(--canvas-accent); }
 .canvas-node-panel-list { min-height: 0; overflow-y: auto; padding: 4px 12px 14px; }

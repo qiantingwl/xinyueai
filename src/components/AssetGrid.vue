@@ -69,6 +69,8 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { Download, FileText, Hand, ImagePlus, Maximize2, MousePointer2, Play, Quote, RefreshCw, Trash2, UsersRound, X, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import { useAssetPreviewTransform } from '../composables/useAssetPreviewTransform'
+import { useEscapeClose } from '../composables/useEscapeClose'
+import { formatFullDay as formatDate } from '../utils/datetime'
 import type { StudioAsset } from '../types'
 
 withDefaults(defineProps<{ assets: StudioAsset[]; deletable?: boolean; reusable?: boolean; regeneratable?: boolean; shareable?: boolean; variant?: 'cards' | 'gallery' | 'list' }>(), { deletable: false, reusable: false, regeneratable: false, shareable: false, variant: 'cards' })
@@ -99,8 +101,8 @@ const {
 function openPreview(asset: StudioAsset) { selected.value = asset; dragMode.value = false; resetView() }
 function isVisualAsset(asset: StudioAsset) { return asset.kind === 'image' || asset.kind === 'product-pack' || Boolean(asset.mimeType?.startsWith('image/')) }
 function isVideoAsset(asset: StudioAsset) { return asset.kind === 'video' || Boolean(asset.mimeType?.startsWith('video/')) }
-function formatDate(value: number) { return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(value) }
 function closePreview() { selected.value = null; dragMode.value = false; resetView() }
+useEscapeClose(() => { if (selected.value) closePreview() })
 function emitAction(action: 'reuse' | 'quote' | 'regenerate') {
   if (!selected.value) return
   const asset = selected.value

@@ -1,8 +1,11 @@
 import { Controller, Get, NotFoundException, Param, Query, StreamableFile } from '@nestjs/common'
-import { InspirationMode } from '@prisma/client'
+import { AssetKind, InspirationMode } from '@prisma/client'
 import { assetDisposition, AssetsService } from '../assets/assets.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { inspirationPreviewAssetIds, inspirationPreviewVideoAssetId, inspirationPublicListFields } from './inspiration-options'
+import { Public } from '../auth/public.decorator'
 
+@Public()
 @Controller('inspirations')
 export class InspirationsController {
   constructor(private readonly prisma: PrismaService, private readonly assets: AssetsService) {}
@@ -12,42 +15,34 @@ export class InspirationsController {
     // The client needs disabled IMAGE_TOOL records to suppress a matching system fallback card.
     // Other inspiration categories remain public-only when enabled.
     const rows = await this.prisma.inspiration.findMany({ where: mode === InspirationMode.IMAGE_TOOL ? { mode } : { mode, enabled: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] })
-    return rows.map((item) => {
-      const options = this.record(item.options)
-      const externalImages = Array.isArray(options.previewImages) ? options.previewImages.filter((value): value is string => typeof value === 'string') : []
-      const uploadedImages = this.previewAssetIds(options).map((assetId) => `/v1/inspirations/${item.id}/previews/${assetId}`)
-      const videoAssetId = this.previewVideoAssetId(options)
-      return { ...item, imageUrl: item.coverAssetId ? `/v1/inspirations/${item.id}/cover` : item.coverUrl, videoUrl: videoAssetId ? `/v1/inspirations/${item.id}/video` : this.previewVideoUrl(options), options: { ...options, previewImages: [...uploadedImages, ...externalImages] } }
-    })
+    return rows.map((item) => ({ ...item, ...inspirationPublicListFields(item.id, item.coverAssetId, item.coverUrl, item.options) }))
   }
 
   @Get(':id/cover')
   async cover(@Param('id') id: string) {
-    const item = await this.prisma.inspiration.findUniqueOrThrow({ where: { id }, select: { coverAssetId: true } })
+    const item = await this.prisma.inspiration.findFirst({ where: { id, enabled: true }, select: { coverAssetId: true } })
+    if (!item) throw new NotFoundException('灵感不存在或未公开')
     if (!item.coverAssetId) return new StreamableFile(Buffer.alloc(0), { type: 'image/png' })
-    const result = await this.assets.readForAdmin(item.coverAssetId)
-    return new StreamableFile(result.file, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name) })
+    const result = await this.assets.streamPublicInspirationAsset(item.coverAssetId, AssetKind.IMAGE)
+    return new StreamableFile(result.stream, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name), length: result.size || undefined })
   }
 
   @Get(':id/previews/:assetId')
   async preview(@Param('id') id: string, @Param('assetId') assetId: string) {
-    const item = await this.prisma.inspiration.findUniqueOrThrow({ where: { id }, select: { options: true } })
-    if (!this.previewAssetIds(item.options).includes(assetId)) throw new NotFoundException('预览图片不存在')
-    const result = await this.assets.readForAdmin(assetId)
-    return new StreamableFile(result.file, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name) })
+    const item = await this.prisma.inspiration.findFirst({ where: { id, enabled: true }, select: { options: true } })
+    if (!item) throw new NotFoundException('灵感不存在或未公开')
+    if (!inspirationPreviewAssetIds(item.options).includes(assetId)) throw new NotFoundException('预览图片不存在')
+    const result = await this.assets.streamPublicInspirationAsset(assetId, AssetKind.IMAGE)
+    return new StreamableFile(result.stream, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name), length: result.size || undefined })
   }
 
   @Get(':id/video')
   async video(@Param('id') id: string) {
-    const item = await this.prisma.inspiration.findUniqueOrThrow({ where: { id }, select: { options: true } })
-    const assetId = this.previewVideoAssetId(item.options)
+    const item = await this.prisma.inspiration.findFirst({ where: { id, enabled: true }, select: { options: true } })
+    if (!item) throw new NotFoundException('灵感不存在或未公开')
+    const assetId = inspirationPreviewVideoAssetId(item.options)
     if (!assetId) throw new NotFoundException('演示视频不存在')
-    const result = await this.assets.readForAdmin(assetId)
-    return new StreamableFile(result.file, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name) })
+    const result = await this.assets.streamPublicInspirationAsset(assetId, AssetKind.VIDEO)
+    return new StreamableFile(result.stream, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name), length: result.size || undefined })
   }
-
-  private record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
-  private previewAssetIds(value: unknown) { const options = this.record(value); return Array.isArray(options.previewAssetIds) ? options.previewAssetIds.filter((item): item is string => typeof item === 'string').slice(0, 30) : [] }
-  private previewVideoAssetId(value: unknown) { const id = this.record(value).previewVideoAssetId; return typeof id === 'string' && id ? id : undefined }
-  private previewVideoUrl(value: unknown) { const url = this.record(value).previewVideoUrl; return typeof url === 'string' && /^(?:https?:\/\/|\/)/.test(url) ? url : '' }
 }

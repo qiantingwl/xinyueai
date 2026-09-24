@@ -105,8 +105,8 @@ function harness(name: 'image' | 'commerce' | 'video', behavior: AttemptBehavior
     },
   }
   const runner = name !== 'video'
-    ? new ImageGenerationRunner(prisma as never, {} as never, providers as never, {} as never, {} as never, attemptAudit as never, {} as never)
-    : new VideoGenerationRunner(prisma as never, {} as never, providers as never, {} as never, {} as never, attemptAudit as never, {} as never)
+    ? new ImageGenerationRunner(prisma as never, {} as never, providers as never, {} as never, attemptAudit as never, {} as never)
+    : new VideoGenerationRunner(prisma as never, {} as never, providers as never, {} as never, attemptAudit as never, {} as never)
 
   if (name !== 'video') {
     const internals = runner as unknown as {

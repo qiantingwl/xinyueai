@@ -4,6 +4,7 @@
 
 <script setup lang="ts">
 import { X } from 'lucide-vue-next'
+import { useEscapeClose } from '../../composables/useEscapeClose'
 import type { CredentialEditor, ProviderTemplate } from './types'
 
 const props = defineProps<{
@@ -17,6 +18,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
 }>()
+
+useEscapeClose(() => emit('close'))
 
 function applyCredentialTemplate() {
   if (!props.editor.templateId) return

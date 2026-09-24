@@ -52,3 +52,26 @@ test('模型售价会按 USD 汇率换算为结算币种额度', async () => {
     globalThis.fetch = originalFetch
   }
 })
+
+test('发现目录会把 glm / kimi / qiniu 前缀模型归到正确厂商', async () => {
+  const originalFetch = globalThis.fetch
+  const service = new ModelDiscoveryService(endpointPolicy as never)
+  try {
+    globalThis.fetch = async () => { throw new Error('catalog unavailable') }
+    const result = await service.discover([
+      'glm-4.5',
+      'z-ai/glm-5.3',
+      'kimi-k2',
+      'moonshotai/kimi-k3',
+      'deepseek/deepseek-v4.1-flash',
+    ], { creditValueMicros: 10_000, markupPercent: 130, forceRefresh: true })
+    const byId = Object.fromEntries(result.map((item) => [item.id, item.vendorKey]))
+    assert.equal(byId['glm-4.5'], 'zhipu')
+    assert.equal(byId['z-ai/glm-5.3'], 'zhipu')
+    assert.equal(byId['kimi-k2'], 'kimi')
+    assert.equal(byId['moonshotai/kimi-k3'], 'kimi')
+    assert.equal(byId['deepseek/deepseek-v4.1-flash'], 'deepseek')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})

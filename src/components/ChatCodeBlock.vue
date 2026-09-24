@@ -18,11 +18,12 @@ import { computed, ref } from 'vue'
 import { Check, ChevronDown, Copy, Play } from 'lucide-vue-next'
 import type { CodeArtifact } from '../types'
 import { artifactTitle, highlightCode, isPreviewableCode, languageLabel, normalizedLanguage } from '../utils/code-artifacts'
+import { useCopyFeedback } from '../composables/useCopyFeedback'
 
 const props = defineProps<{ code: string; language?: string }>()
 const emit = defineEmits<{ preview: [artifact: CodeArtifact] }>()
 const collapsed = ref(false)
-const copied = ref(false)
+const { copied, copy } = useCopyFeedback()
 const highlighted = computed(() => highlightCode(props.code, props.language))
 const previewable = computed(() => isPreviewableCode(props.code, props.language))
 
@@ -30,9 +31,5 @@ function openPreview() {
   emit('preview', { code: props.code, language: props.language || 'html', title: artifactTitle(props.code, props.language) })
 }
 
-async function copyCode() {
-  await navigator.clipboard.writeText(props.code)
-  copied.value = true
-  window.setTimeout(() => { copied.value = false }, 1600)
-}
+const copyCode = () => copy(props.code)
 </script>

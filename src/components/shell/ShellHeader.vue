@@ -5,8 +5,20 @@
     </button>
     <strong v-if="mobileTitle" class="workspace-mobile-title">{{ mobileTitle }}</strong>
   </header>
-  <nav v-if="workspaceDataLoaded && auth.isAuthenticated" class="workspace-chat-actions" aria-label="工作区操作">
-    <TaskCenter v-if="activeMode !== 'office'" />
+  <nav v-if="showHeaderActions" class="workspace-chat-actions" :class="{ 'is-chat': activeMode === 'chat', 'has-thread': Boolean(currentConversation) }" aria-label="工作区操作">
+    <button
+      v-if="activeMode === 'chat'"
+      class="temporary-chat-toggle"
+      :class="{ active: studio.temporaryChat }"
+      type="button"
+      :aria-pressed="studio.temporaryChat"
+      :aria-label="studio.temporaryChat ? '退出临时聊天' : '开启临时聊天'"
+      :title="studio.temporaryChat ? '退出临时聊天' : '临时聊天'"
+      @click="studio.toggleTemporaryChat()"
+    >
+      <MessageCircleDashed :size="18" />
+    </button>
+    <TaskCenter v-if="showTaskCenter" />
     <button v-if="activeMode === 'chat' && showUpgradeEntry" class="workspace-upgrade-button" type="button" @click="openUpgrade"><Sparkles :size="16" /><span>升级</span></button>
     <button v-if="activeMode === 'chat' && currentConversation" type="button" aria-label="分享对话" title="分享" :disabled="conversationActionBusy" @click="shareCurrentConversation"><Share2 :size="18" /><span>分享</span></button>
     <div v-if="activeMode === 'chat' && currentConversation" class="workspace-chat-more-wrap">
@@ -23,7 +35,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Archive, Menu, MoreHorizontal, Pin, PinOff, Share2, Sparkles, Trash2 } from 'lucide-vue-next'
+import { Archive, Menu, MessageCircleDashed, MoreHorizontal, Pin, PinOff, Share2, Sparkles, Trash2 } from 'lucide-vue-next'
 import type { ConversationSummary, StudioMode } from '../../types'
 import { useAuthStore } from '../../stores/auth'
 import { useStudioStore } from '../../stores/studio'
@@ -50,6 +62,8 @@ const { t } = useI18n()
 
 const mobileTitle = computed(() => ({ chat: 'Xinyue AI', images: t('workspace.creation'), videos: t('workspace.creation'), commerce: t('studio.commerce'), office: t('workspace.office'), prompts: t('workspace.prompts'), plugins: t('workspace.plugins'), workspace: '工作空间' } as Partial<Record<StudioMode, string>>)[props.activeMode] || '')
 const currentConversation = computed(() => studio.conversations.find((item) => item.id === studio.currentConversationId) || null)
+const showTaskCenter = computed(() => ['chat', 'images', 'videos', 'commerce'].includes(props.activeMode))
+const showHeaderActions = computed(() => props.workspaceDataLoaded && auth.isAuthenticated && (props.activeMode === 'chat' || showTaskCenter.value))
 
 async function shareCurrentConversation() {
   if (!currentConversation.value) return

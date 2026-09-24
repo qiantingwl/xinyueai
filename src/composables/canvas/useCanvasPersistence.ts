@@ -86,9 +86,35 @@ export function useCanvasPersistence<TDocument>(
     if (state.dirty.value) event.preventDefault()
   }
 
-  watch(state.documentState, markDirty, { deep: true })
   watch(state.title, markDirty)
-  onBeforeUnmount(() => window.clearTimeout(saveTimer))
+  // 拖拽由页面在 node/selection drag 事件里调 pauseDocumentWatch/resumeDocumentWatch：
+  // Vue Flow 拖拽时每帧原地改 position，deep watcher 会跟着每帧遍历整份文档图，
+  // 节点多时掉帧。暂停期间漏掉的变更在 resume 时用 markDirty 兜底；4 秒定时器防止
+  // drag-stop 事件丢失导致监听器永久停摆。
+  let documentWatchPaused = false
+  let documentWatchResumeTimer = 0
+  const stopDocumentWatch = watch(state.documentState, markDirty, { deep: true })
 
-  return { saveLabel, scheduleSave, saveNow, handleBeforeUnload }
+  function pauseDocumentWatch() {
+    if (documentWatchPaused) return
+    documentWatchPaused = true
+    stopDocumentWatch.pause()
+    window.clearTimeout(documentWatchResumeTimer)
+    documentWatchResumeTimer = window.setTimeout(() => resumeDocumentWatch(), 4000)
+  }
+
+  function resumeDocumentWatch() {
+    window.clearTimeout(documentWatchResumeTimer)
+    if (!documentWatchPaused) return
+    documentWatchPaused = false
+    stopDocumentWatch.resume()
+    markDirty()
+  }
+
+  onBeforeUnmount(() => {
+    window.clearTimeout(saveTimer)
+    window.clearTimeout(documentWatchResumeTimer)
+  })
+
+  return { saveLabel, scheduleSave, saveNow, handleBeforeUnload, markDirty, pauseDocumentWatch, resumeDocumentWatch }
 }

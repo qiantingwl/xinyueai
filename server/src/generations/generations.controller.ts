@@ -32,10 +32,10 @@ export class GenerationsController {
   @Post(':id/cancel') cancel(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) { return this.generations.cancel(user.id, id) }
   @Post(':id/retry') retry(@CurrentUser() user: AuthenticatedUser, @Req() request: AuthenticatedRequest, @Param('id') id: string) { return this.generations.retry(user.id, id, { requestId: request.requestId, traceId: request.traceId }) }
   /**
-   * Ordered generation-event stream. It replays events after the supplied
-   * cursor, then keeps polling only the event table until a terminal event is
-   * observed. The legacy snapshot stream below remains available to older
-   * clients during migration.
+   * Ordered generation-event stream used by chat. Replays events after the
+   * supplied cursor, then keeps polling the event table until a terminal
+   * event is observed. `:id/events` is the snapshot stream used by image,
+   * office, canvas, and studio job watchers.
    */
   @Sse(':id/events/stream') eventsStream(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Headers('last-event-id') lastEventId?: string, @Query('after') after?: string): Observable<MessageEvent> {
     const parsed = Number.parseInt(String(after || lastEventId || '0'), 10)

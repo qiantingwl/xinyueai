@@ -9,7 +9,7 @@
 
   <aside class="workspace-sidebar" :class="{ 'is-mobile-open': mobileOpen }">
     <div class="workspace-sidebar__top">
-      <BrandMark to="/chat" dark :compact="!sidebarOpen" />
+      <BrandMark :to="homePath" dark :compact="!sidebarOpen" />
       <button class="icon-button sidebar-close" type="button" aria-label="关闭边栏" @click="sidebarOpen = !sidebarOpen">
         <PanelLeftClose :size="18" />
       </button>
@@ -20,26 +20,26 @@
 
     <div class="workspace-sidebar__scroll" @scroll="closeConversationMenu">
     <nav class="workspace-menu" aria-label="工作台导航">
+      <template v-for="item in navItems" :key="item.key">
       <a
-        v-for="item in navItems"
-        :key="item.key"
         :href="item.to"
         :target="item.external && item.openNewTab ? '_blank' : undefined"
         :rel="item.external && item.openNewTab ? 'noreferrer' : undefined"
         class="workspace-menu__item"
-        :class="{ 'is-active': !item.external && (item.activeModes || [item.mode]).includes(activeMode) && (item.mode !== 'chat' || !studio.currentConversationId) }"
+        :class="{ 'is-active': !item.external && navItemIsActive(item.key, route.path, String(route.name || ''), route.query, props.publicSettings, studio.currentConversationId) }"
         :title="!sidebarOpen ? item.label : undefined"
         @click="handleNavLink($event, item)"
       >
         <component :is="item.icon" :size="19" />
         <span>{{ item.label }}</span>
       </a>
+      </template>
     </nav>
 
     <section v-if="auth.isAuthenticated" class="workspace-recent" :class="{ 'is-collapsed': !sidebarOpen }">
       <button v-if="!sidebarOpen" class="workspace-recent-collapsed" type="button" aria-label="打开最近对话" title="打开最近对话" @click="sidebarOpen = true"><History :size="19" /></button>
       <template v-else>
-      <header class="workspace-recent__header"><button class="workspace-recent__toggle" type="button" :aria-expanded="recentOpen" @click="recentOpen = !recentOpen">对话 <ChevronDown :size="14" :class="{ 'is-up': recentOpen }" /></button><button class="workspace-recent__search-button" type="button" aria-label="搜索对话" title="搜索对话" @click="recentSearchOpen = !recentSearchOpen; recentOpen = true"><Search :size="15" /></button></header>
+      <header class="workspace-recent__header"><button class="workspace-recent__toggle" type="button" :aria-expanded="recentOpen" @click="recentOpen = !recentOpen">对话</button><button class="workspace-recent__search-button" type="button" aria-label="搜索对话" title="搜索对话" @click="recentSearchOpen = !recentSearchOpen; recentOpen = true"><Search :size="15" /></button></header>
       <div v-if="recentOpen" class="workspace-recent__body">
         <label v-if="recentSearchOpen" class="workspace-recent__search-field"><Search :size="14" /><input v-model="conversationSearch" aria-label="搜索对话" placeholder="搜索对话" /></label>
         <template v-for="conversation in visibleRecentConversations" :key="conversation.id">
@@ -67,7 +67,7 @@
     </div>
 
     <div class="workspace-sidebar__bottom">
-      <button v-if="workspaceDataLoaded && auth.isAuthenticated && publicSettings.trialEnabled && !currentSubscription && activeMode !== 'chat'" class="workspace-trial-button" type="button" @click="openSettings('plan')"><Gift :size="17" /><span>免费试用</span></button>
+      <button v-if="workspaceDataLoaded && auth.isAuthenticated && publicSettings.trialEnabled && !currentSubscription" class="workspace-trial-button" type="button" @click="openSettings('plan')"><Gift :size="17" /><span>免费试用</span></button>
       <button v-if="!auth.isAuthenticated" class="workspace-settings" type="button" title="设置" @click="showSettings">
         <Settings :size="19" />
         <span>{{ t('workspace.settings') }}</span>
@@ -76,7 +76,7 @@
       <section v-if="!auth.isAuthenticated && catalog.loginEnabled" class="workspace-signin">
         <strong>获取为你量身定制的回复</strong>
         <p>登录后可保存对话、创建图片并上传文件。</p>
-        <RouterLink class="workspace-signin__button" to="/login?redirect=/chat">{{ t('workspace.signIn') }}</RouterLink>
+        <RouterLink class="workspace-signin__button" :to="`/login?redirect=${encodeURIComponent(homePath)}`">{{ t('workspace.signIn') }}</RouterLink>
       </section>
       <section v-if="auth.isAuthenticated" class="workspace-account-wrap">
         <button class="workspace-account-button" type="button" :aria-expanded="accountOpen" @click="accountOpen = !accountOpen">
@@ -93,9 +93,9 @@
           <button type="button" @click="openUpgrade"><Sparkles :size="16" />{{ currentSubscription ? '查看升级方案' : '升级套餐' }}</button>
           <button type="button" @click="openSettings('teams')"><Users :size="16" />团队空间</button>
           <button type="button" @click="openSettings('support')"><LifeBuoy :size="16" />帮助与客服</button>
-          <button type="button" @click="openSettings('personalization')">{{ t('workspace.personalization') }}</button>
-          <button type="button" @click="openSettings('account')">{{ t('workspace.account') }}</button>
-          <button type="button" @click="openSettings('general')">{{ t('workspace.settings') }}</button>
+          <button type="button" @click="openSettings('personalization')"><Palette :size="16" />{{ t('workspace.personalization') }}</button>
+          <button type="button" @click="openSettings('account')"><UserRound :size="16" />{{ t('workspace.account') }}</button>
+          <button type="button" @click="openSettings('general')"><Settings :size="16" />{{ t('workspace.settings') }}</button>
           <button class="account-logout" type="button" @click="logout"><LogOut :size="17" />{{ t('workspace.logout') }}</button>
         </div>
       </section>
@@ -105,44 +105,55 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, type Component } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   Blocks,
   BookOpen,
-  BriefcaseBusiness,
+  BookOpenText,
+  Bot,
   Check,
-  ChevronDown,
   ChevronUp,
   Code2,
+  Database,
   ExternalLink,
+  Files,
   FolderKanban,
+  Folders,
   Gift,
   History,
+  Image as ImageIcon,
+  Images,
   KeyRound,
-  LibraryBig,
   LifeBuoy,
   LoaderCircle,
   LogOut,
+  MessageSquarePlus,
   MoreHorizontal,
+  NotebookPen,
+  Palette,
   PanelLeftClose,
   Pencil,
   Pin,
+  ScanText,
   Search,
   Settings,
-  ShoppingBag,
+  Shapes,
   Sparkles,
-  SquarePen,
+  Spline,
+  Store,
   Users,
+  UserRound,
+  Video,
   Webhook,
   X,
-  Image as ImageIcon,
 } from 'lucide-vue-next'
 import BrandMark from '../BrandMark.vue'
 import type { ConversationSummary, StudioMode } from '../../types'
 import { useAuthStore } from '../../stores/auth'
 import { useCatalogStore } from '../../stores/catalog'
 import { useStudioStore } from '../../stores/studio'
+import { firstSidebarPath, NESTED_NAV_CATALOG, navItemIsActive, visibleSidebarNav } from '../../utils/sidebar-nav'
 import type {
   ExternalNavLinkItem,
   PublicSettings,
@@ -182,6 +193,7 @@ const auth = useAuthStore()
 const catalog = useCatalogStore()
 const studio = useStudioStore()
 const router = useRouter()
+const route = useRoute()
 const { t } = useI18n()
 
 const recentOpen = ref(true)
@@ -208,30 +220,74 @@ function dayStart(timestamp: number) {
   const date = new Date(timestamp)
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
 }
+function groupBucket(timestamp: number) {
+  const days = Math.max(0, Math.floor((dayStart(Date.now()) - dayStart(timestamp)) / 86_400_000))
+  return days === 0 ? '今天' : days === 1 ? '昨天' : '三天前'
+}
+
 function groupLabel(conversation: ConversationSummary) {
   const index = visibleRecentConversations.value.findIndex((item) => item.id === conversation.id)
   if (index > 0) {
     const previous = visibleRecentConversations.value[index - 1]
-    if (dayStart(previous.updatedAt) === dayStart(conversation.updatedAt)) return ''
+    if (groupBucket(previous.updatedAt) === groupBucket(conversation.updatedAt)) return ''
   }
-  const days = Math.max(0, Math.floor((dayStart(Date.now()) - dayStart(conversation.updatedAt)) / 86_400_000))
-  return days === 0 ? '今天' : days === 1 ? '昨天' : '三天前'
+  return groupBucket(conversation.updatedAt)
 }
 watch(conversationSearch, () => { recentVisibleCount.value = recentConversationPageSize })
 
 const currentPlanName = computed(() => props.currentSubscription?.plan.name || '免费版')
+const homePath = computed(() => firstSidebarPath(props.publicSettings) || '/')
+const nestedIconMap: Record<string, Component> = {
+  projects: FolderKanban,
+  files: Files,
+  works: Images,
+  canvases: Spline,
+  'image-prompts': ScanText,
+  images: ImageIcon,
+  videos: Video,
+  assistants: Bot,
+  skills: Blocks,
+  knowledge: Database,
+  'prompt-image': ImageIcon,
+  'prompt-video': Video,
+}
+const primaryIconMap: Record<string, Component> = {
+  chat: MessageSquarePlus,
+  creation: Palette,
+  commerce: Store,
+  office: NotebookPen,
+  prompts: BookOpenText,
+  plugins: Shapes,
+  workspace: Folders,
+}
+const primaryModeMap: Record<string, StudioMode> = {
+  chat: 'chat',
+  creation: 'images',
+  commerce: 'commerce',
+  office: 'office',
+  prompts: 'prompts',
+  plugins: 'plugins',
+  workspace: 'workspace',
+}
 
 const externalIconMap: Record<string, Component> = { code: Code2, 'book-open': BookOpen, webhook: Webhook, 'key-round': KeyRound, 'life-buoy': LifeBuoy, 'external-link': ExternalLink }
-const navItems = computed<WorkspaceNavItem[]>(() => [
-  { key: 'chat', mode: 'chat', label: t('workspace.newChat'), icon: SquarePen, to: '/chat', external: false, openNewTab: false },
-  ...(props.publicSettings.sidebarCreationEnabled ? [{ key: 'creation', mode: 'images' as const, activeModes: ['images', 'videos'] as StudioMode[], label: t('workspace.creation'), icon: ImageIcon, to: '/image', external: false, openNewTab: false }] : []),
-  ...(props.publicSettings.sidebarCommerceEnabled ? [{ key: 'commerce', mode: 'commerce' as const, label: t('workspace.commerce'), icon: ShoppingBag, to: '/commerce', external: false, openNewTab: false }] : []),
-  ...(props.publicSettings.sidebarOfficeEnabled ? [{ key: 'office', mode: 'office' as const, label: t('workspace.office'), icon: BriefcaseBusiness, to: '/office', external: false, openNewTab: false }] : []),
-  ...(props.publicSettings.sidebarPromptsEnabled ? [{ key: 'prompts', mode: 'prompts' as const, label: t('workspace.prompts'), icon: LibraryBig, to: '/prompts', external: false, openNewTab: false }] : []),
-  ...(props.publicSettings.sidebarPluginsEnabled ? [{ key: 'plugins', mode: 'plugins' as const, label: '能力中心', icon: Blocks, to: '/capabilities', external: false, openNewTab: false }] : []),
-  ...(props.publicSettings.sidebarProjectsEnabled || props.publicSettings.sidebarAssetsEnabled ? [{ key: 'workspace', mode: 'workspace' as const, label: '工作空间', icon: FolderKanban, to: '/workspace', external: false, openNewTab: false }] : []),
-  ...props.externalLinks.map((item) => ({ key: `external-${item.key}`, mode: 'api' as const, label: item.name, icon: externalIconMap[item.icon] || ExternalLink, to: item.url, external: true, openNewTab: item.openNewTab })),
-])
+const navItems = computed<WorkspaceNavItem[]>(() => {
+  const externalItems = props.externalLinks.map((item) => ({ key: `external-${item.key}`, mode: 'workspace' as const, label: item.name, icon: externalIconMap[item.icon] || ExternalLink, to: item.url, external: true, openNewTab: item.openNewTab }))
+  const items = visibleSidebarNav(props.publicSettings).map((item) => {
+    const nested = NESTED_NAV_CATALOG.find((entry) => entry.key === item.key)
+    const label = item.key === 'chat' ? t('workspace.newChat') : item.key === 'creation' ? t('workspace.creation') : item.key === 'commerce' ? t('workspace.commerce') : item.key === 'office' ? t('workspace.office') : item.key === 'prompts' ? t('workspace.prompts') : item.label
+    return {
+      key: item.key,
+      mode: (nested?.mode || primaryModeMap[item.key] || 'workspace') as StudioMode,
+      label,
+      icon: nestedIconMap[item.key] || primaryIconMap[item.key] || Folders,
+      to: item.to,
+      external: false,
+      openNewTab: false,
+    }
+  })
+  return [...items, ...externalItems]
+})
 
 function handleNav(mode: StudioMode) {
   mobileOpen.value = false

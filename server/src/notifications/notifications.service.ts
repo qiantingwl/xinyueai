@@ -6,6 +6,7 @@ import { CredentialCryptoService } from '../providers/credential-crypto.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { PublicEndpointPolicyService } from '../common/public-endpoint-policy.service'
 import { fetchPublicNoRedirect } from '../common/outbound-http'
+import { asJsonRecord } from '../common/json-record'
 
 type TemplateInput = {
   key: string
@@ -87,23 +88,36 @@ export class NotificationsService implements OnModuleInit {
 
   async sendCustomToUsers(userIds: string[], title: string, body: string, channels: NotificationChannel[] = [NotificationChannel.IN_APP], metadata: Record<string, unknown> = {}, template?: { key: string; webhookUrl: string; encryptedWebhookSecret: string }) {
     const ids = [...new Set(userIds)].slice(0, 100_000)
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: ids }, status: 'ACTIVE' },
+    // 用户分片查询 + 投递记录并发分批插入：一次广播可能覆盖十万用户，
+    // 单条巨型 IN 查询和串行逐条 INSERT 都会拖垮请求和连接池。
+    const firstBatch = await this.prisma.user.findMany({
+      where: { id: { in: ids.slice(0, 1000) }, status: 'ACTIVE' },
       select: { id: true, email: true, settings: { select: { notifications: true } } },
     })
+    const users = [...firstBatch]
+    for (let offset = 1000; offset < ids.length; offset += 1000) {
+      const batch = await this.prisma.user.findMany({
+        where: { id: { in: ids.slice(offset, offset + 1000) }, status: 'ACTIVE' },
+        select: { id: true, email: true, settings: { select: { notifications: true } } },
+      })
+      users.push(...batch)
+    }
     const templateKey = template?.key || String(metadata.templateKey || 'custom')
+    const uniqueChannels = [...new Set(channels)]
+    const recipients = users.flatMap((user) => uniqueChannels.map((channel) => ({ user, channel })))
     const deliveries: NotificationDelivery[] = []
-    for (const user of users) {
-      for (const channel of [...new Set(channels)]) {
+    for (let offset = 0; offset < recipients.length; offset += 100) {
+      const created = await Promise.all(recipients.slice(offset, offset + 100).map(({ user, channel }) => {
         const recipient = channel === NotificationChannel.EMAIL ? user.email || '' : channel === NotificationChannel.WEBHOOK ? template?.webhookUrl || '' : user.id
         const skipped = user.settings?.notifications === false || !recipient
-        deliveries.push(await this.prisma.notificationDelivery.create({ data: {
+        return this.prisma.notificationDelivery.create({ data: {
           templateKey, userId: user.id, channel, recipient, title, body,
           metadata: metadata as Prisma.InputJsonValue,
           status: skipped ? NotificationDeliveryStatus.SKIPPED : NotificationDeliveryStatus.PENDING,
           lastError: skipped ? user.settings?.notifications === false ? '用户已关闭通知' : '缺少投递地址' : '',
-        } }))
-      }
+        } })
+      }))
+      deliveries.push(...created)
     }
     let sent = 0, failed = 0, skipped = deliveries.filter((item) => item.status === NotificationDeliveryStatus.SKIPPED).length
     for (let offset = 0; offset < deliveries.length; offset += 20) {
@@ -129,7 +143,7 @@ export class NotificationsService implements OnModuleInit {
     try {
       if (delivery.channel === NotificationChannel.IN_APP) {
         if (!delivery.userId) throw new Error('缺少用户')
-        await this.prisma.notification.create({ data: { userId: delivery.userId, type: NotificationType.SYSTEM, title: delivery.title, body: delivery.body, metadata: { ...(this.record(delivery.metadata)), deliveryId: delivery.id } as Prisma.InputJsonValue } })
+        await this.prisma.notification.create({ data: { userId: delivery.userId, type: NotificationType.SYSTEM, title: delivery.title, body: delivery.body, metadata: { ...(asJsonRecord(delivery.metadata)), deliveryId: delivery.id } as Prisma.InputJsonValue } })
       } else if (delivery.channel === NotificationChannel.EMAIL) {
         if (!await this.email.sendNotification(delivery.recipient, delivery.title, delivery.body)) throw new Error('SMTP 未启用或配置不完整')
       } else {
@@ -170,5 +184,4 @@ export class NotificationsService implements OnModuleInit {
   }
 
   private publicTemplate<T extends { encryptedWebhookSecret: string }>(row: T) { return { ...row, encryptedWebhookSecret: undefined, hasWebhookSecret: Boolean(row.encryptedWebhookSecret) } }
-  private record(value: Prisma.JsonValue | null): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 }

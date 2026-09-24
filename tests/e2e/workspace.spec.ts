@@ -113,7 +113,8 @@ test('工作区切页保留侧栏且长输入菜单不越界', async ({ page }) 
   await expect(page.locator('.workspace-recent__body')).toHaveCSS('overflow-y', 'visible')
 
   await page.getByRole('link', { name: '提示词库', exact: true }).click()
-  await expect(page).toHaveURL(/\/prompts$/)
+  // 新嵌套导航会把「提示词库」深链到第一个分区（图片提示词），允许带 query
+  await expect(page).toHaveURL(/\/prompts(\?|$)/)
   await expect(sidebar).toHaveAttribute('data-e2e-persistent', 'true')
   await page.getByRole('link', { name: 'AI 创作', exact: true }).click()
   await expect(page).toHaveURL(/\/image$/)
@@ -146,6 +147,16 @@ test('多轮聊天可以从右侧导航跳回已发送消息', async ({ page }) 
       const response = await page.request.post(`/v1/conversations/${conversation.id}/messages`, { data: { content } })
       expect(response.ok()).toBeTruthy()
     }
+    // The thread hides a user turn that was re-sent without a reply, so give the first turn an answer.
+    await page.route(`**/v1/conversations/${conversation.id}`, async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback()
+      const response = await route.fetch()
+      const body = await response.json() as { messages: Array<Record<string, unknown>> }
+      const [first, second] = body.messages
+      const reply = { ...first, id: 'e2e-message-nav-reply', role: first.role === 'USER' ? 'ASSISTANT' : 'assistant', content: '第一条消息的回复', parentId: first.id, author: null, attachments: [] }
+      body.messages = [first, reply, { ...second, parentId: reply.id }, ...body.messages.slice(2)]
+      await route.fulfill({ response, json: body })
+    })
     await page.goto('/chat')
     await page.getByRole('button', { name: title, exact: true }).click()
     const navigator = page.getByRole('button', { name: '浏览已发送消息', exact: true })
@@ -165,7 +176,7 @@ test('多轮聊天可以从右侧导航跳回已发送消息', async ({ page }) 
 
 test('关闭邮箱验证码后隐藏游客登录入口并显示关闭状态', async ({ page }) => {
   await page.context().clearCookies()
-  await page.addInitScript(() => localStorage.setItem('flux:settings', JSON.stringify({ appearance: '浅色', language: 'zh-CN' })))
+  await page.addInitScript(() => localStorage.setItem('xinyue:settings', JSON.stringify({ appearance: '浅色', language: 'zh-CN' })))
   await page.route('**/v1/catalog/settings', (route) => route.fulfill({ json: { siteName: 'Xinyue AI', emailLoginEnabled: false, registrationEnabled: true, otpResendSeconds: 60, smtpReady: false } }))
   await page.goto('/chat')
   await expect(page.getByRole('button', { name: '设置', exact: true })).toBeVisible()
@@ -180,19 +191,19 @@ test('关闭邮箱验证码后隐藏游客登录入口并显示关闭状态', as
   await expect(page.getByLabel('邮箱')).toHaveCount(0)
   await expect(page.getByRole('heading', { name: '登录暂未开放', exact: true })).toHaveCSS('color', 'rgb(22, 23, 26)')
   await expect(page.getByText('管理员尚未开放邮箱验证码登录。', { exact: true })).toHaveCSS('color', 'rgb(126, 131, 140)')
-  await expect(page.getByRole('link', { name: '返回工作台', exact: true })).toHaveCSS('background-color', 'rgb(24, 24, 27)')
+  await expect(page.getByRole('link', { name: '返回工作台', exact: true })).toHaveCSS('background-color', 'rgb(77, 107, 254)')
   await page.waitForTimeout(500)
   await page.screenshot({ path: 'test-results/login-disabled.png', fullPage: false })
 })
 
 test('开启邮箱登录但关闭注册时仅显示已有用户登录', async ({ page }) => {
   await page.context().clearCookies()
-  await page.addInitScript(() => localStorage.setItem('flux:settings', JSON.stringify({ appearance: '浅色', language: 'zh-CN' })))
+  await page.addInitScript(() => localStorage.setItem('xinyue:settings', JSON.stringify({ appearance: '浅色', language: 'zh-CN' })))
   await page.route('**/v1/catalog/settings', (route) => route.fulfill({ json: { siteName: 'Xinyue AI', emailLoginEnabled: true, registrationEnabled: false, otpResendSeconds: 60, smtpReady: true } }))
   await page.goto('/chat')
   await expect(page.getByRole('link', { name: '登录', exact: true }).first()).toBeVisible()
   await expect(page.getByRole('link', { name: '免费注册', exact: true })).toHaveCount(0)
-  await expect(page.locator('.workspace-signin p')).toHaveCSS('color', 'rgb(98, 98, 98)')
+  await expect(page.locator('.workspace-signin p')).toHaveCSS('color', 'rgb(102, 112, 133)')
 
   await page.goto('/login?redirect=/chat')
   await expect(page.getByLabel('邮箱')).toBeVisible()
@@ -313,7 +324,7 @@ test('生图提交后进入聊天任务流并支持失败重试', async ({ page 
   await page.goto('/image')
   await page.locator('.creation-prompt-row textarea').fill('霓虹城市夜景')
   await page.getByRole('button', { name: '开始生成', exact: true }).click()
-  await expect(page).toHaveURL(/\/chat\?generation=mock-image-job-1/)
+  await expect(page).toHaveURL(/\/chat\?(?:.*&)?generation=mock-image-job-1(?:&|$)/)
   await expect(page.locator('.message--user')).toContainText('霓虹城市夜景')
   await expect(page.locator('.image-generation-stage')).toBeVisible()
   await expect(page.locator('.chat-thread')).toHaveCSS('scrollbar-width', 'none')
@@ -323,7 +334,7 @@ test('生图提交后进入聊天任务流并支持失败重试', async ({ page 
   await expect(page.getByText('生成失败，请调整内容后重试')).toBeVisible()
   await expect(page.getByText('上游渠道暂时不可用')).toBeVisible()
   await page.getByRole('button', { name: '重新生成', exact: true }).click()
-  await expect(page).toHaveURL(/\/chat\?generation=mock-image-job-2/)
+  await expect(page).toHaveURL(/\/chat\?(?:.*&)?generation=mock-image-job-2(?:&|$)/)
   await expect(page.locator('.message--user').last()).toContainText('按原方案重试')
   await expect(page.getByText('图片已生成', { exact: true })).toBeVisible()
   await expect(page.locator('.image-generation-response')).toHaveCount(2)
@@ -431,7 +442,7 @@ test('上传图片会显示可移除的真实缩略图', async ({ page }) => {
 
 test('浅色工作台关键页面保持可读且浮层不遮挡内容', async ({ page }) => {
   await page.request.patch('/v1/users/me/settings', { data: { appearance: 'light' } })
-  await page.addInitScript(() => localStorage.setItem('flux:settings', JSON.stringify({ appearance: '浅色', language: 'zh-CN' })))
+  await page.addInitScript(() => localStorage.setItem('xinyue:settings', JSON.stringify({ appearance: '浅色', language: 'zh-CN' })))
 
   await page.goto('/image')
   await expect(page.locator('html')).toHaveAttribute('data-studio-theme', 'light')
@@ -456,7 +467,8 @@ test('浅色工作台关键页面保持可读且浮层不遮挡内容', async ({
   await assertNoPageOverflow(page)
 
   await page.goto('/chat')
-  const heading = page.locator('.chat-center h2')
+  // 皮肤无关：kimi 皮肤首页用字标代替 h2 问候语，断言身份区整体可见
+  const heading = page.locator('.chat-center .chat-home-identity')
   const chatComposer = page.locator('.chat-composer')
   const attachmentButton = page.getByRole('button', { name: '添加文件等', exact: true })
   await attachmentButton.click()
@@ -518,7 +530,8 @@ test('聊天设置可切换浅色模式，模型菜单显示后台信息', async
     ;(window as unknown as { SpeechRecognition: typeof MockSpeechRecognition }).SpeechRecognition = MockSpeechRecognition
   })
   await page.goto('/chat')
-    await expect(page.getByRole('heading', { name: 'Xinyue AI' })).toBeVisible()
+  // 皮肤无关：kimi 皮肤首页无 h2（字标代替），断言身份区整体可见
+  await expect(page.locator('.chat-center .chat-home-identity')).toBeVisible()
   await page.locator('.workspace-account-button').click()
   await page.locator('.workspace-account-menu').getByRole('button', { name: '设置', exact: true }).click()
   await page.getByLabel('外观', { exact: true }).selectOption({ label: '浅色' })
@@ -539,7 +552,7 @@ test('聊天设置可切换浅色模式，模型菜单显示后台信息', async
   await expect(page.getByRole('button', { name: '全部删除', exact: true })).toBeVisible()
 })
 
-test('最近对话可以重命名并归档', async ({ page }) => {
+test('最近对话可以直接重命名并归档', async ({ page }) => {
   const title = `e2e-conversation-${Date.now()}`
   const renamed = `${title}-renamed`
   const created = await page.request.post('/v1/conversations', { data: { title, model: 'gpt-5.5' } })
@@ -549,10 +562,9 @@ test('最近对话可以重命名并归档', async ({ page }) => {
   try {
     await page.goto('/chat')
     await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible()
-    await page.getByRole('button', { name: `打开“${title}”的对话选项`, exact: true }).click()
-    await page.getByRole('menuitem', { name: '重命名', exact: true }).click()
+    await page.getByRole('button', { name: `重命名“${title}”`, exact: true }).click()
     await page.getByLabel('对话名称').fill(renamed)
-    await page.getByLabel('对话名称').press('Enter')
+    await page.getByRole('button', { name: '保存重命名', exact: true }).click()
     await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible()
 
     await page.getByRole('button', { name: `打开“${renamed}”的对话选项`, exact: true }).click()
@@ -819,7 +831,7 @@ test('知识库可以编辑并管理文件资料', async ({ page }) => {
 
     await page.goto('/capabilities')
     await page.getByRole('button', { name: /^知识库/ }).click()
-    await page.getByRole('button', { name: '新建知识库', exact: true }).click()
+    await page.getByRole('button', { name: '新建知识库', exact: true }).first().click()
     const createDialog = page.locator('.connector-dialog').filter({ hasText: '新建知识库' })
     await createDialog.getByLabel('名称').fill(originalName)
     await createDialog.getByLabel('说明').fill('浏览器自动化创建的知识库')

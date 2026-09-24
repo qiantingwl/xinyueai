@@ -5,7 +5,6 @@
  *
  * ## 主要功能
  *
- * - iframe 路由检测，判断是否为外部嵌入页面
  * - 菜单项有效性验证，过滤隐藏和无效菜单
  * - 路径标准化处理，统一路径格式
  * - 递归查找菜单树中第一个有效路径
@@ -16,18 +15,12 @@
  * - 系统初始化时获取默认跳转路径
  * - 菜单权限过滤后获取首个可访问页面
  * - 路由重定向逻辑处理
- * - iframe 页面特殊处理
  *
  * @module utils/navigation/route
  * @author Art Design Pro Team
  */
 
 import { AppRouteRecord } from '@/types'
-
-// 检查是否为 iframe 路由
-export function isIframe(url: string): boolean {
-  return url.startsWith('/outside/iframe/')
-}
 
 /**
  * 判断菜单项是否可作为默认导航落点

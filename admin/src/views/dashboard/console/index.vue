@@ -38,23 +38,21 @@
   import AboutProject from './modules/about-project.vue'
   import { dashboardApi, type Overview } from '@/api/xinyue/dashboard'
   import { customerApi, type AdminUser } from '@/api/xinyue/customers'
+  import { useXinyueAsync } from '@/hooks'
 
   defineOptions({ name: 'Console' })
 
   const overview = ref<Overview | null>(null)
   const users = ref<AdminUser[]>([])
-  const loading = ref(false)
+  const { loading, withLoading } = useXinyueAsync()
 
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       ;[overview.value, users.value] = await Promise.all([
         dashboardApi.overview(),
         customerApi.users()
       ])
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   onMounted(load)

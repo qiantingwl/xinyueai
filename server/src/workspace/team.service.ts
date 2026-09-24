@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { NotificationType, Prisma } from '@prisma/client'
 import { createHash, randomBytes } from 'node:crypto'
@@ -21,6 +21,13 @@ export class TeamService {
   constructor(private readonly prisma: PrismaService, private readonly email: EmailService, private readonly config: ConfigService) {}
 
   private hashToken(token: string) { return createHash('sha256').update(token).digest('hex') }
+
+  // Seat capacity is derived from a COUNT, so every decision that consumes or frees a seat must
+  // hold this row lock for the whole transaction. Concurrent callers block here instead of reading
+  // a stale count and oversubscribing `seatLimit`.
+  private lockTeamSeats(tx: Prisma.TransactionClient, teamId: string) {
+    return tx.$queryRaw`SELECT id FROM "Team" WHERE id = ${teamId} FOR UPDATE`
+  }
 
   private audit(teamId: string, actorId: string | null, action: string, targetType = '', targetId = '', metadata?: Record<string, unknown>) {
     return this.prisma.teamAuditLog.create({ data: { teamId, actorId, action, targetType, targetId, metadata: metadata as Prisma.InputJsonValue | undefined } })
@@ -50,9 +57,12 @@ export class TeamService {
   async update(teamId: string, userId: string, input: TeamInput) {
     const { team } = await this.manager(teamId, userId, true)
     const seatLimit = input.seatLimit ?? team.seatLimit
-    const occupied = await this.prisma.teamMember.count({ where: { teamId } })
-    if (seatLimit < occupied) throw new BadRequestException(`席位数不能少于当前成员数 ${occupied}`)
-    const updated = await this.prisma.team.update({ where: { id: teamId }, data: { name: input.name.trim(), description: input.description?.trim() || '', seatLimit }, include: teamInclude })
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.lockTeamSeats(tx, teamId)
+      const occupied = await tx.teamMember.count({ where: { teamId } })
+      if (seatLimit < occupied) throw new BadRequestException(`席位数不能少于当前成员数 ${occupied}`)
+      return tx.team.update({ where: { id: teamId }, data: { name: input.name.trim(), description: input.description?.trim() || '', seatLimit }, include: teamInclude })
+    })
     await this.audit(teamId, userId, 'team.updated', 'team', teamId, { name: updated.name, seatLimit: updated.seatLimit })
     return updated
   }
@@ -63,19 +73,22 @@ export class TeamService {
     const role = input.role === 'ADMIN' ? 'ADMIN' : 'MEMBER'
     if (role === 'ADMIN' && actorRole !== 'OWNER') throw new ForbiddenException('只有团队所有者可以邀请管理员')
     const existingUser = await this.prisma.user.findUnique({ where: { email }, select: { id: true } })
-    if (existingUser && await this.prisma.teamMember.count({ where: { teamId, userId: existingUser.id } })) throw new BadRequestException('该用户已是团队成员')
-    const [members, pendingOthers] = await Promise.all([
-      this.prisma.teamMember.count({ where: { teamId } }),
-      this.prisma.teamInvitation.count({ where: { teamId, status: 'PENDING', expiresAt: { gt: new Date() }, email: { not: email } } }),
-    ])
-    if (members + pendingOthers >= team.seatLimit) throw new BadRequestException(`团队席位已满（${team.seatLimit} 席）`)
     const token = randomBytes(32).toString('base64url')
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-    const invitation = await this.prisma.teamInvitation.upsert({
-      where: { teamId_email: { teamId, email } },
-      create: { teamId, email, role, tokenHash: this.hashToken(token), invitedById: userId, expiresAt },
-      update: { role, tokenHash: this.hashToken(token), status: 'PENDING', invitedById: userId, acceptedById: null, acceptedAt: null, expiresAt },
-      select: { id: true, email: true, role: true, status: true, expiresAt: true },
+    const invitation = await this.prisma.$transaction(async (tx) => {
+      await this.lockTeamSeats(tx, teamId)
+      const current = await tx.team.findUnique({ where: { id: teamId }, select: { seatLimit: true, status: true } })
+      if (!current || current.status !== 'ACTIVE') throw new NotFoundException('团队不存在或已停用')
+      if (existingUser && await tx.teamMember.count({ where: { teamId, userId: existingUser.id } })) throw new BadRequestException('该用户已是团队成员')
+      const members = await tx.teamMember.count({ where: { teamId } })
+      const pendingOthers = await tx.teamInvitation.count({ where: { teamId, status: 'PENDING', expiresAt: { gt: new Date() }, email: { not: email } } })
+      if (members + pendingOthers >= current.seatLimit) throw new BadRequestException(`团队席位已满（${current.seatLimit} 席）`)
+      return tx.teamInvitation.upsert({
+        where: { teamId_email: { teamId, email } },
+        create: { teamId, email, role, tokenHash: this.hashToken(token), invitedById: userId, expiresAt },
+        update: { role, tokenHash: this.hashToken(token), status: 'PENDING', invitedById: userId, acceptedById: null, acceptedAt: null, expiresAt },
+        select: { id: true, email: true, role: true, status: true, expiresAt: true },
+      })
     })
     const acceptPath = `/chat?teamInviteToken=${encodeURIComponent(token)}&settings=teams`
     const acceptUrl = new URL(acceptPath, this.config.get<string>('WEB_ORIGIN') || 'http://localhost:5173').toString()
@@ -111,12 +124,31 @@ export class TeamService {
       throw new BadRequestException('邀请已过期，请联系团队管理员重新邀请')
     }
     if (invitation.email !== user.email.toLowerCase()) throw new ForbiddenException('当前登录邮箱与受邀邮箱不一致')
-    const members = await this.prisma.teamMember.count({ where: { teamId: invitation.teamId } })
-    if (members >= invitation.team.seatLimit) throw new BadRequestException('团队席位已满，请联系团队所有者扩容')
-    await this.prisma.$transaction([
-      this.prisma.teamMember.upsert({ where: { teamId_userId: { teamId: invitation.teamId, userId: user.id } }, create: { teamId: invitation.teamId, userId: user.id, role: invitation.role }, update: { role: invitation.role } }),
-      this.prisma.teamInvitation.update({ where: { id: invitation.id }, data: { status: 'ACCEPTED', acceptedById: user.id, acceptedAt: new Date() } }),
-    ])
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockTeamSeats(tx, invitation.teamId)
+      const currentInvite = await tx.teamInvitation.findUnique({ where: { id: invitation.id }, include: { team: true } })
+      if (!currentInvite || currentInvite.status !== 'PENDING') throw new ConflictException('邀请已被处理或已失效')
+      if (currentInvite.expiresAt.getTime() <= Date.now()) {
+        await tx.teamInvitation.update({ where: { id: currentInvite.id }, data: { status: 'EXPIRED' } })
+        throw new BadRequestException('邀请已过期，请联系团队管理员重新邀请')
+      }
+      const isAlreadyMember = await tx.teamMember.count({ where: { teamId: currentInvite.teamId, userId: user.id } })
+      const currentMembers = await tx.teamMember.count({ where: { teamId: currentInvite.teamId } })
+      if (!isAlreadyMember && currentMembers >= currentInvite.team.seatLimit) {
+        throw new BadRequestException('团队席位已满，请联系团队所有者扩容')
+      }
+      await tx.teamMember.upsert({
+        where: { teamId_userId: { teamId: currentInvite.teamId, userId: user.id } },
+        create: { teamId: currentInvite.teamId, userId: user.id, role: currentInvite.role },
+        update: { role: currentInvite.role },
+      })
+      await tx.teamInvitation.update({
+        where: { id: currentInvite.id },
+        data: { status: 'ACCEPTED', acceptedById: user.id, acceptedAt: new Date() },
+      })
+    })
+
     await this.audit(invitation.teamId, user.id, 'invitation.accepted', 'invitation', invitation.id, { role: invitation.role })
     return { accepted: true, teamId: invitation.teamId, teamName: invitation.team.name }
   }

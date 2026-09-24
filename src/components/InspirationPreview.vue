@@ -24,10 +24,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ChevronLeft, ChevronRight, Sparkles, X } from 'lucide-vue-next'
+import { useEscapeClose } from '../composables/useEscapeClose'
 
 type PreviewInspiration = { id: string; title: string; prompt: string; badge: string; imageUrl: string; videoUrl?: string; options?: Record<string, unknown> | null }
 const props = defineProps<{ inspiration: PreviewInspiration; typeLabel: string }>()
-defineEmits<{ close: []; use: [] }>()
+const emit = defineEmits<{ close: []; use: [] }>()
+useEscapeClose(() => emit('close'))
 const currentIndex = ref(0)
 const images = computed(() => {
   const configured = Array.isArray(props.inspiration.options?.previewImages) ? props.inspiration.options.previewImages.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())) : []

@@ -1,3 +1,4 @@
+import { pollUntilTerminal } from '../../services/api'
 import type { CanvasGenerationKind } from '../../types/canvas'
 
 export type CanvasJobAsset = {
@@ -12,18 +13,19 @@ export type CanvasJobAsset = {
 
 export type CanvasGenerationJob = {
   id: string
-  kind: CanvasGenerationKind
+  kind: CanvasGenerationKind | 'CHAT'
   status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
   model: string
   creditCost?: number
   errorMessage?: string | null
   outputs?: Array<{ asset: CanvasJobAsset }>
+  stream?: { content?: string } | null
 }
 
 interface CanvasGenerationMonitorActions {
   nodeExists: (nodeId: string) => boolean
   jobIdForNode: (nodeId: string) => string | undefined
-  updateNode: (nodeId: string, patch: { status?: CanvasGenerationJob['status']; creditCost?: number; error?: string }) => void
+  updateNode: (nodeId: string, patch: { status?: CanvasGenerationJob['status']; creditCost?: number; error?: string; content?: string }) => void
   applyResult: (nodeId: string, job: CanvasGenerationJob) => void
   streamJob: (jobId: string, onUpdate: (job: CanvasGenerationJob) => void) => Promise<CanvasGenerationJob>
   fetchJob: (jobId: string) => Promise<CanvasGenerationJob>
@@ -34,13 +36,11 @@ export function useCanvasGenerationMonitor(actions: CanvasGenerationMonitorActio
   const monitoringJobs = new Map<string, Promise<void>>()
 
   async function pollGeneration(jobId: string, onUpdate: (job: CanvasGenerationJob) => void) {
-    for (let attempt = 0; attempt < 300; attempt += 1) {
-      const job = await actions.fetchJob(jobId)
-      onUpdate(job)
-      if (job.status === 'SUCCEEDED' || job.status === 'FAILED' || job.status === 'CANCELLED') return job
-      await new Promise((resolve) => window.setTimeout(resolve, 1000))
-    }
-    throw new Error('生成任务等待超时，请稍后重新打开画布查看。')
+    return pollUntilTerminal<CanvasGenerationJob>(`/generations/${jobId}`, {
+      onUpdate,
+      maxAttempts: 300,
+      timeoutMessage: '生成任务等待超时，请稍后重新打开画布查看。',
+    })
   }
 
   async function monitorGeneration(nodeId: string, jobId: string) {
@@ -48,9 +48,12 @@ export function useCanvasGenerationMonitor(actions: CanvasGenerationMonitorActio
     const monitor = (async () => {
       try {
         const update = (current: CanvasGenerationJob) => {
-          if (actions.nodeExists(nodeId)) {
-            actions.updateNode(nodeId, { status: current.status, creditCost: current.creditCost })
-          }
+          if (!actions.nodeExists(nodeId)) return
+          actions.updateNode(nodeId, {
+            status: current.status,
+            creditCost: current.creditCost,
+            ...(current.stream?.content ? { content: current.stream.content } : {}),
+          })
         }
         let job: CanvasGenerationJob
         try {

@@ -29,8 +29,11 @@
 .workspace-chat-more-wrap > button[aria-expanded='true'],
 .workspace-task-center > button:hover,
 .workspace-task-center > button[aria-expanded='true'] { background: var(--studio-control); color: var(--studio-text); }
-.workspace-chat-actions .workspace-upgrade-button { color: #70a9ff; }
+.workspace-chat-actions .workspace-upgrade-button { color: var(--studio-brand); }
+html[data-studio-theme="light"] .workspace-chat-actions .workspace-upgrade-button { color: var(--studio-brand-pressed); }
 .workspace-chat-actions .workspace-upgrade-button svg { fill: currentColor; }
+.workspace-main:has(> .workspace-chat-actions) .chat-page__header .temporary-chat-toggle { display: none; }
+.workspace-chat-actions .temporary-chat-toggle { padding: 0; width: 36px; }
 .workspace-chat-more-wrap { position: relative; }
 .workspace-task-center { position: relative; }
 .workspace-task-center > button { padding: 0; position: relative; width: 36px; }
@@ -45,8 +48,10 @@
 .workspace-task-panel > header button:hover,
 .workspace-task-list nav button:hover { background: var(--studio-control); color: var(--studio-text); }
 .workspace-task-list { max-height: min(480px, calc(100dvh - 100px)); overflow: auto; }
-.workspace-task-list article { align-items: center; border-bottom: 1px solid var(--studio-border); display: grid; gap: var(--studio-space-3); grid-template-columns: 32px minmax(0, 1fr) 32px; min-height: 76px; padding: var(--studio-space-3) var(--studio-space-4); }
+.workspace-task-list article { align-items: center; border-bottom: 1px solid var(--studio-border); display: grid; gap: var(--studio-space-3); grid-template-columns: minmax(0, 1fr) 32px; min-height: 76px; padding: 0 var(--studio-space-4) 0 0; }
 .workspace-task-list article:last-child { border-bottom: 0; }
+.workspace-task-list article:hover { background: var(--studio-control); }
+.workspace-task-open { align-items: center; background: transparent; border: 0; color: inherit; cursor: pointer; display: grid; gap: var(--studio-space-3); grid-template-columns: 32px minmax(0, 1fr); min-height: 76px; min-width: 0; padding: var(--studio-space-3) 0 var(--studio-space-3) var(--studio-space-4); text-align: left; width: 100%; }
 .workspace-task-icon { align-items: center; background: var(--studio-control); border-radius: var(--studio-radius-sm); color: var(--studio-muted); display: flex; height: 32px; justify-content: center; }
 .workspace-task-list article > div { min-width: 0; }
 .workspace-task-list article strong { display: block; font-size: var(--studio-text-sm); }
@@ -76,10 +81,10 @@
 .chat-message-navigator { right: 15px; }
 .chat-message-navigator > button {
   align-items: flex-end;
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  box-shadow: none;
+  background: var(--studio-panel);
+  border: 1px solid var(--studio-line);
+  border-radius: 9px;
+  box-shadow: var(--studio-shadow-sm);
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -96,9 +101,8 @@
 .chat-message-navigator__panel { border-radius: 14px; overflow: visible; right: 34px; width: 340px; }
 .chat-message-navigator__panel::after { content: ''; height: 100%; position: absolute; right: -8px; top: 0; width: 8px; }
 .chat-message-navigator__panel > header { display: none; }
-.chat-message-navigator__panel > div { border-radius: inherit; max-height: inherit; min-height: 0; padding: 7px; }
-.chat-message-navigator__panel > div > button { display: block; grid-template-columns: minmax(0, 1fr); min-height: 40px; padding: 8px 12px; }
-.chat-message-navigator__panel > div > button strong { display: block; font-size: 12px; }
+.chat-message-navigator__panel > div { border-radius: inherit; max-height: inherit; min-height: 0; padding: 6px; }
+.chat-message-navigator__panel > div > button { min-height: 40px; padding: 8px 12px; }
 
 .studio-settings-dialog {
   grid-template-columns: 220px minmax(0, 1fr);
@@ -273,6 +277,8 @@ html[data-studio-theme="light"] .settings-team-builder > header { background: #f
   .workspace-chat-actions { right: 8px; top: 6px; }
   .workspace-chat-actions .workspace-upgrade-button span,
   .workspace-chat-actions > button:not(.workspace-upgrade-button) span { display: none; }
+  /* 触控目标兜底：图标态（文字收起后）热区不小于 32×32，视觉尺寸不变 */
+  .workspace-chat-actions > button { min-height: 32px; min-width: 32px; }
   .workspace-main:has(> .workspace-chat-actions) .chat-page__header-actions { margin-right: 0; }
   .workspace-upgrade-layer { padding: 8px; }
   .workspace-upgrade-dialog { max-height: calc(100dvh - 16px); padding: 28px 16px; width: calc(100vw - 16px); }
@@ -437,6 +443,7 @@ html[data-studio-theme="light"] .support-status.waiting_user { background: #fff4
   }
   .model-popover--catalog > .model-catalog-picker.model-catalog-picker { width: 100%; }
   .message-actions { opacity: 1; }
+  .message-actions button { height: 34px; width: 34px; }
   .message-editor { max-width: 92%; }
   .image-generation-response { width: 100%; }
   .image-generation-results { grid-template-columns: 1fr; }
@@ -517,10 +524,14 @@ html[data-studio-theme="light"] .settings-routing-overview > header { background
 }
 
 @media (max-width: 640px) {
+  /* 覆盖后方 58px/52px 的桌面内缩，移动端顶栏操作组贴右，给标题留出空间 */
+  .workspace-chat-actions { right: 8px; }
+  /* 触控目标兜底：composer 工具行按钮热区不小于 32×32（透明扩展，图标视觉尺寸不变） */
+  .chat-composer button { min-height: 32px; min-width: 32px; }
   .chat-composer {
     align-items: center;
     display: grid;
-    grid-template-columns: 36px minmax(0, 1fr) auto auto auto 36px 36px;
+    grid-template-columns: 36px minmax(0, 1fr) auto auto auto 36px;
     grid-template-rows: minmax(36px, auto) 36px;
     min-height: 92px;
     padding: 7px 7px 7px 8px;
@@ -548,7 +559,6 @@ html[data-studio-theme="light"] .settings-routing-overview > header { background
   .chat-composer:has(> .attachment-list) .composer-assistant,
   .chat-composer:has(> .attachment-list) > .composer-web-search--standalone,
   .chat-composer:has(> .attachment-list) .composer-model,
-  .chat-composer:has(> .attachment-list) > .composer-voice,
   .chat-composer:has(> .attachment-list) > .chat-composer-submit { grid-row: 3; }
   .chat-composer > button:first-child { grid-column: 1; grid-row: 2; }
   .chat-composer > .plugin-selector { grid-column: 2; grid-row: 2; justify-self: start; }
@@ -556,17 +566,22 @@ html[data-studio-theme="light"] .settings-routing-overview > header { background
   .chat-composer > .composer-web-search--standalone { grid-column: 4; grid-row: 2; padding: 0; width: 36px; }
   .chat-composer > .composer-web-search--standalone span { display: none; }
   .chat-composer .composer-model { grid-column: 5; grid-row: 2; }
-  .chat-composer > .composer-voice { grid-column: 6; grid-row: 2; }
-  .chat-composer > .chat-composer-submit { grid-column: 7; grid-row: 2; margin-left: 0; }
-  .chat-ui--qianwen .chat-composer,
-  .chat-ui--kimi .chat-composer { grid-template-columns: 42px minmax(0, 1fr) auto 42px; }
-  .chat-ui--qianwen .chat-composer > .composer-web-search--standalone,
+  .chat-ui--qianwen .chat-composer { grid-template-columns: 42px minmax(0, 1fr) auto auto 42px; }
+  .chat-ui--kimi .chat-composer { grid-template-columns: 42px auto minmax(0, 1fr) auto 42px; }
+  .chat-ui--qianwen .chat-composer > .chat-home-shortcuts--in-composer,
+  .chat-ui--qianwen .chat-composer > .plugin-selector { grid-column: 2; }
+  .chat-ui--qianwen .chat-composer > .composer-web-search--standalone { grid-column: 3; }
+  .chat-ui--qianwen .chat-composer .composer-model { grid-column: 4; }
+  .chat-ui--qianwen .chat-composer > .chat-composer-submit { grid-column: 5; }
   .chat-ui--kimi .chat-composer > .composer-web-search--standalone { grid-column: 2; }
-  .chat-ui--qianwen .chat-composer > .chat-composer-submit,
-  .chat-ui--kimi .chat-composer > .chat-composer-submit { grid-column: 4; }
-  .message-process__body { padding-left: 4px; }
-  .message-process__sources a { grid-template-columns: 22px minmax(0, 1fr) 18px; }
-  .message-process__sources a small { display: none; }
+  .chat-ui--kimi .chat-composer .composer-model { grid-column: 3; justify-self: start; min-width: 0; }
+  .chat-ui--kimi .chat-composer .composer-model > button { max-width: 100%; }
+  .chat-ui--kimi .chat-composer .composer-model > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-ui--kimi .chat-composer > .chat-kimi-modes { grid-column: 4; }
+  .chat-ui--kimi .chat-composer > .chat-composer-submit { grid-column: 5; }
+  .chat-ui--kimi .chat-composer > .plugin-selector,
+  .chat-ui--qianwen .chat-composer > .plugin-selector { display: none; }
+  .message-process__body { padding-left: 0; }
   .chat-page.has-messages .composer-attachment-panel { bottom: 100px; }
   .chat-page.has-messages .chat-center--thread > .composer-attachment-panel,
   .chat-page.has-messages.is-artifact-open .chat-center--thread > .composer-attachment-panel { left: 10px; }
@@ -583,13 +598,11 @@ html[data-studio-theme="light"] .settings-routing-overview > header { background
 .chat-page:not(.has-messages) .chat-home-shortcuts { animation: chat-home-rise .48s .09s cubic-bezier(.2, .7, .3, 1) both; }
 .chat-page:not(.has-messages) .chat-home-suggestions { animation: chat-home-rise .48s .13s cubic-bezier(.2, .7, .3, 1) both; }
 .chat-page:not(.has-messages) .chat-home-qianwen-carousel { animation: chat-home-rise .48s .13s cubic-bezier(.2, .7, .3, 1) both; }
-.chat-page:not(.has-messages) .chat-home-promo { animation: chat-home-rise .48s .18s cubic-bezier(.2, .7, .3, 1) both; }
 .chat-page:not(.has-messages) .chat-home-explore { animation: chat-home-rise .48s .22s cubic-bezier(.2, .7, .3, 1) both; }
 
 /* 首页推荐与快捷入口：hover 反馈 */
 .chat-home-suggestions button,
 .chat-home-shortcuts button,
-.chat-home-promo,
 .chat-home-explore {
   transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
 }
@@ -605,7 +618,6 @@ html[data-studio-theme="light"] .settings-routing-overview > header { background
   transform: translateY(-1px);
 }
 
-.chat-home-promo:hover,
 .chat-home-explore:hover {
   border-color: color-mix(in srgb, var(--studio-brand) 45%, var(--studio-border));
   box-shadow: var(--studio-shadow-sm);
@@ -659,7 +671,6 @@ html[data-studio-theme="light"] .chat-code-block {
   .chat-page:not(.has-messages) .chat-home-shortcuts,
   .chat-page:not(.has-messages) .chat-home-suggestions,
   .chat-page:not(.has-messages) .chat-home-qianwen-carousel,
-  .chat-page:not(.has-messages) .chat-home-promo,
   .chat-page:not(.has-messages) .chat-home-explore,
   .chat-dialog-pane .message-row { animation: none; }
 }
@@ -677,6 +688,32 @@ html[data-studio-theme="light"] .chat-code-block {
 
 html[data-studio-theme="light"] .chat-composer:focus-within {
   box-shadow: 0 8px 26px rgba(24, 24, 27, .1), 0 0 0 4px var(--studio-brand-soft);
+}
+
+/* 首页空草稿时保持中性描边：进入 /chat 会程序化聚焦 textarea，
+   空内容的聚焦态应与默认态一致（对齐千问/Kimi 官网首页）；输入内容后再点亮品牌描边+光晕。
+   仅作用于 gpt/qianwen/kimi 首页，对话页与其他预设不受影响 */
+.chat-page:not(.has-messages):is(.chat-ui--gpt, .chat-ui--qianwen, .chat-ui--kimi) .chat-composer:focus-within:not(:has(textarea:not(:placeholder-shown))) {
+  border-color: var(--studio-border);
+  box-shadow: none;
+}
+
+.chat-page:not(.has-messages).chat-ui--gpt .chat-composer:focus-within:not(:has(textarea:not(:placeholder-shown))) {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .05);
+}
+
+html[data-studio-theme="light"] .chat-page:not(.has-messages).chat-ui--gpt .chat-composer:focus-within:not(:has(textarea:not(:placeholder-shown))) {
+  border-color: rgba(0, 0, 0, .15);
+}
+
+html[data-studio-theme="light"] .chat-page:not(.has-messages).chat-ui--qianwen .chat-composer:focus-within:not(:has(textarea:not(:placeholder-shown))) {
+  border-color: #d5d6da;
+  box-shadow: 0 10px 34px rgba(28, 31, 35, .1);
+}
+
+html[data-studio-theme="light"] .chat-page:not(.has-messages).chat-ui--kimi .chat-composer:focus-within:not(:has(textarea:not(:placeholder-shown))) {
+  border-color: #ebebed;
+  box-shadow: 0 10px 32px rgba(28, 31, 35, .08);
 }
 
 /* 发送按钮：可发送时点亮品牌色，hover 弹性放大、按压缩回 */
@@ -731,8 +768,7 @@ html[data-studio-theme="light"] .chat-composer:focus-within {
 }
 
 /* 输入光标使用品牌色 */
-.chat-composer textarea,
-.chat-composer input {
+.chat-composer textarea {
   caret-color: var(--studio-brand);
 }
 
@@ -777,10 +813,7 @@ html[data-studio-theme="light"] .chat-composer:focus-within {
 
 
 /* ===== 布局修复与工作空间页面质感 ===== */
-/* 豆包布局：快捷入口溢出时右缘渐隐，不再硬切半个按钮 */
-.chat-ui--doubao .chat-composer > .chat-home-shortcuts--in-composer {
-  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
-}
+/* 快捷入口溢出渐隐由 .can-scroll-start/.can-scroll-end 按滚动位置精确控制（见 foundation.css） */
 
 /* 搜索框聚焦反馈 */
 .workspace-search { transition: border-color .16s ease, box-shadow .16s ease; }
@@ -896,10 +929,14 @@ html[data-studio-theme="light"] .chat-composer:focus-within {
   .message-process summary small::before,
   .message-process__progress i,
   .message-process__steps > div > svg,
+  .message-process__steps svg.message-process__spinner + span strong,
+  .message-process__steps svg.message-process__spinner + span small::after,
   .message-process__thinking-icon,
   .message-process__body,
+  .message-process__sources a,
   .message-citations,
   .message-citations a { animation: none; }
+  .message-process__steps svg.message-process__spinner + span strong { background: none; background-clip: initial; -webkit-background-clip: initial; color: var(--studio-text); }
   .chat-thinking-dots i { opacity: .8; }
 }
 
@@ -934,15 +971,17 @@ html[data-studio-theme="light"] .chat-composer:focus-within {
 .image-result-actions button:hover { transform: scale(1.08); }
 .image-result-actions button:active { transform: scale(.94); }
 
-/* 生成中舞台：增加流光扫过 */
+/* 生成中舞台：斜向流光 */
 .image-generation-stage { overflow: hidden; }
 .image-generation-stage::before {
-  animation: generation-sheen 2.6s ease-in-out infinite;
-  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .07) 50%, transparent 70%);
+  animation: generation-sheen 2.4s ease-in-out infinite;
+  background: linear-gradient(105deg, transparent 28%, color-mix(in srgb, #fff 16%, transparent) 50%, transparent 72%);
   content: '';
   inset: 0;
+  pointer-events: none;
   position: absolute;
   transform: translateX(-100%);
+  z-index: 1;
 }
 
 @keyframes generation-sheen {
@@ -959,8 +998,9 @@ html[data-studio-theme="light"] .chat-composer:focus-within {
   background: rgba(213, 107, 107, .08);
   border: 1px solid rgba(213, 107, 107, .22);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 12px 14px;
 }
+.image-generation-failure > strong { font-size: 14px; }
 .image-generation-failure > button { transition: background-color .15s ease, transform .15s ease; }
 .image-generation-failure > button:hover { transform: translateY(-1px); }
 
@@ -988,7 +1028,109 @@ html[data-studio-theme="light"] .chat-composer:focus-within {
 @media (prefers-reduced-motion: reduce) {
   .image-generation-response,
   .image-generation-result { animation: none; }
-  .image-generation-stage::before { animation: none; }
+  .image-generation-stage::before,
+  .image-generation-stage::after,
+  .image-generation-stage__orb,
+  .image-generation-stage__ring { animation: none; }
   .image-result-actions { opacity: 1; transform: none; }
 }
 
+
+/* 步骤摘要最多两行截断；完整思考内容在下方「模型思考」块中查看 */
+.message-process__steps > div > span small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* GPT/Kimi 底部控制行的能力选择器空间不足：只留图标，避免文字被截断成“对…” */
+.chat-ui--gpt .chat-composer > .plugin-selector,
+.chat-ui--kimi .chat-composer > .plugin-selector { min-width: 0; }
+.chat-ui--gpt .chat-composer > .plugin-selector > button,
+.chat-ui--kimi .chat-composer > .plugin-selector > button { justify-content: center; max-width: 36px; min-width: 36px; padding: 0; width: 36px; }
+.chat-ui--gpt .chat-composer > .plugin-selector > button span,
+.chat-ui--gpt .chat-composer > .plugin-selector > button .plugin-selector__chevron,
+.chat-ui--kimi .chat-composer > .plugin-selector > button span,
+.chat-ui--kimi .chat-composer > .plugin-selector > button .plugin-selector__chevron { display: none; }
+
+/* 千问首页轮播指示点：移到横幅下方居中，不再悬浮在左边缘像脏点 */
+.chat-home-qianwen-carousel > nav { bottom: -20px; display: flex; gap: 7px; left: 50%; position: absolute; top: auto; transform: translateX(-50%); }
+.chat-home-qianwen-carousel > nav button.is-active { background: var(--studio-brand); height: 7px; width: 16px; }
+
+
+/* ============ 消息流与全局细节精修（对照 GPT / DeepSeek / Kimi） ============ */
+
+/* 全局文本选中：品牌色弱底，替代浏览器默认蓝 */
+::selection { background: var(--studio-brand-soft-strong); }
+
+/* Markdown 表格：行悬停反馈（GPT/DeepSeek 均有行级高亮） */
+.markdown-segment tbody tr td { transition: background-color .12s ease; }
+.markdown-segment tbody tr:hover td { background: color-mix(in srgb, var(--studio-brand) 5%, transparent); }
+
+/* 用户消息气泡：悬停轻微加深，暗示可操作（编辑/复制） */
+.message--user { transition: background-color .15s ease, box-shadow .15s ease; }
+.message-row:hover .message--user { background: color-mix(in srgb, var(--studio-bubble-user) 90%, var(--studio-text)); }
+
+/* 助手头像列：与模型标识行光标对齐，避免历史消息定格头像“压”住正文 */
+.message-avatar-col { padding-top: 0; }
+.message-row--assistant .message-model-line { padding-top: 6px; }
+
+/* 引用来源角标：更圆润的胶囊 */
+.message-citations a { border-radius: 999px; }
+
+/* 追问建议：加入悬停右移动效，强化“点我可以继续问” */
+.message-follow-ups button { border-radius: 999px; }
+.message-follow-ups button:hover { transform: translateX(2px); }
+
+
+/* 聊天回复失败：行内错误卡片（与生成失败卡同语言） */
+.message-error-box {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--studio-danger) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--studio-danger) 30%, transparent);
+  border-radius: 12px;
+  color: var(--studio-text);
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.message-error-box > svg { color: var(--studio-danger); flex: 0 0 auto; margin-top: 2px; }
+.message-error-box__body { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.message-error-box__body strong { font-size: 13px; }
+.message-error-box__body p { color: var(--studio-muted); font-size: 12px; line-height: 1.55; margin: 0; overflow-wrap: anywhere; }
+.message-error-box > button {
+  align-items: center;
+  align-self: center;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--studio-danger) 36%, var(--studio-border));
+  border-radius: 999px;
+  color: var(--studio-text);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.message-error-box > button:hover { background: color-mix(in srgb, var(--studio-danger) 12%, transparent); border-color: var(--studio-danger); }
+.message-error-box > button:disabled { opacity: .5; }
+
+html[data-studio-theme="light"] .message-error-box { background: #fef1f0; border-color: #f2c8c4; }
+
+/* 语音入口（空输入时的发送按钮）：中性灰底，语音中/悬停时品牌色 */
+.chat-composer > .chat-composer-submit.is-voice-entry { background: var(--studio-control); box-shadow: none; color: var(--studio-muted); }
+.chat-composer > .chat-composer-submit.is-voice-entry:hover { background: var(--studio-brand-soft); color: var(--studio-brand); }
+.chat-composer > .chat-composer-submit.is-listening { animation: voice-pulse 1.4s ease-in-out infinite; background: var(--studio-brand-soft); color: var(--studio-brand); }
+
+/* 千问首页：对话能力 chip 与同排按钮同款紧凑胶囊，限宽防长标签撑爆 */
+.chat-ui--qianwen .chat-home-shortcuts--in-composer > .plugin-selector > button span { max-width: none; }
+.chat-ui--qianwen .chat-home-shortcuts--in-composer > .plugin-selector > button { max-width: 136px; padding: 0 10px; }
+/* 轨内滚动渐隐遮罩会压暗末端 chip：有对话能力 chip 时改留 12px 呼吸位 */
+.chat-ui--qianwen .chat-composer:has(> .chat-home-shortcuts--in-composer > .plugin-selector) .chat-home-shortcuts--in-composer.can-scroll-end {
+  mask-image: linear-gradient(to right, #000 calc(100% - 12px), rgba(0, 0, 0, .35));
+}
+/* 工具轨与发送按钮重叠：留出 46px 让轨内容不被提交按钮压住（千问首页空态） */
+.chat-page:not(.has-messages).chat-ui--qianwen .chat-composer > .chat-home-shortcuts--in-composer { margin-right: 46px; }

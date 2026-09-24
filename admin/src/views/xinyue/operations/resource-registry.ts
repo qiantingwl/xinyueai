@@ -124,16 +124,17 @@ export const operationResources: Record<string, ResourceConfig> = {
     ]
   },
   plugins: {
-    title: '插件管理',
-    description: '管理官方插件的发布、能力、定价和使用情况',
+    title: '技能管理',
+    description: '管理官方技能的发布、能力、定价和使用情况',
     icon: 'ri:apps-2-line',
     endpoint: '/v1/admin/plugins',
     columns: [
-      { key: 'name', label: '插件名称', minWidth: 180 },
+      { key: 'name', label: '技能名称', minWidth: 180 },
       { key: 'category.name', label: '分类', minWidth: 120 },
       { key: 'capabilities', label: '支持能力', minWidth: 180 },
       { key: 'status', label: '发布状态', width: 105, type: 'status' },
       { key: 'featured', label: '精选', width: 85, type: 'status' },
+      { key: 'preinstalled', label: '默认启用', width: 100, type: 'status' },
       { key: 'priceCredits', label: '安装价格', width: 105, type: 'number' },
       { key: 'installCount', label: '安装', width: 85, type: 'number' },
       { key: 'usageCount', label: '调用', width: 85, type: 'number' },
@@ -142,8 +143,8 @@ export const operationResources: Record<string, ResourceConfig> = {
     ]
   },
   pluginCategories: {
-    title: '插件分类',
-    description: '维护插件市场分类、图标和前台排序',
+    title: '技能分类',
+    description: '维护技能市场分类、图标和前台排序',
     icon: 'ri:folder-settings-line',
     endpoint: '/v1/admin/plugin-categories',
     columns: [
@@ -438,19 +439,6 @@ export const operationResources: Record<string, ResourceConfig> = {
       { key: 'durationMs', label: '耗时(ms)', width: 110, type: 'number' },
       { key: 'error', label: '错误', minWidth: 190 },
       { key: 'createdAt', label: '时间', width: 175, type: 'date' }
-    ]
-  },
-  systemHealth: {
-    title: '系统健康',
-    description: '查看数据库、Redis、文件存储和运行环境',
-    icon: 'ri:pulse-line',
-    endpoint: '/v1/admin/system',
-    columns: [
-      { key: 'database', label: '数据库', minWidth: 150, type: 'status' },
-      { key: 'queue', label: '队列', minWidth: 150, type: 'status' },
-      { key: 'storage.driver', label: '存储驱动', minWidth: 160 },
-      { key: 'storage.status', label: '存储状态', minWidth: 150, type: 'status' },
-      { key: 'environment', label: '运行环境', minWidth: 150, type: 'status' }
     ]
   }
 }

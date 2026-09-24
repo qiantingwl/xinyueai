@@ -192,8 +192,8 @@ export class AdminController {
 
   @Get('assets/:id/content')
   async assetContent(@Param('id') id: string) {
-    const result = await this.assets.readForAdmin(id)
-    return new StreamableFile(result.file, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name) })
+    const result = await this.assets.streamForAdmin(id)
+    return new StreamableFile(result.stream, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name), length: result.size || undefined })
   }
 
   @Delete('assets/:id')

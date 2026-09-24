@@ -63,47 +63,27 @@
     const isFirstLevel = firstRoute.meta?.isFirstLevel
     const lastIndex = matchedLength - 1
     const currentRoute = matched[lastIndex]
-    const currentRouteMeta = currentRoute.meta
 
     let items = isFirstLevel
       ? [createBreadcrumbItem(currentRoute)]
       : matched.map(createBreadcrumbItem)
 
-    // 过滤包裹容器：如果有多个项目且第一个是容器路由（如 /outside），则移除它
-    if (items.length > 1 && isWrapperContainer(items[0])) {
-      items = items.slice(1)
-    }
-
-    // IFrame 页面特殊处理：如果过滤后只剩一个 iframe 页面，或者所有项都是包裹容器，则仅展示当前页
-    if (currentRouteMeta?.isIframe && (items.length === 1 || items.every(isWrapperContainer))) {
-      return [createBreadcrumbItem(currentRoute)]
-    }
-
     return items
   })
 
-  // 辅助函数：判断是否为包裹容器路由
-  const isWrapperContainer = (item: BreadcrumbItem): boolean =>
-    item.path === '/outside' && !!item.meta?.isIframe
-
-  // 辅助函数：创建面包屑项目
   const createBreadcrumbItem = (route: RouteLocationMatched): BreadcrumbItem => ({
     path: route.path,
     meta: route.meta
   })
 
-  // 辅助函数：判断是否为首页
   const isHomeRoute = (route: RouteLocationMatched): boolean => route.name === '/'
 
-  // 辅助函数：判断是否为最后一项
   const isLastItem = (index: number): boolean => {
     const itemsLength = breadcrumbItems.value.length
     return index === itemsLength - 1
   }
 
-  // 辅助函数：判断是否可点击
-  const isClickable = (item: BreadcrumbItem, index: number): boolean =>
-    item.path !== '/outside' && !isLastItem(index)
+  const isClickable = (item: BreadcrumbItem, index: number): boolean => !isLastItem(index)
 
   // 辅助函数：查找路由的第一个有效子路由
   const findFirstValidChild = (route: RouteRecordRaw) =>
@@ -114,8 +94,7 @@
 
   // 处理面包屑点击事件
   async function handleBreadcrumbClick(item: BreadcrumbItem, index: number): Promise<void> {
-    // 如果是最后一项或外部链接，不处理
-    if (isLastItem(index) || item.path === '/outside') {
+    if (isLastItem(index)) {
       return
     }
 

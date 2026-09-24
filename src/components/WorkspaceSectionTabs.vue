@@ -1,29 +1,46 @@
 <template>
-  <nav class="workspace-section-tabs" aria-label="工作空间内容">
-    <RouterLink :to="{ path: '/workspace', query: { tab: 'projects' } }" :class="{ 'is-active': active === 'projects' }">
-      <FolderKanban :size="17" />
-      <span>项目</span>
-    </RouterLink>
-    <RouterLink :to="{ path: '/workspace', query: { tab: 'files' } }" :class="{ 'is-active': active === 'files' }">
-      <Files :size="17" />
-      <span>文件</span>
-    </RouterLink>
-    <RouterLink to="/canvases" :class="{ 'is-active': active === 'canvases' }">
-      <Spline :size="17" />
-      <span>画布</span>
-    </RouterLink>
-    <RouterLink to="/image-prompt" :class="{ 'is-active': active === 'image-prompts' }">
-      <ScanText :size="17" />
-      <span>图片反推</span>
+  <nav v-if="items.length" class="workspace-section-tabs" aria-label="工作空间内容">
+    <RouterLink
+      v-for="item in items"
+      :key="item.key"
+      :to="item.to"
+      custom
+      v-slot="{ href, navigate }"
+    >
+      <a
+        :href="href"
+        :class="{ 'is-active': active === item.key }"
+        :aria-current="active === item.key ? 'page' : undefined"
+        @click="navigate"
+      >
+        <component :is="iconFor(item.key)" :size="17" />
+        <span>{{ item.label }}</span>
+      </a>
     </RouterLink>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { Files, FolderKanban, ScanText, Spline } from 'lucide-vue-next'
+import { computed, type Component } from 'vue'
+import { Files, FolderKanban, Images, ScanText, Spline } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
+import { useCatalogStore } from '../stores/catalog'
+import { visibleWorkspaceNav, type WorkspaceNavKey } from '../utils/sidebar-nav'
 
-defineProps<{ active: 'projects' | 'files' | 'canvases' | 'image-prompts' }>()
+defineProps<{ active: WorkspaceNavKey }>()
+
+const catalog = useCatalogStore()
+const icons: Record<WorkspaceNavKey, Component> = {
+  projects: FolderKanban,
+  files: Files,
+  works: Images,
+  canvases: Spline,
+  'image-prompts': ScanText,
+}
+function iconFor(key: string) {
+  return key in icons ? icons[key as WorkspaceNavKey] : FolderKanban
+}
+const items = computed(() => visibleWorkspaceNav(catalog.settings))
 </script>
 
 <style scoped>
@@ -48,7 +65,7 @@ defineProps<{ active: 'projects' | 'files' | 'canvases' | 'image-prompts' }>()
   gap: 7px;
   height: 36px;
   justify-content: center;
-  min-width: 100px;
+  min-width: 88px;
   padding: 0 16px;
   text-decoration: none;
 }
@@ -80,3 +97,4 @@ defineProps<{ active: 'projects' | 'files' | 'canvases' | 'image-prompts' }>()
   }
 }
 </style>
+

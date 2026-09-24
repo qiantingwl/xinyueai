@@ -1,38 +1,42 @@
 import { defineStore } from 'pinia'
-import { api, streamApiEvents } from '../services/api'
+import { api, streamApiEvents, watchJobEvents } from '../services/api'
+import { uploadAsset } from '../utils/asset-upload'
+import { formatFileSize } from '../utils/format-bytes'
 import type { ConversationSummary, GenerationOptions, GenerationRun, Message, MessageWebSearch, Project, ProjectVersion, ProjectWorkflowConfig, ProjectWorkflowStatus, StudioAsset, StudioMode, WebSearchSource } from '../types'
 import { createClientId } from '../utils/client-id'
 import { isGenerationActive, isGenerationTerminal } from '../utils/generation-run-state'
 
 type ServerConversation = { id: string; title: string; model: string; projectId?: string | null; temporary?: boolean; pinnedAt?: string | null; sharedAt?: string | null; archivedAt?: string | null; createdAt: string; updatedAt: string; messages?: ServerMessage[]; generationJobs?: ServerJob[] }
-type ServerMessageMetadata = { jobId?: string; feedback?: 'UP' | 'DOWN' | null; suggestionVersion?: number; suggestions?: string[]; reasoning?: unknown; webSearch?: unknown }
+type ServerMessageMetadata = { jobId?: string; feedback?: 'UP' | 'DOWN' | null; suggestionVersion?: number; suggestions?: string[]; reasoning?: unknown; reasoningTokens?: unknown; thinkingSeconds?: unknown; webSearch?: unknown }
 type ServerMessage = { id: string; role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL'; content: string; model?: string | null; metadata?: ServerMessageMetadata | null; createdAt: string; parentId?: string | null; branchIndex?: number; branchCount?: number; branches?: Array<{ id: string; branchIndex: number }>; attachments?: { assetId?: string; asset?: { id: string } }[] }
 type ServerProject = { id: string; name: string; description?: string; instructions?: string; workflowStatus?: ProjectWorkflowStatus; workflowConfig?: ProjectWorkflowConfig | null; defaultModel?: string; defaultAssistantId?: string | null; revision?: number; archivedAt?: string | null; updatedAt: string; teamId?: string | null; team?: { id: string; name: string } | null; assets?: ServerAsset[]; conversations?: ServerConversation[]; accessRole?: 'OWNER' | 'ADMIN' | 'MEMBER'; user?: { id: string; displayName: string; email?: string | null }; members?: Project['members']; activeSkillVersion?: Project['activeSkillVersion']; _count?: { assets?: number; conversations?: number; versions?: number } }
 type ServerVersion = Omit<ProjectVersion, 'createdAt' | 'snapshot'> & { createdAt: string; snapshot: ProjectVersion['snapshot'] }
 type ServerAsset = { id: string; projectId?: string | null; kind: 'IMAGE' | 'VIDEO' | 'FILE' | 'PRODUCT_PACK'; name: string; mimeType: string; size: number; contentUrl: string; createdAt: string; teamId?: string | null; team?: { id: string; name: string } | null; user?: { id: string; displayName: string } | null; canManage?: boolean; metadata?: Record<string, unknown> | null }
-type ServerJob = { id: string; conversationId?: string | null; kind: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE'; status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'; model: string; prompt: string; options?: Record<string, unknown>; creditCost?: number; errorMessage?: string | null; stream?: { messageId: string; content: string; model?: string | null; metadata?: ServerMessageMetadata | null } | null; outputs?: { asset: ServerAsset }[]; createdAt: string }
+type ServerJob = { id: string; conversationId?: string | null; kind: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE'; status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'; model: string; prompt: string; options?: Record<string, unknown>; creditCost?: number; errorMessage?: string | null; inputTokens?: number; outputTokens?: number; reasoningTokens?: number; stream?: { messageId: string; content: string; model?: string | null; metadata?: ServerMessageMetadata | null } | null; outputs?: { asset: ServerAsset }[]; createdAt: string; startedAt?: string | null; completedAt?: string | null }
 type ServerGenerationEvent = { id?: string; sequence?: number; type?: string; payload?: unknown }
 
-const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 const terminalJob = (job: ServerJob) => isGenerationTerminal(job.status)
 async function waitForServerJob(jobId: string, onEvent?: (job: ServerJob) => void) {
-  try {
-    return await streamApiEvents<ServerJob>(`/generations/${jobId}/events`, onEvent)
-  } catch {
-    for (let attempt = 0; attempt < 180; attempt += 1) {
-      const job = await api<ServerJob>(`/generations/${jobId}`)
-      onEvent?.(job)
-      if (terminalJob(job)) return job
-      await wait(1000)
-    }
-    throw new Error('任务处理超时，请稍后重新打开查看')
-  }
+  return watchJobEvents<ServerJob>(`/generations/${jobId}/events`, `/generations/${jobId}`, {
+    isTerminal: (status) => isGenerationTerminal(status),
+    onUpdate: onEvent,
+    timeoutMessage: '任务处理超时，请稍后重新打开查看',
+  })
 }
 const idempotencyKey = (prefix: string) => `${prefix}:${createClientId()}`
 const welcomeMessage = (): Message => ({ id: 'welcome', role: 'assistant', content: '告诉我今天要做的商品、画面或文案目标。我会先拆任务，再把可交付的素材放进资料库。', createdAt: Date.now() })
 let pendingWorkspaceHydration: Promise<void> | null = null
 let conversationLoadSequence = 0
 const pendingChatJobs = new Map<string, Promise<ServerJob>>()
+
+function thinkingSecondsFrom(value: unknown, job?: Pick<ServerJob, 'startedAt' | 'completedAt' | 'createdAt'>): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return Math.max(1, Math.round(value))
+  if (!job) return undefined
+  const start = Date.parse(job.startedAt || job.createdAt)
+  const end = Date.parse(job.completedAt || '')
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return undefined
+  return Math.max(1, Math.round((end - start) / 1000))
+}
 
 function mapWebSearch(value: unknown): MessageWebSearch | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
@@ -81,7 +85,7 @@ function mapVersion(item: ServerVersion): ProjectVersion {
 function mapAsset(item: ServerAsset): StudioAsset {
   const kind = item.kind === 'IMAGE' ? 'image' : item.kind === 'VIDEO' ? 'video' : item.kind === 'PRODUCT_PACK' ? 'product-pack' : 'text'
   const isVisual = item.kind === 'IMAGE' || item.kind === 'PRODUCT_PACK' || item.mimeType.startsWith('image/')
-  const sizeLabel = `${Math.max(1, Math.ceil(Number(item.size || 0) / 1024))} KB`
+  const sizeLabel = formatFileSize(item.size)
   const generated = item.metadata?.purpose === 'generated'
   return {
     id: item.id,
@@ -111,6 +115,12 @@ function mapAsset(item: ServerAsset): StudioAsset {
   }
 }
 
+/** 聊天失败原因转用户可读文案（截断技术细节，隐藏 JSON 噪声） */
+function chatFailureText(errorMessage?: string | null) {
+  const detail = (errorMessage || '').split('\n')[0].replace(/\s*\{[\s\S]*\}\s*$/, '').trim()
+  return detail || '回复生成失败，请点击重新生成重试。'
+}
+
 function mapGeneration(job: ServerJob, fallback?: GenerationOptions): GenerationRun {
   const options = job.options || {}
   const mode = job.kind === 'COMMERCE' ? 'commerce' : job.kind === 'VIDEO' ? 'videos' : 'images'
@@ -125,6 +135,8 @@ function mapGeneration(job: ServerJob, fallback?: GenerationOptions): Generation
     modules: Number(options.modules || 8),
     referenceAssetIds: Array.isArray(options.referenceAssetIds) ? options.referenceAssetIds.map(String) : [],
     maskAssetId: typeof options.maskAssetId === 'string' ? options.maskAssetId : undefined,
+    firstFrameAssetId: typeof options.firstFrameAssetId === 'string' ? options.firstFrameAssetId : undefined,
+    lastFrameAssetId: typeof options.lastFrameAssetId === 'string' ? options.lastFrameAssetId : undefined,
     creationType: typeof options.creationType === 'string' ? options.creationType : undefined,
     platform: typeof options.platform === 'string' ? options.platform : undefined,
     outputFormat: options.outputFormat as GenerationOptions['outputFormat'],
@@ -170,7 +182,6 @@ export const useStudioStore = defineStore('studio', {
     lastError: '',
     conversations: [] as ConversationSummary[],
     archivedConversations: [] as ConversationSummary[],
-    apiKeys: [] as { id: string; name: string; value: string; createdAt: number }[],
     messages: [welcomeMessage()] as Message[],
     assets: [] as StudioAsset[],
     projects: [] as Project[],
@@ -213,9 +224,10 @@ export const useStudioStore = defineStore('studio', {
             for (const job of videoJobs.value.filter((item) => isGenerationActive(item.status))) void this.monitorGeneration(job.id)
           }
 
-          const failure = results.find((result) => result.status === 'rejected')
-          this.workspaceHydrated = !failure
-          if (failure?.status === 'rejected') throw failure.reason
+          // 只有会话列表失败才视为致命错误并提示；积分/素材/任务等非关键资源失败时静默降级（下次进工作区仍会重试）
+          const criticalFailure = conversations.status === 'rejected' ? conversations.reason : null
+          this.workspaceHydrated = results.every((result) => result.status === 'fulfilled')
+          if (criticalFailure) throw criticalFailure
         } catch (reason) {
           this.lastError = reason instanceof Error ? reason.message : '工作台数据加载失败'
           throw reason
@@ -251,6 +263,22 @@ export const useStudioStore = defineStore('studio', {
       this.generations = []
       this.lastError = ''
     },
+    async toggleTemporaryChat() {
+      if (!this.temporaryChat) {
+        this.newConversation(true)
+        return
+      }
+      const temporaryConversationId = this.currentConversationId
+      if (temporaryConversationId) {
+        try {
+          await this.deleteConversation(temporaryConversationId)
+        } catch (reason) {
+          this.lastError = reason instanceof Error ? reason.message : '临时聊天删除失败'
+        }
+        return
+      }
+      this.newConversation(false)
+    },
     async openConversation(conversationId: string) {
       const loadSequence = ++conversationLoadSequence
       this.openingConversationId = conversationId
@@ -265,17 +293,46 @@ export const useStudioStore = defineStore('studio', {
           parentId: message.parentId || null, branchIndex: message.branchIndex || 0, branchCount: message.branchCount || 1, branches: message.branches || [{ id: message.id, branchIndex: message.branchIndex || 0 }],
           model: message.model || undefined, generationJobId: message.metadata?.jobId, createdAt: Date.parse(message.createdAt), attachmentIds: message.attachments?.map((attachment) => attachment.assetId || attachment.asset?.id || '').filter(Boolean),
           reasoning: typeof message.metadata?.reasoning === 'string' ? message.metadata.reasoning : undefined,
+          reasoningTokens: typeof message.metadata?.reasoningTokens === 'number' && message.metadata.reasoningTokens > 0 ? message.metadata.reasoningTokens : undefined,
+          thinkingSeconds: thinkingSecondsFrom(message.metadata?.thinkingSeconds),
           feedback: message.metadata?.feedback || null,
           suggestions: message.metadata?.suggestionVersion === 3 && Array.isArray(message.metadata.suggestions) ? message.metadata.suggestions.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 3) : [],
           webSearch: mapWebSearch(message.metadata?.webSearch),
         }))
         if (!this.messages.length) this.messages = [welcomeMessage()]
+        const chatJobs = new Map((conversation.generationJobs || []).filter((job) => job.kind === 'CHAT').map((job) => [job.id, job]))
+        if (chatJobs.size) {
+          this.messages = this.messages.map((message) => {
+            if (!message.generationJobId) return message
+            const job = chatJobs.get(message.generationJobId)
+            if (!job) return message
+            const reasoningTokens = message.reasoningTokens || (Number(job.reasoningTokens) > 0 ? Number(job.reasoningTokens) : undefined)
+            const thinkingSeconds = message.thinkingSeconds || thinkingSecondsFrom(undefined, job)
+            if (reasoningTokens === message.reasoningTokens && thinkingSeconds === message.thinkingSeconds) return message
+            return {
+              ...message,
+              ...(reasoningTokens ? { reasoningTokens } : {}),
+              ...(thinkingSeconds ? { thinkingSeconds } : {}),
+            }
+          })
+        }
         // Chat jobs are represented by assistant messages. Keep only visual/
         // commerce jobs in the creation timeline so a chat reply cannot be
         // rendered as an image-generation card or suppress chat thinking UI.
         this.generations = (conversation.generationJobs || [])
           .filter((generation) => generation.kind !== 'CHAT')
           .map((generation) => mapGeneration(generation))
+        // 失败的聊天任务没有持久化回复：合成本地失败占位，让用户能看到失败原因并重试
+        const hydrated = [...this.messages]
+        for (const job of conversation.generationJobs || []) {
+          if (job.kind !== 'CHAT' || !terminalJob(job) || job.status !== 'FAILED') continue
+          if (hydrated.some((message) => message.generationJobId === job.id && message.role === 'assistant' && message.content)) continue
+          const failedAt = Date.parse(job.createdAt) || Date.now()
+          const insertAt = hydrated.findIndex((message) => message.createdAt > failedAt)
+          const failedMessage: Message = { id: `error:${job.id}`, role: 'assistant', content: chatFailureText(job.errorMessage), model: job.model || '', createdAt: failedAt, generationJobId: job.id, failed: true }
+          hydrated.splice(insertAt < 0 ? hydrated.length : insertAt, 0, failedMessage)
+        }
+        this.messages = hydrated
         // Rebuild the chat composer state from the conversation payload. This is
         // important after a refresh or when opening history while a reply is in
         // flight: the local store may still contain an activity marker from the
@@ -288,7 +345,7 @@ export const useStudioStore = defineStore('studio', {
           this.isGenerating = false
           this.activeJobId = ''
         }
-        const generation = this.generations[0] || null
+        const generation = this.generations.at(-1) || null
         this.activeGeneration = generation
         if (generation && isGenerationActive(generation.status)) {
           void this.monitorGeneration(generation.id)
@@ -386,11 +443,17 @@ export const useStudioStore = defineStore('studio', {
         if (this.currentConversationId === conversationId) this.activeJobId = job.id
         const pendingId = `stream:${job.id}`
         if (this.currentConversationId === conversationId) this.messages.push({ id: pendingId, role: 'assistant', content: '', model: safeModel, generationJobId: job.id, createdAt: Date.now(), webSearch: input.webSearchEnabled ? { enabled: true, status: 'searching', queries: [], sources: [] } : undefined })
-        await this.monitorChatJob(job.id, conversationId, safeModel)
+        const terminalChatJob = await this.monitorChatJob(job.id, conversationId, safeModel)
+        if (this.currentConversationId === conversationId && terminalChatJob.status === 'FAILED') {
+          const index = this.messages.findIndex((message) => message.id === `stream:${job.id}` || message.generationJobId === job.id)
+          const failedMessage: Message = { id: `error:${job.id}`, role: 'assistant', content: chatFailureText(terminalChatJob.errorMessage), model: safeModel, createdAt: Date.now(), generationJobId: job.id, failed: true }
+          if (index >= 0) this.messages.splice(index, 1, failedMessage)
+          else this.messages.push(failedMessage)
+        }
         await Promise.all([
           this.currentConversationId === conversationId && (!this.openingConversationId || this.openingConversationId === conversationId) ? this.openConversation(conversationId) : Promise.resolve(),
-          this.refreshConversations(),
-          this.refreshCredits(),
+          this.refreshConversations().catch(() => undefined),
+          this.refreshCredits().catch(() => undefined),
         ])
       } catch (reason) {
         const message = reason instanceof Error ? reason.message : '消息发送失败'
@@ -422,7 +485,13 @@ export const useStudioStore = defineStore('studio', {
         if (this.currentConversationId === conversationId) this.activeJobId = job.id
         const pendingId = `stream:${job.id}`
         if (this.currentConversationId === conversationId) this.messages.push({ id: pendingId, role: 'assistant', content: '', model: safeModel, generationJobId: job.id, createdAt: Date.now(), webSearch: webSearchEnabled ? { enabled: true, status: 'searching', queries: [], sources: [] } : undefined })
-        await this.monitorChatJob(job.id, conversationId, safeModel)
+        const terminalChatJob = await this.monitorChatJob(job.id, conversationId, safeModel)
+        if (this.currentConversationId === conversationId && terminalChatJob.status === 'FAILED') {
+          const index = this.messages.findIndex((message) => message.id === `stream:${job.id}` || message.generationJobId === job.id)
+          const failedMessage: Message = { id: `error:${job.id}`, role: 'assistant', content: chatFailureText(terminalChatJob.errorMessage), model: safeModel, createdAt: Date.now(), generationJobId: job.id, failed: true }
+          if (index >= 0) this.messages.splice(index, 1, failedMessage)
+          else this.messages.push(failedMessage)
+        }
         await Promise.all([
           this.currentConversationId === conversationId && (!this.openingConversationId || this.openingConversationId === conversationId) ? this.openConversation(conversationId) : Promise.resolve(),
           this.refreshConversations(),
@@ -496,10 +565,7 @@ export const useStudioStore = defineStore('studio', {
     async uploadFiles(files: File[], forcedKind?: 'IMAGE' | 'FILE', projectId?: string, purpose: 'library' | 'reference' | 'mask' | 'attachment' = 'library') {
       const uploaded: StudioAsset[] = []
       for (const file of files) {
-        const kind = forcedKind || (file.type.startsWith('image/') ? 'IMAGE' : 'FILE')
-        const form = new FormData(); form.append('file', file)
-        const query = new URLSearchParams({ kind, purpose }); if (projectId) query.set('projectId', projectId)
-        const row = await api<ServerAsset>(`/assets/uploads?${query}`, { method: 'POST', body: form })
+        const row = await uploadAsset<ServerAsset>(file, { kind: forcedKind, purpose, projectId })
         uploaded.push(mapAsset(row))
       }
       this.assets.unshift(...uploaded)
@@ -533,11 +599,13 @@ export const useStudioStore = defineStore('studio', {
           this.currentConversationId = targetConversationId
         }
         const messageContent = retry ? `按原方案重试「${options.mode === 'videos' ? '视频生成' : '图片生成'}」` : options.prompt
-        const userMessage = await api<ServerMessage>(`/conversations/${targetConversationId}/messages`, { method: 'POST', body: JSON.stringify({ content: messageContent, assetIds: options.referenceAssetIds || [] }) })
-        this.messages.push({ id: userMessage.id, role: 'user', content: messageContent, createdAt: Date.parse(userMessage.createdAt), attachmentIds: options.referenceAssetIds })
+        const frameAssetIds = [options.firstFrameAssetId, options.lastFrameAssetId].filter((id): id is string => Boolean(id))
+        const messageAssetIds = [...(options.referenceAssetIds || []), ...frameAssetIds]
+        const userMessage = await api<ServerMessage>(`/conversations/${targetConversationId}/messages`, { method: 'POST', body: JSON.stringify({ content: messageContent, assetIds: messageAssetIds }) })
+        this.messages.push({ id: userMessage.id, role: 'user', content: messageContent, createdAt: Date.parse(userMessage.createdAt), attachmentIds: messageAssetIds })
         const job = await api<ServerJob>('/generations', { method: 'POST', body: JSON.stringify({
           kind, prompt: options.prompt, model: options.model.trim() || safeConversationModel, projectId: this.currentProjectId || undefined, conversationId: targetConversationId,
-          options: { size: options.ratio, quality: options.quality || 'medium', style: options.style, count: options.count, modules: options.modules, creationType: options.creationType, platform: options.platform, referenceAssetIds: options.referenceAssetIds || [], maskAssetId: options.maskAssetId, outputFormat: options.outputFormat, background: options.background, outputCompression: options.outputCompression, resolution: options.resolution, duration: options.duration, aspectRatio: options.aspectRatio, pluginId: options.pluginId, creationToolId: options.creationToolId },
+          options: { size: options.ratio, quality: options.quality || 'medium', style: options.style, count: options.count, modules: options.modules, creationType: options.creationType, platform: options.platform, referenceAssetIds: options.referenceAssetIds || [], maskAssetId: options.maskAssetId, firstFrameAssetId: options.firstFrameAssetId, lastFrameAssetId: options.lastFrameAssetId, outputFormat: options.outputFormat, background: options.background, outputCompression: options.outputCompression, resolution: options.resolution, duration: options.duration, aspectRatio: options.aspectRatio, pluginId: options.pluginId, creationToolId: options.creationToolId },
           idempotencyKey: idempotencyKey(kind.toLowerCase()),
         }) })
         const generation = mapGeneration(job, options)
@@ -576,7 +644,7 @@ export const useStudioStore = defineStore('studio', {
       if (!current) return null
       return this.startGeneration(current.request, current.conversationId, true)
     },
-    async monitorGeneration(jobId: string) {
+    async monitorGeneration(jobId: string, retries = 2) {
       try {
         const job = await this.pollGenerationJob(jobId)
         const current = this.generations.find((generation) => generation.id === jobId) || this.commerceRuns.find((generation) => generation.id === jobId) || this.videoRuns.find((generation) => generation.id === jobId) || (this.activeGeneration?.id === jobId ? this.activeGeneration : null)
@@ -587,12 +655,18 @@ export const useStudioStore = defineStore('studio', {
         this.videoRuns = this.videoRuns.map((generation) => generation.id === jobId ? updated : generation)
         if (this.activeGeneration?.id === jobId) this.activeGeneration = updated
         await Promise.all([this.refreshAssets(), this.refreshCredits(), this.refreshConversations(), updated.mode === 'commerce' ? this.refreshCommerceJobs() : updated.mode === 'videos' ? this.refreshVideoJobs() : Promise.resolve()])
-      } catch (reason) {
-        const error = reason instanceof Error ? reason.message : '任务状态读取失败'
-        this.generations = this.generations.map((generation) => generation.id === jobId ? { ...generation, status: 'FAILED', error } : generation)
-        this.commerceRuns = this.commerceRuns.map((generation) => generation.id === jobId ? { ...generation, status: 'FAILED', error } : generation)
-        this.videoRuns = this.videoRuns.map((generation) => generation.id === jobId ? { ...generation, status: 'FAILED', error } : generation)
-        if (this.activeGeneration?.id === jobId) this.activeGeneration = { ...this.activeGeneration, status: 'FAILED', error }
+      } catch {
+        const job = await api<ServerJob>(`/generations/${jobId}`).catch(() => null)
+        if (job && (job.status === 'FAILED' || job.status === 'CANCELLED')) {
+          const current = this.generations.find((generation) => generation.id === jobId) || this.commerceRuns.find((generation) => generation.id === jobId) || this.videoRuns.find((generation) => generation.id === jobId) || (this.activeGeneration?.id === jobId ? this.activeGeneration : null)
+          const updated = mapGeneration(job, current?.request)
+          this.generations = this.generations.map((generation) => generation.id === jobId ? updated : generation)
+          this.commerceRuns = this.commerceRuns.map((generation) => generation.id === jobId ? updated : generation)
+          this.videoRuns = this.videoRuns.map((generation) => generation.id === jobId ? updated : generation)
+          if (this.activeGeneration?.id === jobId) this.activeGeneration = updated
+        } else if (retries > 0) {
+          void this.monitorGeneration(jobId, retries - 1)
+        }
       } finally { /* Each image task owns its own monitor and can run concurrently. */ }
     },
     async pollGenerationJob(jobId: string) {
@@ -626,11 +700,19 @@ export const useStudioStore = defineStore('studio', {
           const payload = event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload) ? event.payload as Record<string, unknown> : {}
           const textDelta = typeof payload.textDelta === 'string' ? payload.textDelta : ''
           const reasoningDelta = typeof payload.reasoningDelta === 'string' ? payload.reasoningDelta : ''
-          if (!textDelta && !reasoningDelta) return
+          const reasoningTokens = Math.max(0, Math.trunc(Number(payload.reasoningTokens || 0)))
+          if (!textDelta && !reasoningDelta && !(event.type === 'usage' && reasoningTokens > 0)) return
           const pendingId = `stream:${jobId}`
           const index = this.messages.findIndex((message) => message.id === pendingId || message.generationJobId === jobId)
           const base = index >= 0 ? this.messages[index] : { id: pendingId, role: 'assistant' as const, content: '', model: fallbackModel, generationJobId: jobId, createdAt: Date.now() }
-          const next = { ...base, content: `${base.content || ''}${textDelta}`, model: base.model || fallbackModel, generationJobId: jobId, reasoning: `${base.reasoning || ''}${reasoningDelta}` }
+          const next = {
+            ...base,
+            content: `${base.content || ''}${textDelta}`,
+            model: base.model || fallbackModel,
+            generationJobId: jobId,
+            reasoning: `${base.reasoning || ''}${reasoningDelta}`,
+            ...(reasoningTokens > 0 ? { reasoningTokens } : {}),
+          }
           if (index >= 0) this.messages.splice(index, 1, next)
           else this.messages.push(next)
         }
@@ -650,13 +732,28 @@ export const useStudioStore = defineStore('studio', {
             // The snapshot is authoritative after reconnect, but do not replace
             // a newer local delta with an older database read.
             if (index < 0 || current.stream.content.length >= this.messages[index].content.length) {
-              const streamed = { id: current.stream.messageId, role: 'assistant' as const, content: current.stream.content, model: current.stream.model || fallbackModel, generationJobId: jobId, createdAt: index >= 0 ? this.messages[index].createdAt : Date.now(), reasoning: typeof current.stream.metadata?.reasoning === 'string' ? current.stream.metadata.reasoning : index >= 0 ? this.messages[index].reasoning : undefined, webSearch: mapWebSearch(current.stream.metadata?.webSearch) || (index >= 0 ? this.messages[index].webSearch : undefined) }
+              const streamed = {
+                id: current.stream.messageId,
+                role: 'assistant' as const,
+                content: current.stream.content,
+                model: current.stream.model || fallbackModel,
+                generationJobId: jobId,
+                createdAt: index >= 0 ? this.messages[index].createdAt : Date.now(),
+                reasoning: typeof current.stream.metadata?.reasoning === 'string' ? current.stream.metadata.reasoning : index >= 0 ? this.messages[index].reasoning : undefined,
+                reasoningTokens: typeof current.stream.metadata?.reasoningTokens === 'number' && current.stream.metadata.reasoningTokens > 0
+                  ? current.stream.metadata.reasoningTokens
+                  : current.reasoningTokens && current.reasoningTokens > 0
+                    ? current.reasoningTokens
+                    : index >= 0 ? this.messages[index].reasoningTokens : undefined,
+                thinkingSeconds: thinkingSecondsFrom(current.stream.metadata?.thinkingSeconds, current) || (index >= 0 ? this.messages[index].thinkingSeconds : undefined),
+                webSearch: mapWebSearch(current.stream.metadata?.webSearch) || (index >= 0 ? this.messages[index].webSearch : undefined),
+              }
               if (index >= 0) this.messages.splice(index, 1, streamed)
               else this.messages.push(streamed)
             }
           }
           if (terminalJob(current)) return current
-          await wait(250)
+          await new Promise((resolve) => window.setTimeout(resolve, 250))
         }
         throw new Error('任务处理超时，请稍后重新打开查看')
       })()
@@ -728,9 +825,5 @@ export const useStudioStore = defineStore('studio', {
     },
     async cancelActiveJob() { if (this.activeJobId) await this.cancelGeneration(this.activeJobId) },
     async refreshCredits() { const result = await api<{ balance: number }>('/credits'); this.credits = result.balance },
-    createApiKey(name = '默认密钥') {
-      const random = Array.from(crypto.getRandomValues(new Uint8Array(18))).map((value) => value.toString(16).padStart(2, '0')).join('')
-      const key = { id: createClientId(), name, value: `flux_${random}`, createdAt: Date.now() }; this.apiKeys.unshift(key); return key
-    },
   },
 })

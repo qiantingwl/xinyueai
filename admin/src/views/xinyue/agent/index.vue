@@ -81,12 +81,18 @@
             >
             <ElTableColumn label="操作" width="150" fixed="right"
               ><template #default="{ row }"
-                ><ElButton v-if="active(row.status)" link type="danger" @click.stop="cancel(row)"
+                ><ElButton
+                  v-if="active(row.status)"
+                  link
+                  type="danger"
+                  :loading="saving"
+                  @click.stop="cancel(row)"
                   >停止</ElButton
                 ><ElButton
                   v-else-if="retryable(row.status)"
                   link
                   type="primary"
+                  :loading="saving"
                   @click.stop="retry(row)"
                   >重试</ElButton
                 ><ElButton link @click.stop="openDetail(row)">详情</ElButton></template
@@ -181,46 +187,52 @@
     </ElCard>
 
     <ElDrawer v-model="detailVisible" title="任务运行详情" size="min(760px, 92vw)">
-      <div v-if="detail" class="detail-body">
-        <header
-          ><div
-            ><h2>{{ detail.title }}</h2
-            ><p>{{ detail.goal }}</p></div
-          ><ElTag :type="statusType(detail.status)">{{ statusText(detail.status) }}</ElTag></header
-        >
-        <ElDescriptions :column="2" border
-          ><ElDescriptionsItem label="用户">{{ detail.user.displayName }}</ElDescriptionsItem
-          ><ElDescriptionsItem label="模型">{{ detail.model }}</ElDescriptionsItem
-          ><ElDescriptionsItem label="助手">{{ detail.assistant?.name || '-' }}</ElDescriptionsItem
-          ><ElDescriptionsItem label="项目">{{
-            detail.project?.name || '-'
-          }}</ElDescriptionsItem></ElDescriptions
-        >
-        <section
-          ><h3>执行步骤</h3
-          ><ElSteps direction="vertical" :active="stepActive" finish-status="success"
-            ><ElStep
-              v-for="step in detail.steps"
-              :key="step.id"
-              :title="step.title"
-              :description="step.detail || step.status"
-              :status="stepType(step.status)" /></ElSteps
-        ></section>
-        <section v-for="run in detail.runs" :key="run.id" class="run-card"
-          ><header
-            ><strong>运行 #{{ run.runKey }}</strong
-            ><span>第 {{ run.iteration + 1 }} / {{ run.maxIterations }} 轮</span></header
-          ><p v-if="run.verifierFeedback">校验反馈：{{ run.verifierFeedback }}</p
-          ><ElTimeline
-            ><ElTimelineItem
-              v-for="event in run.events"
-              :key="event.id"
-              :timestamp="date(event.createdAt)"
-              ><strong>{{ event.title }}</strong
-              ><p>{{ event.detail }}</p></ElTimelineItem
-            ></ElTimeline
-          ></section
-        >
+      <div v-loading="detailLoading" class="detail-shell">
+        <div v-if="detail" class="detail-body">
+          <header
+            ><div
+              ><h2>{{ detail.title }}</h2
+              ><p>{{ detail.goal }}</p></div
+            ><ElTag :type="statusType(detail.status)">{{
+              statusText(detail.status)
+            }}</ElTag></header
+          >
+          <ElDescriptions :column="2" border
+            ><ElDescriptionsItem label="用户">{{ detail.user.displayName }}</ElDescriptionsItem
+            ><ElDescriptionsItem label="模型">{{ detail.model }}</ElDescriptionsItem
+            ><ElDescriptionsItem label="助手">{{
+              detail.assistant?.name || '-'
+            }}</ElDescriptionsItem
+            ><ElDescriptionsItem label="项目">{{
+              detail.project?.name || '-'
+            }}</ElDescriptionsItem></ElDescriptions
+          >
+          <section
+            ><h3>执行步骤</h3
+            ><ElSteps direction="vertical" :active="stepActive" finish-status="success"
+              ><ElStep
+                v-for="step in detail.steps"
+                :key="step.id"
+                :title="step.title"
+                :description="step.detail || step.status"
+                :status="stepType(step.status)" /></ElSteps
+          ></section>
+          <section v-for="run in detail.runs" :key="run.id" class="run-card"
+            ><header
+              ><strong>运行 #{{ run.runKey }}</strong
+              ><span>第 {{ run.iteration + 1 }} / {{ run.maxIterations }} 轮</span></header
+            ><p v-if="run.verifierFeedback">校验反馈：{{ run.verifierFeedback }}</p
+            ><ElTimeline
+              ><ElTimelineItem
+                v-for="event in run.events"
+                :key="event.id"
+                :timestamp="date(event.createdAt)"
+                ><strong>{{ event.title }}</strong
+                ><p>{{ event.detail }}</p></ElTimelineItem
+              ></ElTimeline
+            ></section
+          >
+        </div>
       </div>
     </ElDrawer>
   </div>
@@ -228,11 +240,13 @@
 
 <script setup lang="ts">
   import { ElMessageBox } from 'element-plus'
-  import request from '@/utils/http'
+  import { useXinyueAsync } from '@/hooks'
+  import { agentApi } from '@/api/xinyue/agent'
+  import { formatDateTime } from '@/utils/xinyue/formatters'
   defineOptions({ name: 'XinyueAgentOperations' })
   type Row = Record<string, any>
-  const loading = ref(false),
-    tab = ref('tasks'),
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
+  const tab = ref('tasks'),
     tasks = ref<Row[]>([]),
     schedules = ref<Row[]>([]),
     toolCalls = ref<Row[]>([])
@@ -241,6 +255,7 @@
     pageSize = ref(20),
     total = ref(0),
     detailVisible = ref(false),
+    detailLoading = ref(false),
     detail = ref<Row | null>(null)
   const filters = reactive({ query: '', status: '' })
   const statuses = [
@@ -315,9 +330,7 @@
     return ['FAILED', 'CANCELLED', 'SUCCEEDED'].includes(value)
   }
   function date(value: string) {
-    return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'medium' }).format(
-      new Date(value)
-    )
+    return formatDateTime(value)
   }
   function duration(start?: string, end?: string) {
     if (!start) return '-'
@@ -325,54 +338,50 @@
     return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`
   }
   async function loadTasks() {
-    const data = await request.get<Row>({
-      url: '/v1/admin/agent/tasks',
-      params: {
-        page: page.value,
-        pageSize: pageSize.value,
-        query: filters.query || undefined,
-        status: filters.status || undefined
-      }
+    const data = await agentApi.tasks({
+      page: page.value,
+      pageSize: pageSize.value,
+      query: filters.query || undefined,
+      status: filters.status || undefined
     })
     tasks.value = data.items
     total.value = data.total
   }
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       const [summary, scheduleRows, calls] = await Promise.all([
-        request.get<Row>({ url: '/v1/admin/agent/overview' }),
-        request.get<Row[]>({ url: '/v1/admin/agent/schedules' }),
-        request.get<Row[]>({ url: '/v1/admin/agent/tool-calls' }),
+        agentApi.overview(),
+        agentApi.schedules(),
+        agentApi.toolCalls(),
         loadTasks()
       ])
       overview.value = summary
       schedules.value = scheduleRows
       toolCalls.value = calls
-    } finally {
-      loading.value = false
-    }
+    })
   }
   async function openDetail(row: Row) {
     detailVisible.value = true
-    detail.value = await request.get<Row>({ url: `/v1/admin/agent/tasks/${row.id}` })
+    detail.value = null
+    detailLoading.value = true
+    try {
+      detail.value = await agentApi.task(row.id)
+    } finally {
+      detailLoading.value = false
+    }
   }
   async function cancel(row: Row) {
     await ElMessageBox.confirm(`确认停止“${row.title}”？`, '停止任务', { type: 'warning' })
-    await request.post({
-      url: `/v1/admin/agent/tasks/${row.id}/cancel`,
-      params: {},
-      showSuccessMessage: true
+    await withSaving(async () => {
+      await agentApi.cancel(row.id)
+      await load()
     })
-    await load()
   }
   async function retry(row: Row) {
-    await request.post({
-      url: `/v1/admin/agent/tasks/${row.id}/retry`,
-      params: {},
-      showSuccessMessage: true
+    await withSaving(async () => {
+      await agentApi.retry(row.id)
+      await load()
     })
-    await load()
   }
   onMounted(load)
 </script>
@@ -522,6 +531,10 @@
     display: flex;
     justify-content: flex-end;
     padding-top: 14px;
+  }
+
+  .detail-shell {
+    min-height: 240px;
   }
 
   .detail-body {

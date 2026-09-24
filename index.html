@@ -13,7 +13,7 @@
       (function () {
         try {
           var appearance = ''
-          try { appearance = (JSON.parse(localStorage.getItem('flux:settings') || '{}') || {}).appearance || '' } catch (e) {}
+          try { appearance = (JSON.parse(localStorage.getItem('xinyue:settings') || '{}') || {}).appearance || '' } catch (e) {}
           var theme = (appearance === '浅色' || appearance === 'light') ? 'light'
             : (appearance === '深色' || appearance === 'dark') ? 'dark'
             : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
@@ -25,23 +25,7 @@
     <title>Xinyue AI</title>
   </head>
   <body>
-    <div id="app">
-      <div class="app-boot" role="status" aria-live="polite">正在加载 Xinyue AI</div>
-    </div>
-    <style>
-      .app-boot {
-        display: grid;
-        min-height: 100svh;
-        place-items: center;
-        padding: 24px;
-        color: #7f8a9b;
-        background: #0b0c10;
-        font: 500 14px/1.5 Inter, system-ui, sans-serif;
-      }
-      @media (prefers-color-scheme: light) {
-        .app-boot { color: #687385; background: #f7f9fc; }
-      }
-    </style>
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -147,7 +147,8 @@ test('metrics 端点要求登录且显式要求 dashboard.read', async () => {
   const source = readFileSync(new URL('../../server/src/health.controller.ts', import.meta.url), 'utf8')
   assert.match(source, /@Get\('metrics'\)\s*@UseGuards\(AuthGuard, AdminGuard\)\s*@RequireAdminPermission\('dashboard\.read'\)/)
 
-  const authGuard = new AuthGuard({} as never)
+  // reflector 用最小桩：返回 undefined 即「非 @Public」，让守卫继续走会话校验
+  const authGuard = new AuthGuard({} as never, { getAllAndOverride: () => undefined } as never)
   await assert.rejects(
     () => authGuard.canActivate(executionContext({ cookies: {}, url: '/v1/health/metrics', method: 'GET' })),
     (error: unknown) => hasHttpStatus(error, 401),

@@ -13,6 +13,7 @@ test('聊天提交只在聊天模式下识别明确的图片或视频意图', ()
   assert.equal(inferChatSubmissionCapability('帮我制作一个十秒视频', 'CHAT'), 'VIDEO')
   assert.equal(inferChatSubmissionCapability('分析这张图片的内容', 'CHAT'), 'CHAT')
   assert.equal(inferChatSubmissionCapability('生成一张图片', 'AGENT'), 'AGENT')
+  assert.equal(inferChatSubmissionCapability('你好', 'CHAT', 'IMAGE'), 'IMAGE')
 })
 
 test('模型不可用提示保持各能力原有文案', () => {

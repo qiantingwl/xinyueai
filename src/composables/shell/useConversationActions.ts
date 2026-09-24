@@ -3,6 +3,7 @@ import { useMessage } from 'naive-ui'
 import type { ConversationSummary } from '../../types'
 import { useStudioStore } from '../../stores/studio'
 import { api } from '../../services/api'
+import { copyText } from '../../utils/clipboard'
 
 type ConversationIdentity = Pick<ConversationSummary, 'id' | 'title'>
 
@@ -18,21 +19,6 @@ export function useConversationActions() {
 
   function closeConversationMenu() {
     conversationMenuId.value = ''
-  }
-
-  async function copyText(value: string) {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value)
-      return
-    }
-    const input = document.createElement('textarea')
-    input.value = value
-    input.style.position = 'fixed'
-    input.style.opacity = '0'
-    document.body.appendChild(input)
-    input.select()
-    document.execCommand('copy')
-    input.remove()
   }
 
   async function shareConversation(conversation: ConversationSummary) {

@@ -10,12 +10,29 @@ export type LocalPromptLibraryEntry = {
   modelName?: string
 }
 
+// 图片提示词没有真实配图，封面从静态池里按标题哈希取：池子覆盖 13 张后，
+// 28 条默认条目每张最多复用 3 次，且相邻条目几乎不再撞图（此前 index % 4 会让首页四连重复）。
 const covers = [
   '/assets/inspiration-1.jpg',
   '/assets/inspiration-2.jpg',
   '/assets/inspiration-3.jpg',
   '/assets/inspiration-4.jpg',
+  '/assets/inspirations/video/artisan-pottery.jpg',
+  '/assets/inspirations/video/culinary-detail.jpg',
+  '/assets/inspirations/video/epic-coast.jpg',
+  '/assets/inspirations/video/fashion-stage.jpg',
+  '/assets/inspirations/video/liminal-corridor.jpg',
+  '/assets/inspirations/video/mountain-road.jpg',
+  '/assets/inspirations/video/sci-fi-iris.jpg',
+  '/assets/inspirations/video/urban-geometry.jpg',
+  '/assets/inspirations/video/urban-transit.jpg',
 ]
+
+function coverFor(title: string) {
+  let hash = 0
+  for (let index = 0; index < title.length; index += 1) hash = (hash * 31 + title.charCodeAt(index)) >>> 0
+  return covers[hash % covers.length]
+}
 
 const entries: Array<Omit<LocalPromptLibraryEntry, 'sourceId' | 'coverUrl'>> = [
   {
@@ -297,7 +314,7 @@ export const localPromptLibraryEntries: LocalPromptLibraryEntry[] = [
   ...entries.map((entry, index) => ({
     ...entry,
     sourceId: sourceIds[Math.floor(index / 4)],
-    coverUrl: covers[index % covers.length],
+    coverUrl: coverFor(entry.title),
   })),
   ...videoEntries,
 ]

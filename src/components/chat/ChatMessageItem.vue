@@ -5,70 +5,45 @@
                 <footer><button type="button" @click="$emit('cancel-edit')">取消</button><button type="submit" :disabled="!editingMessageContent.trim() || store.isGenerating">保存并提交</button></footer>
               </form>
               <template v-else>
+                <div v-if="message.role === 'assistant' && avatarEnabled !== false" class="message-avatar-col" aria-hidden="true">
+                  <AssistantAvatar :state="avatarState" :motion="avatarMotion ?? 'ambient'" :variant="avatarStyle ?? 'classic'" :tone="avatarColor ?? 'auto'" :frozen="avatarFrozen" :size="30" />
+                </div>
+                <div class="message-body-col">
                 <header v-if="message.role === 'assistant' && message.model" class="message-model-line">
                   <ModelBadge :model="{ displayName: message.model }" size="sm" /><span>{{ message.model }}</span>
                 </header>
-                <details v-if="message.role === 'assistant' && responseState.hasProcess" class="message-process" :class="[message.webSearch ? `is-${message.webSearch.status}` : '', `is-phase-${responseState.phase}`]" open>
+                <details v-if="message.role === 'assistant' && responseState.hasProcess && hasProcessBody" class="message-process" :class="[message.webSearch ? `is-${message.webSearch.status}` : '', `is-phase-${responseState.phase}`]">
                   <summary>
-                    <LoaderCircle v-if="responseState.isProcessRunning" class="message-process__spinner" :size="16" aria-hidden="true" />
-                    <BrainCircuit v-else :size="16" aria-hidden="true" />
-                    <span>{{ responseState.processTitle }}</span>
-                    <small aria-live="polite">{{ responseState.processStatus }}</small>
+                    <LoaderCircle v-if="responseState.isProcessRunning" class="message-process__spinner" :size="14" aria-hidden="true" />
+                    <span>{{ processHeadline }}</span>
                     <ChevronDown :size="14" aria-hidden="true" />
                   </summary>
-                  <div v-if="responseState.isProcessRunning" class="message-process__progress" aria-hidden="true"><i /></div>
                   <div class="message-process__body">
-                    <div class="message-process__steps">
-                      <div v-if="responseState.isStreaming && !message.webSearch">
-                        <LoaderCircle class="message-process__spinner" :size="15" /><span><strong>正在思考</strong><small>{{ message.reasoning?.trim() ? responseState.reasoningSummary : '正在分析问题并组织回答' }}</small></span>
-                      </div>
-                      <div v-if="message.webSearch?.status === 'searching'">
-                        <LoaderCircle class="message-process__spinner" :size="15" /><span><strong>查找可靠来源</strong><small>正在规划关键词并检索公开网页</small></span>
-                      </div>
-                      <div v-if="message.webSearch?.queries.length">
-                        <Search :size="15" /><span><strong>检索关键词</strong><small>{{ message.webSearch.queries.join(' · ') }}</small></span>
-                      </div>
-                      <div v-if="message.webSearch?.sources.length">
-                        <BookOpenCheck :size="15" /><span><strong>核验资料</strong><small>已读取 {{ message.webSearch.sources.length }} 个网页来源</small></span>
-                      </div>
-                      <div v-if="message.webSearch?.status === 'failed'">
-                        <CircleAlert :size="15" /><span><strong>联网检索未完成</strong><small>{{ message.webSearch.error || '当前搜索渠道暂时不可用' }}</small></span>
-                      </div>
-                      <div v-if="responseState.reasoningSummary">
-                        <Sparkles :size="15" /><span><strong>组织回答</strong><small>{{ responseState.reasoningSummary }}</small></span>
-                      </div>
-                      <div v-else-if="responseState.isStreaming && message.content.trim()">
-                        <Sparkles class="message-process__thinking-icon" :size="15" /><span><strong>正在生成回答</strong><small>内容正在实时输出</small></span>
-                      </div>
-                      <div v-else-if="message.webSearch?.status === 'completed'">
-                        <CheckCircle2 :size="15" /><span><strong>组织回答</strong><small>已结合检索资料完成回答并检查引用</small></span>
-                      </div>
-                    </div>
-                    <div v-if="message.reasoning?.trim()" class="message-process__reasoning">
-                      <span>模型思考</span>
-                      <p>{{ message.reasoning }}</p>
-                    </div>
-                    <div v-if="message.webSearch?.sources.length" class="message-process__sources">
-                      <a v-for="(source, sourceIndex) in message.webSearch.sources" :key="source.url" :href="source.url" target="_blank" rel="noopener noreferrer">
-                        <span>{{ sourceIndex + 1 }}</span><strong>{{ source.title }}</strong><small>{{ sourceDomain(source.url) }}</small><ArrowRight :size="14" />
-                      </a>
-                    </div>
+                    <div v-if="message.reasoning?.trim()" class="message-process__reasoning"><p>{{ message.reasoning }}</p></div>
+                    <p v-if="quotedSearchQueries" class="message-process__queries">{{ quotedSearchQueries }}</p>
+                    <ol v-if="message.webSearch?.sources.length" class="message-process__source-list">
+                      <li v-for="source in message.webSearch.sources" :key="source.url">
+                        <a :href="source.url" target="_blank" rel="noopener noreferrer">{{ source.title }}</a>
+                      </li>
+                    </ol>
+                    <p v-if="message.webSearch?.status === 'failed'" class="message-process__hint">{{ message.webSearch.error || '当前搜索渠道暂时不可用' }}</p>
                   </div>
                 </details>
-                <div v-if="responseState.isPending && !message.webSearch" class="message-inline-thinking" aria-live="polite"><span class="chat-thinking-dots" aria-hidden="true"><i /><i /><i /></span><span>正在思考</span></div>
+                <p v-else-if="message.role === 'assistant' && responseState.hasProcess" class="message-process-label">
+                  <LoaderCircle v-if="responseState.isProcessRunning" class="message-process__spinner" :size="14" aria-hidden="true" />
+                  <span>{{ processHeadline }}</span>
+                </p>
+                <div v-if="responseState.isProcessRunning && message.reasoning?.trim()" class="message-live-reasoning" aria-live="polite"><p>{{ message.reasoning }}</p></div>
                 <article v-if="responseState.shouldRender" :class="`message message--${message.role}${responseState.isStreaming ? ' message--streaming' : ''}`">
-                  <ChatMessageContent v-if="message.role === 'assistant'" :content="message.content" @preview="$emit('preview-artifact', $event)" />
+                  <div v-if="message.failed" class="message-error-box" role="alert">
+                    <CircleAlert :size="16" />
+                    <div class="message-error-box__body"><strong>回复生成失败</strong><p>{{ message.content }}</p></div>
+                    <button type="button" :disabled="store.isGenerating" @click="$emit('retry')"><RefreshCw :size="14" />重新生成</button>
+                  </div>
+                  <ChatMessageContent v-else-if="message.role === 'assistant'" :content="message.content" @preview="$emit('preview-artifact', $event)" />
                   <template v-else>{{ message.content }}</template>
                   <span v-if="responseState.isStreaming && message.role === 'assistant' && message.content" class="chat-stream-cursor" aria-hidden="true" />
                 </article>
-                <section v-if="message.role === 'assistant' && message.webSearch?.sources.length && responseState.shouldRender" class="message-citations" aria-label="引用来源">
-                  <header><BookOpenCheck :size="15" /><strong>引用来源</strong><small>{{ message.webSearch.sources.length }} 个网页来源</small></header>
-                  <div>
-                    <a v-for="(source, sourceIndex) in message.webSearch.sources" :key="`citation-${source.url}`" :href="source.url" target="_blank" rel="noopener noreferrer">
-                      <span>[{{ sourceIndex + 1 }}]</span><strong>{{ source.title }}</strong><small>{{ sourceDomain(source.url) }}</small><ArrowRight :size="14" />
-                    </a>
-                  </div>
-                </section>
                 <nav v-if="message.id !== 'welcome' && responseState.shouldRender" class="message-actions" :aria-label="`${message.role === 'user' ? '用户' : '助手'}消息操作`">
                   <button type="button" :title="copied ? '已复制' : '复制'" @click="copyMessage(message)"><Check v-if="copied" :size="15" /><Copy v-else :size="15" /></button>
                   <span v-if="orderedBranches.length > 1" class="message-branch-nav" aria-label="消息分支">
@@ -88,17 +63,20 @@
                     <span>{{ suggestion }}</span><ArrowRight :size="15" />
                   </button>
                 </nav>
+                </div>
               </template>
             </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { ArrowRight, BookOpenCheck, BrainCircuit, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Copy, LoaderCircle, Pencil, RefreshCw, Search, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-vue-next'
+import { computed, onUnmounted, ref, watch } from 'vue'
+import { ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Copy, LoaderCircle, Pencil, RefreshCw, ThumbsDown, ThumbsUp } from 'lucide-vue-next'
 import ChatMessageContent from '../ChatMessageContent.vue'
 import ModelBadge from '../common/ModelBadge.vue'
+import AssistantAvatar, { type AssistantAvatarVariant } from './AssistantAvatar.vue'
 import { useStudioStore } from '../../stores/studio'
-import { resolveChatResponseState } from '../../utils/chat-response-state'
+import { chatProcessHeadline, resolveChatResponseState } from '../../utils/chat-response-state'
+import { useCopyFeedback } from '../../composables/useCopyFeedback'
 import type { CodeArtifact, Message } from '../../types'
 
 const props = defineProps<{
@@ -107,6 +85,16 @@ const props = defineProps<{
   editing: boolean
   followUps: string[]
   showFollowUps: boolean
+  /** 是否最新一条助手消息：只有它的头像常驻动效，历史消息定格 */
+  avatarLive: boolean
+  /** 头像动效模式（后台可配）：ambient 常驻轮动 / active 仅生成时 / off 静态 */
+  avatarMotion?: 'ambient' | 'active' | 'off'
+  /** 是否显示助手头像小球（后台可配） */
+  avatarEnabled?: boolean
+  /** 头像形态风格（后台可配）：classic/lively/calm/geometric/faces/orbit/comet/thinker/sleepy */
+  avatarStyle?: AssistantAvatarVariant
+  /** 头像配色（后台可配）：auto 跟随主题 / brand 品牌蓝 / 自定义 hex */
+  avatarColor?: string
 }>()
 const emit = defineEmits<{
   (e: 'start-edit'): void
@@ -120,21 +108,57 @@ const emit = defineEmits<{
 const editingMessageContent = defineModel<string>('editingContent', { required: true })
 
 const store = useStudioStore()
-const copied = ref(false)
+const { copied, copy } = useCopyFeedback()
 const responseState = computed(() => resolveChatResponseState(props.message, {
   isGenerating: store.isGenerating,
   activeJobId: store.activeJobId,
 }))
+// 助手头像状态：检索/思考中 → thinking（球体坍缩聚合），回答输出中 → responding（轨道环绕），其余进入氛围轮动
+const avatarState = computed<'idle' | 'thinking' | 'responding'>(() => {
+  if (!responseState.value.isProcessRunning) return 'idle'
+  return responseState.value.phase === 'answer' ? 'responding' : 'thinking'
+})
+const avatarFrozen = computed(() => {
+  if (props.avatarMotion === 'off') return true
+  if (props.avatarMotion === 'active') return !responseState.value.isProcessRunning
+  return false
+})
 const orderedBranches = computed(() => [...(props.message.branches || [])].sort((left, right) => left.branchIndex - right.branchIndex))
 const currentBranchPosition = computed(() => Math.max(0, orderedBranches.value.findIndex((branch) => branch.id === props.message.id)))
 
-function sourceDomain(value: string) {
-  try { return new URL(value).hostname.replace(/^www\./, '') } catch { return value }
-}
+const thinkingSeconds = ref(0)
+const thinkingFinalSeconds = ref(0)
+let thinkingTimer = 0
+const processHeadline = computed(() => chatProcessHeadline(props.message, {
+  isStreaming: responseState.value.isProcessRunning,
+  elapsedSeconds: responseState.value.isProcessRunning
+    ? thinkingSeconds.value || undefined
+    : props.message.thinkingSeconds || thinkingFinalSeconds.value || undefined,
+}))
+const quotedSearchQueries = computed(() => (props.message.webSearch?.queries || []).map((query) => `“${query}”`).join('、'))
+const hasProcessBody = computed(() => Boolean(
+  props.message.reasoning?.trim()
+  || props.message.webSearch?.queries.length
+  || props.message.webSearch?.sources.length
+  || props.message.webSearch?.status === 'failed',
+))
+watch(() => responseState.value.isProcessRunning, (running, wasRunning) => {
+  if (running && !wasRunning) {
+    const startedAt = props.message.createdAt || Date.now()
+    thinkingSeconds.value = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+    thinkingFinalSeconds.value = 0
+    window.clearInterval(thinkingTimer)
+    thinkingTimer = window.setInterval(() => {
+      thinkingSeconds.value = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+    }, 400)
+  } else if (!running && wasRunning) {
+    window.clearInterval(thinkingTimer)
+    thinkingFinalSeconds.value = Math.max(1, props.message.thinkingSeconds || thinkingSeconds.value || (props.message.createdAt ? Math.round((Date.now() - props.message.createdAt) / 1000) : 0))
+  }
+}, { immediate: true })
+onUnmounted(() => window.clearInterval(thinkingTimer))
 function copyMessage(message: { id: string; content: string }) {
-  navigator.clipboard?.writeText(message.content).catch(() => undefined)
-  copied.value = true
-  window.setTimeout(() => { copied.value = false }, 1600)
+  void copy(message.content)
 }
 async function setMessageFeedback(value: 'UP' | 'DOWN') {
   const nextValue = props.message.feedback === value ? null : value

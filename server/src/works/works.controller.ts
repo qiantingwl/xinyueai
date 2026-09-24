@@ -6,6 +6,7 @@ import { AuthGuard } from '../auth/auth.guard'
 import { assetDisposition } from '../assets/assets.service'
 import { AuthenticatedUser, CurrentUser } from '../common/request-user'
 import { WorkDraftInput, WorksService } from './works.service'
+import { Public } from '../auth/public.decorator'
 
 class WorkDraftDto implements WorkDraftInput {
   @IsOptional() @IsString() @MaxLength(120) title?: string
@@ -41,6 +42,7 @@ export class WorksController {
   @Post('creators/:userId/follow') follow(@CurrentUser() user: AuthenticatedUser, @Param('userId') userId: string) { return this.works.toggleFollow(user.id, userId) }
 }
 
+@Public()
 @Controller('gallery')
 export class GalleryController {
   constructor(private readonly works: WorksService) {}

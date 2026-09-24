@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { defaultCatalogModel, findCatalogModel, type CatalogModel } from '../../utils/model-catalog'
+import { defaultCatalogModel, findCatalogModel, resolveCatalogModel, type CatalogModel } from '../../utils/model-catalog'
 
 type CapabilitySelection = Record<'CHAT' | 'IMAGE' | 'VIDEO' | 'AGENT', string>
 
@@ -45,15 +45,19 @@ export function useStudioModelCatalog(state: StudioModelCatalogState, actions: S
       const imageSelection = findCatalogModel(state.models.value, state.imageModel.value, 'IMAGE')
       const videoSelection = findCatalogModel(state.models.value, state.videoModel.value, 'VIDEO')
       const commerceSelection = findCatalogModel(state.models.value, state.commerceModel.value, 'COMMERCE')
+      const knownChat = chatSelection || resolveCatalogModel(state.models.value, state.chatModel.value)
+      const knownImage = imageSelection || resolveCatalogModel(state.models.value, state.imageModel.value)
+      const knownVideo = videoSelection || resolveCatalogModel(state.models.value, state.videoModel.value)
+      const knownCommerce = commerceSelection || resolveCatalogModel(state.models.value, state.commerceModel.value)
 
-      if (!actions.currentConversationId() && defaultChat && (options.applyDefaults || !chatSelection)) state.chatModel.value = defaultChat.key
-      else if (chatSelection) state.chatModel.value = chatSelection.key
-      if (defaultImage && (options.applyDefaults || !imageSelection)) state.imageModel.value = defaultImage.key
-      else if (imageSelection) state.imageModel.value = imageSelection.key
-      if (defaultVideo && (options.applyDefaults || !videoSelection)) state.videoModel.value = defaultVideo.key
-      else if (videoSelection) state.videoModel.value = videoSelection.key
-      if (defaultCommerce && (options.applyDefaults || !commerceSelection)) state.commerceModel.value = defaultCommerce.key
-      else if (commerceSelection) state.commerceModel.value = commerceSelection.key
+      if (chatSelection) state.chatModel.value = chatSelection.key
+      else if (!actions.currentConversationId() && defaultChat && (options.applyDefaults || !state.chatModel.value.trim()) && !knownChat) state.chatModel.value = defaultChat.key
+      if (imageSelection) state.imageModel.value = imageSelection.key
+      else if (defaultImage && (options.applyDefaults || !state.imageModel.value.trim()) && !knownImage) state.imageModel.value = defaultImage.key
+      if (videoSelection) state.videoModel.value = videoSelection.key
+      else if (defaultVideo && (options.applyDefaults || !state.videoModel.value.trim()) && !knownVideo) state.videoModel.value = defaultVideo.key
+      if (commerceSelection) state.commerceModel.value = commerceSelection.key
+      else if (defaultCommerce && (options.applyDefaults || !state.commerceModel.value.trim()) && !knownCommerce) state.commerceModel.value = defaultCommerce.key
 
       state.capabilitySelections.CHAT = state.chatModel.value || defaultChat?.key || ''
       state.capabilitySelections.IMAGE = state.imageModel.value || defaultImage?.key || ''

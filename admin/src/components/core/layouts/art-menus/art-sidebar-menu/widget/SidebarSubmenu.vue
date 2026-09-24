@@ -33,7 +33,7 @@
 
     <ElMenuItem
       v-else
-      :index="isExternalLink(item) ? undefined : item.path || item.meta.title"
+      :index="item.path || item.meta.title"
       :level-item="level + 1"
       @click="goPage(item)"
     >
@@ -188,15 +188,6 @@
     const section = filteredMenuItems.value[index]?.meta.menuSection
     if (!section) return false
     return filteredMenuItems.value[index - 1]?.meta.menuSection !== section
-  }
-
-  /**
-   * 判断是否为外部链接
-   * @param item 菜单项数据
-   * @returns 是否为外部链接
-   */
-  const isExternalLink = (item: AppRouteRecord): boolean => {
-    return !!(item.meta.link && !item.meta.isIframe)
   }
 
   /**

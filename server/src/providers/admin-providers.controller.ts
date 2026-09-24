@@ -180,6 +180,9 @@ class UpdateSystemDto {
   @IsOptional() @IsBoolean() sidebarPluginsEnabled?: boolean
   @IsOptional() @IsBoolean() sidebarProjectsEnabled?: boolean
   @IsOptional() @IsBoolean() sidebarAssetsEnabled?: boolean
+  @IsOptional() @IsObject() sidebarNav?: Record<string, unknown>
+  @IsOptional() @IsObject() workspaceNav?: Record<string, unknown>
+  @IsOptional() @IsObject() sectionNav?: Record<string, unknown>
   @IsOptional() @IsBoolean() registrationEnabled?: boolean
   @IsOptional() @IsBoolean() emailLoginEnabled?: boolean
   @IsOptional() @IsBoolean() emailVerifyEnabled?: boolean
@@ -199,7 +202,11 @@ class UpdateSystemDto {
   @IsOptional() @IsInt() @Min(0) @Max(1000000) defaultUserCredits?: number
   @IsOptional() @IsString() @MaxLength(20) defaultTheme?: string
   @IsOptional() @IsString() @MaxLength(20) defaultLanguage?: string
-  @IsOptional() @IsIn(['gpt', 'doubao', 'qianwen', 'kimi']) chatUiPreset?: string
+  @IsOptional() @IsIn(['gpt', 'doubao', 'qianwen', 'kimi', 'jixing']) chatUiPreset?: string
+  @IsOptional() @IsIn(['ambient', 'active', 'off']) chatAvatarMotion?: string
+  @IsOptional() @IsBoolean() chatAvatarEnabled?: boolean
+  @IsOptional() @IsIn(['classic', 'lively', 'calm', 'geometric', 'faces', 'orbit', 'comet', 'thinker', 'sleepy']) chatAvatarStyle?: string
+  @IsOptional() @IsString() @MaxLength(20) @Matches(/^(auto|brand|#[0-9a-fA-F]{3,8})$/) chatAvatarColor?: string
   @IsOptional() @IsObject() chatHomeContent?: Record<string, unknown>
   @IsOptional() @IsObject() siteContent?: Record<string, unknown>
   @IsOptional() @IsString() @MaxLength(100) defaultChatModelKey?: string

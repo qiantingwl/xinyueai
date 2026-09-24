@@ -21,6 +21,7 @@ import { TokenQuotaService, type QuotaReservation } from '../billing/token-quota
 import { ChatContextService } from './chat-context.service'
 import { publicGenerationDetailSelect, publicGenerationListSelect, toPublicGeneration, toPublicGenerationEvent, type PublicGenerationDto, type PublicGenerationEventDto } from './public-generation.dto'
 import { GenerationReconciliationService } from './generation-reconciliation.service'
+import { isUserOwnedChatFree, parseQuotaReservationRefs } from './chat-billing'
 
 interface CreateJobInput { kind: JobKind; prompt: string; model?: string; projectId?: string; conversationId?: string; options: Record<string, unknown>; idempotencyKey?: string }
 interface RequestTrace { requestId?: string; traceId?: string }
@@ -31,7 +32,7 @@ export class GenerationsService {
   async create(userId: string, input: CreateJobInput, trace: RequestTrace = {}): Promise<PublicGenerationDto> {
     const idempotencyKey = input.idempotencyKey ? `${userId}:${input.idempotencyKey}` : undefined
     if (input.idempotencyKey) {
-      const existing = await this.prisma.generationJob.findFirst({ where: { userId, idempotencyKey: { in: [idempotencyKey!, input.idempotencyKey] } }, select: publicGenerationListSelect })
+      const existing = await this.prisma.generationJob.findFirst({ where: { userId, idempotencyKey }, select: publicGenerationListSelect })
       if (existing) return toPublicGeneration(existing)
     }
     const imagePromptTask = input.kind === 'CHAT' && input.options.taskType === 'IMAGE_PROMPT_EXTRACTION'
@@ -68,8 +69,9 @@ export class GenerationsService {
     await this.moderation.inspect(userId, moderationSource, input.prompt, { conversationId: input.conversationId || null, projectId: input.projectId || null, kind: input.kind })
     const [project, conversation] = await Promise.all([
       input.projectId ? this.prisma.project.findFirst({ where: { id: input.projectId, archivedAt: null, ...this.access.projectWhere(userId) }, select: { id: true, teamId: true, instructions: true, team: { select: { status: true, billingEnabled: true } }, activeSkillVersion: { select: { id: true, version: true, name: true, content: true, enabled: true } } } }) : null,
-      input.conversationId ? this.prisma.conversation.findFirst({ where: { id: input.conversationId, userId }, select: { id: true, projectId: true } }) : null,
+      input.conversationId ? this.prisma.conversation.findFirst({ where: { id: input.conversationId, userId }, select: { id: true, projectId: true, temporary: true } }) : null,
     ])
+    const temporaryConversation = input.conversationId ? Boolean(conversation?.temporary) : input.options?.temporaryConversation === true
     if (input.projectId && !project) throw new NotFoundException('项目不存在')
     if (input.conversationId && !conversation) throw new NotFoundException('对话不存在')
     if (input.projectId && conversation?.projectId !== input.projectId) throw new NotFoundException('对话不属于该项目')
@@ -134,15 +136,15 @@ export class GenerationsService {
       unitCreditCost = configured === undefined ? raw : Math.ceil(raw * resolved.creditRatePercent / 100)
     }
     const billedToPlatform = imagePromptTask && input.options.billingMode === 'PLATFORM'
-    const byokFree = input.kind === 'CHAT' && resolved.source === 'user' && effectivePlan?.byokMode === 'FREE'
+    const byokPlanFree = resolved.source === 'user' && effectivePlan?.byokMode === 'FREE'
+    const byokFree = (input.kind === 'CHAT' && isUserOwnedChatFree(resolved.source, effectivePlan?.byokMode, resolved.inputCreditsPerMillion, resolved.outputCreditsPerMillion)) || byokPlanFree
+    if (byokPlanFree) unitCreditCost = 0
     const userTokenFree = byokFree || billedToPlatform
     const effectiveInputRate = userTokenFree ? 0 : resolved.inputCreditsPerMillion
     const effectiveOutputRate = userTokenFree ? 0 : resolved.outputCreditsPerMillion
     const tokenPricingConfigured = input.kind === 'CHAT' && (effectiveInputRate > 0 || effectiveOutputRate > 0)
     if (input.kind === 'CHAT' && !billedToPlatform && !byokFree && !tokenPricingConfigured) {
-      throw new BadRequestException(resolved.source === 'user'
-        ? '当前 BYOK 模型未匹配到 Token 价格；请在模型定价中配置同名模型，或将套餐 BYOK 计费设为免费'
-        : '当前文字模型尚未配置 Token 价格，请先在管理端同步或设置模型价格')
+      throw new BadRequestException('当前文字模型尚未配置 Token 价格，请先在管理端同步或设置模型价格')
     }
     const baseCreditCost = input.kind === 'CHAT' ? 0 : Math.max(0, unitCreditCost * quantity)
     const maxOutputTokens = input.kind === 'CHAT' ? Math.max(1, Math.min(32768, Number(normalizedOptions.maxOutputTokens || 4096))) : 0
@@ -197,15 +199,26 @@ export class GenerationsService {
     let chargedReservedTokenCredits = billedToPlatform ? 0 : directTokenCreditCost
     let billingSource = billedToPlatform ? 'PLATFORM' : byokFree ? 'BYOK_FREE' : tokenQuotaEnabled ? 'SUBSCRIPTION_QUOTA' : imagePromptTask ? 'CREATION_CREDITS' : 'OVERAGE_CREDITS'
     const billingTeamId = project?.teamId && project.team?.status === 'ACTIVE' && project.team.billingEnabled ? project.teamId : null
+    let conversationId = input.conversationId
+    let createdConversationId: string | undefined
+    if (!conversationId && input.kind !== 'CHAT' && !temporaryConversation) {
+      conversationId = createdConversationId = await this.createVisualConversation(userId, {
+        kind: input.kind,
+        prompt: input.prompt,
+        model: resolved.model,
+        projectId: project?.id || input.projectId || null,
+      })
+    }
     let job: GenerationJob
     try {
       job = await this.prisma.$transaction(async (tx) => {
         const pricingSnapshot = this.pricing.snapshot({ version: priceVersion?.version || 0, presetKey: resolved.presetKey || '', source: resolved.source, model: resolved.model, provider: `${resolved.source}:${resolved.type}`, unitCreditCost, settlementCurrency: resolved.settlementCurrency, creditValueMicros: resolved.creditValueMicros, pricingUsdExchangeRateMicros: resolved.pricingUsdExchangeRateMicros, inputRate: effectiveInputRate, outputRate: effectiveOutputRate, baseInputRate: resolved.baseInputCreditsPerMillion, baseOutputRate: resolved.baseOutputCreditsPerMillion, groupRatePercent: resolved.creditRatePercent, billingSource, overageRatePercent, inputCreditsPerMillion: effectiveInputRate, outputCreditsPerMillion: effectiveOutputRate, inputCostMicrosPerMillion: resolved.inputCostMicrosPerMillion, outputCostMicrosPerMillion: resolved.outputCostMicrosPerMillion, imageCostMicros: resolved.imageCostMicros, videoCostMicros: resolved.videoCostMicros, expectedReservationCount, expectedReservationScopes, expectedReservationUnits: String(reservedTokenUnits) })
-        const created = await tx.generationJob.create({ data: { userId, requestId: trace.requestId, traceId: trace.traceId, projectId: input.projectId, conversationId: input.conversationId, billingTeamId, kind: input.kind, provider: `${resolved.source}:${resolved.type}`, providerChannelId: resolved.providerId, userCredentialId: resolved.credentialId, userModelRouteId: resolved.source === 'user' ? resolved.routeId : undefined, priceVersionId: priceVersion?.id, pricingSnapshot: pricingSnapshot as Prisma.InputJsonValue, model: resolved.model, prompt: input.prompt, options: { ...normalizedOptions, requestedModel, assistantId: assistant?.id, ...(plugin ? { pluginId: plugin.id, pluginSnapshot: { name: plugin.name, version: plugin.version, capability: plugin.capability } } : {}), presetKey: resolved.presetKey, subscriptionId: subscription?.id, planCode: subscription?.plan.code, billing: { accountType: billingTeamId ? 'TEAM' : 'PERSONAL', teamId: billingTeamId, subscriptionId: subscription?.id, unitCreditCost, baseCreditCost: chargedBaseCreditCost, reservedTokenUnits, reservedTokenCredits: chargedReservedTokenCredits, maxOutputTokens, baseInputCreditsPerMillion: resolved.baseInputCreditsPerMillion, baseOutputCreditsPerMillion: resolved.baseOutputCreditsPerMillion, inputCreditsPerMillion: effectiveInputRate, outputCreditsPerMillion: effectiveOutputRate, groupRatePercent: resolved.creditRatePercent, overageRatePercent, billingSource, creditValueMicros: resolved.creditValueMicros, estimatedInputTokens, quotaEnabled: tokenQuotaEnabled, quotaScopeKey, quotaPeriodStart: quotaPeriodStart.toISOString(), quotaPeriodEnd: quotaPeriodEnd.toISOString(), expectedReservationCount, expectedReservationScopes, expectedReservationUnits: String(reservedTokenUnits) }, privacy: { trainingOptOut: privacy?.trainingOptOut ?? true, shareUsageAnalytics: privacy?.shareUsageAnalytics ?? false } } as Prisma.InputJsonValue, creditCost, revenueMicros: Math.min(2_000_000_000, creditCost * resolved.creditValueMicros), idempotencyKey } })
+        const created = await tx.generationJob.create({ data: { userId, requestId: trace.requestId, traceId: trace.traceId, projectId: input.projectId, conversationId, billingTeamId, kind: input.kind, provider: `${resolved.source}:${resolved.type}`, providerChannelId: resolved.providerId, userCredentialId: resolved.credentialId, userModelRouteId: resolved.source === 'user' ? resolved.routeId : undefined, priceVersionId: priceVersion?.id, pricingSnapshot: pricingSnapshot as Prisma.InputJsonValue, model: resolved.model, prompt: input.prompt, options: { ...normalizedOptions, requestedModel, assistantId: assistant?.id, ...(temporaryConversation ? { temporaryConversation: true } : {}), ...(plugin ? { pluginId: plugin.id, pluginSnapshot: { name: plugin.name, version: plugin.version, capability: plugin.capability } } : {}), presetKey: resolved.presetKey, subscriptionId: subscription?.id, planCode: subscription?.plan.code, billing: { accountType: billingTeamId ? 'TEAM' : 'PERSONAL', teamId: billingTeamId, subscriptionId: subscription?.id, unitCreditCost, baseCreditCost: chargedBaseCreditCost, reservedTokenUnits, reservedTokenCredits: chargedReservedTokenCredits, maxOutputTokens, baseInputCreditsPerMillion: resolved.baseInputCreditsPerMillion, baseOutputCreditsPerMillion: resolved.baseOutputCreditsPerMillion, inputCreditsPerMillion: effectiveInputRate, outputCreditsPerMillion: effectiveOutputRate, groupRatePercent: resolved.creditRatePercent, overageRatePercent, billingSource, creditValueMicros: resolved.creditValueMicros, estimatedInputTokens, quotaEnabled: tokenQuotaEnabled, quotaScopeKey, quotaPeriodStart: quotaPeriodStart.toISOString(), quotaPeriodEnd: quotaPeriodEnd.toISOString(), expectedReservationCount, expectedReservationScopes, expectedReservationUnits: String(reservedTokenUnits) }, privacy: { trainingOptOut: privacy?.trainingOptOut ?? true, shareUsageAnalytics: privacy?.shareUsageAnalytics ?? false } } as Prisma.InputJsonValue, creditCost, revenueMicros: Math.min(2_000_000_000, creditCost * resolved.creditValueMicros), idempotencyKey } })
         if (plugin) await tx.pluginUsage.create({ data: { userId, pluginId: plugin.id, jobId: created.id, capability: pluginCapability } })
         return created
       })
     } catch (error) {
+      if (createdConversationId) await this.prisma.conversation.deleteMany({ where: { id: createdConversationId, userId } }).catch(() => undefined)
       if (idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         const existing = await this.prisma.generationJob.findUnique({ where: { idempotencyKey }, select: publicGenerationListSelect })
         if (existing) return toPublicGeneration(existing)
@@ -267,18 +280,64 @@ export class GenerationsService {
     }
   }
 
+  private visualConversationTitle(kind: JobKind, prompt: string) {
+    const trimmed = prompt.trim().replace(/\s+/g, ' ').slice(0, 42)
+    if (trimmed) return trimmed
+    return kind === 'VIDEO' ? '视频生成' : kind === 'COMMERCE' ? '商品视觉' : '图片生成'
+  }
+
+  private async createVisualConversation(userId: string, input: { kind: JobKind; prompt: string; model: string; projectId?: string | null }) {
+    const title = this.visualConversationTitle(input.kind, input.prompt)
+    const conversation = await this.prisma.conversation.create({
+      data: {
+        userId,
+        projectId: input.projectId || undefined,
+        title,
+        model: input.model.trim() || process.env.AI_CHAT_MODEL || 'gpt-4.1',
+        temporary: false,
+        messages: { create: { authorId: userId, role: 'USER', content: input.prompt.trim() || title } },
+      },
+      select: { id: true },
+    })
+    return conversation.id
+  }
+
+  /** Jobs from a temporary chat keep no history, even after their temporary conversation expires. */
+  private needsVisualConversation(job: { conversationId: string | null; kind: JobKind; options: Prisma.JsonValue }) {
+    if (job.conversationId || job.kind === 'CHAT') return false
+    const options = job.options && typeof job.options === 'object' && !Array.isArray(job.options) ? job.options as Record<string, unknown> : {}
+    return options.temporaryConversation !== true
+  }
+
+  private async attachVisualConversation(userId: string, job: { id: string; kind: JobKind; prompt: string; model: string; projectId: string | null }) {
+    const conversationId = await this.createVisualConversation(userId, job)
+    const linked = await this.prisma.generationJob.updateMany({ where: { id: job.id, conversationId: null }, data: { conversationId } })
+    if (!linked.count) {
+      await this.prisma.conversation.deleteMany({ where: { id: conversationId, userId } }).catch(() => undefined)
+      return null
+    }
+    return conversationId
+  }
+
   private async assertImageAssets(userId: string, options: Record<string, unknown>) {
     const ids = Array.isArray(options.referenceAssetIds) ? options.referenceAssetIds.map(String) : []
     const maskId = typeof options.maskAssetId === 'string' ? options.maskAssetId : undefined
-    const allIds = [...new Set([...ids, ...(maskId ? [maskId] : [])])]
+    const firstFrameId = typeof options.firstFrameAssetId === 'string' ? options.firstFrameAssetId : undefined
+    const lastFrameId = typeof options.lastFrameAssetId === 'string' ? options.lastFrameAssetId : undefined
+    const allIds = [...new Set([...ids, ...(maskId ? [maskId] : []), ...(firstFrameId ? [firstFrameId] : []), ...(lastFrameId ? [lastFrameId] : [])])]
     if (!allIds.length) return
     const assets = await this.prisma.asset.findMany({ where: { id: { in: allIds }, deletedAt: null, ...this.access.assetWhere(userId) }, select: { id: true, kind: true, mimeType: true } })
     if (assets.length !== allIds.length) throw new NotFoundException('参考图片不存在或你没有访问权限')
     if (assets.some((asset) => asset.kind !== 'IMAGE' || !asset.mimeType.toLowerCase().startsWith('image/'))) throw new BadRequestException('参考图和蒙版必须是图片文件')
   }
   async get(userId: string, id: string): Promise<PublicGenerationDto> {
-    const job = await this.prisma.generationJob.findFirst({ where: { id, userId }, select: publicGenerationDetailSelect })
+    let job = await this.prisma.generationJob.findFirst({ where: { id, userId }, select: publicGenerationDetailSelect })
     if (!job) throw new NotFoundException('任务不存在')
+    if (this.needsVisualConversation(job)) {
+      await this.attachVisualConversation(userId, job)
+      job = await this.prisma.generationJob.findFirst({ where: { id, userId }, select: publicGenerationDetailSelect })
+      if (!job) throw new NotFoundException('任务不存在')
+    }
     const streamMessage = job.kind === 'CHAT' && job.conversationId ? await this.prisma.message.findFirst({ where: { conversationId: job.conversationId, deletedAt: null, metadata: { path: ['jobId'], equals: job.id } }, select: { id: true, content: true, model: true, metadata: true } }) : null
     return toPublicGeneration(job, streamMessage ? { messageId: streamMessage.id, content: streamMessage.content, model: streamMessage.model, metadata: streamMessage.metadata } : null)
   }
@@ -305,6 +364,12 @@ export class GenerationsService {
   }
   async list(userId: string, kind?: JobKind): Promise<PublicGenerationDto[]> {
     const jobs = await this.prisma.generationJob.findMany({ where: { userId, kind }, orderBy: { createdAt: 'desc' }, take: 100, select: publicGenerationListSelect })
+    const orphans = jobs.filter((job) => this.needsVisualConversation(job))
+    if (orphans.length) {
+      for (const job of orphans) await this.attachVisualConversation(userId, job)
+      const refreshed = await this.prisma.generationJob.findMany({ where: { userId, kind }, orderBy: { createdAt: 'desc' }, take: 100, select: publicGenerationListSelect })
+      return refreshed.map((job) => toPublicGeneration(job))
+    }
     return jobs.map((job) => toPublicGeneration(job))
   }
   async cancel(userId: string, id: string): Promise<PublicGenerationDto> {
@@ -333,17 +398,7 @@ export class GenerationsService {
   private async releaseTokenReservations(job: GenerationJob, reason: string): Promise<boolean> {
     const options = job.options && typeof job.options === 'object' && !Array.isArray(job.options) ? job.options as Record<string, unknown> : {}
     const billing = options.billing && typeof options.billing === 'object' && !Array.isArray(options.billing) ? options.billing as Record<string, unknown> : {}
-    const optionReservations = Array.isArray(billing.quotaReservations)
-      ? billing.quotaReservations.flatMap((item) => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) return []
-        const row = item as Record<string, unknown>
-        if (typeof row.quotaId !== 'string') return []
-        return [{ reservationId: typeof row.reservationId === 'string' ? row.reservationId : undefined, quotaId: row.quotaId }]
-      })
-      : []
-    if (typeof billing.quotaId === 'string' && !optionReservations.some((reservation) => reservation.quotaId === billing.quotaId)) {
-      optionReservations.push({ reservationId: undefined, quotaId: billing.quotaId })
-    }
+    const optionReservations = parseQuotaReservationRefs(billing, { includeQuotaIdAlways: true })
     let databaseLookupSucceeded = true
     let databaseReservations: Awaited<ReturnType<TokenQuotaService['reservationsForGeneration']>> = []
     try {
@@ -368,3 +423,4 @@ export class GenerationsService {
     return released
   }
 }
+

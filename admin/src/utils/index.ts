@@ -1,6 +1,6 @@
 /**
  * Utils 工具函数统一导出
- * 提供向后兼容性和便捷导入
+ * 统一导出入口
  *
  * @module utils/index
  * @author Art Design Pro Team
@@ -29,6 +29,3 @@ export * from './http'
 
 // 表单相关
 export * from './form'
-
-// socket 相关
-export * from './socket'

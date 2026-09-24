@@ -28,10 +28,10 @@
               <template #default="{ row }">
                 <div class="work-title-cell">
                   <ElImage
-                    v-if="cover(row)"
-                    :src="cover(row)!.contentUrl"
+                    v-if="cover(row as AdminPublishedWork)"
+                    :src="cover(row as AdminPublishedWork)!.contentUrl"
                     fit="cover"
-                    :preview-src-list="previewList(row)"
+                    :preview-src-list="previewList(row as AdminPublishedWork)"
                     preview-teleported
                   />
                   <span v-else class="work-cover-empty"><ArtSvgIcon icon="ri:image-line" /></span>
@@ -77,29 +77,39 @@
             >
             <ElTableColumn label="操作" width="260" fixed="right" align="right">
               <template #default="{ row }">
-                <ElButton link type="primary" @click="openDetail(row)">查看</ElButton>
+                <ElButton link type="primary" @click="openDetail(row as AdminPublishedWork)"
+                  >查看</ElButton
+                >
                 <ElButton
                   v-if="row.currentVersion.moderationStatus === 'PENDING'"
                   link
                   type="success"
-                  @click="review(row, 'APPROVED')"
+                  :disabled="saving"
+                  @click="review(row as AdminPublishedWork, 'APPROVED')"
                   >通过</ElButton
                 >
                 <ElButton
                   v-if="row.currentVersion.moderationStatus === 'PENDING'"
                   link
                   type="danger"
-                  @click="review(row, 'REJECTED')"
+                  :disabled="saving"
+                  @click="review(row as AdminPublishedWork, 'REJECTED')"
                   >驳回</ElButton
                 >
                 <ElButton
                   v-if="row.publishedVersion"
                   link
                   :type="row.isFeatured ? 'warning' : 'primary'"
-                  @click="toggleFeatured(row)"
+                  :disabled="saving"
+                  @click="toggleFeatured(row as AdminPublishedWork)"
                   >{{ row.isFeatured ? '取消精选' : '设为精选' }}</ElButton
                 >
-                <ElButton v-if="row.publishedVersion" link type="danger" @click="takeDown(row)"
+                <ElButton
+                  v-if="row.publishedVersion"
+                  link
+                  type="danger"
+                  :disabled="saving"
+                  @click="takeDown(row as AdminPublishedWork)"
                   >下架</ElButton
                 >
               </template>
@@ -155,13 +165,15 @@
                   v-if="row.status === 'PENDING'"
                   link
                   type="success"
-                  @click="resolveReport(row, 'RESOLVED')"
+                  :disabled="saving"
+                  @click="resolveReport(row as AdminWorkReport, 'RESOLVED')"
                   >确认违规</ElButton
                 ><ElButton
                   v-if="row.status === 'PENDING'"
                   link
                   type="primary"
-                  @click="resolveReport(row, 'DISMISSED')"
+                  :disabled="saving"
+                  @click="resolveReport(row as AdminWorkReport, 'DISMISSED')"
                   >驳回举报</ElButton
                 ></template
               ></ElTableColumn
@@ -215,9 +227,11 @@
     type AdminPublishedWork,
     type AdminWorkReport
   } from '@/api/xinyue/content'
+  import { useXinyueAsync } from '@/hooks'
+  import { formatDateTime } from '@/utils/xinyue/formatters'
 
   const tab = ref('works')
-  const loading = ref(false)
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
   const status = ref('')
   const query = ref('')
   const works = ref<AdminPublishedWork[]>([])
@@ -242,7 +256,7 @@
     () => reports.value.filter((item) => item.status === 'PENDING').length
   )
 
-  const date = (value?: string | null) => (value ? new Date(value).toLocaleString('zh-CN') : '-')
+  const date = (value?: string | null) => formatDateTime(value, '-')
   const statusText = (value: string) =>
     (
       ({
@@ -273,23 +287,17 @@
     row.currentVersion.assets.filter((item) => item.kind === 'IMAGE').map((item) => item.contentUrl)
 
   async function loadWorks() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       works.value = await xinyueApi.works({
         ...(status.value ? { status: status.value } : {}),
         ...(query.value ? { q: query.value } : {})
       })
-    } finally {
-      loading.value = false
-    }
+    })
   }
   async function loadReports() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       reports.value = await xinyueApi.workReports(reportStatus.value || undefined)
-    } finally {
-      loading.value = false
-    }
+    })
   }
   async function load() {
     if (tab.value === 'reports') await loadReports()
@@ -319,12 +327,16 @@
         '通过作品',
         { type: 'success' }
       )
-    await xinyueApi.reviewWork(row.id, { status: decision, reason })
-    await loadWorks()
+    await withSaving(async () => {
+      await xinyueApi.reviewWork(row.id, { status: decision, reason })
+      await loadWorks()
+    })
   }
   async function toggleFeatured(row: AdminPublishedWork) {
-    await xinyueApi.featureWork(row.id, !row.isFeatured)
-    await loadWorks()
+    await withSaving(async () => {
+      await xinyueApi.featureWork(row.id, !row.isFeatured)
+      await loadWorks()
+    })
   }
   async function takeDown(row: AdminPublishedWork) {
     const result = await ElMessageBox.prompt(
@@ -332,8 +344,10 @@
       '下架作品',
       { inputValidator: (value) => value.trim().length >= 2 || '至少填写 2 个字', type: 'warning' }
     )
-    await xinyueApi.takeDownWork(row.id, result.value)
-    await loadWorks()
+    await withSaving(async () => {
+      await xinyueApi.takeDownWork(row.id, result.value)
+      await loadWorks()
+    })
   }
   async function resolveReport(row: AdminWorkReport, decision: 'RESOLVED' | 'DISMISSED') {
     const result = await ElMessageBox.prompt(
@@ -343,8 +357,10 @@
       decision === 'RESOLVED' ? '确认违规' : '驳回举报',
       { inputValidator: (value) => value.trim().length >= 2 || '至少填写 2 个字' }
     )
-    await xinyueApi.resolveWorkReport(row.id, { status: decision, resolution: result.value })
-    await loadReports()
+    await withSaving(async () => {
+      await xinyueApi.resolveWorkReport(row.id, { status: decision, resolution: result.value })
+      await loadReports()
+    })
   }
   onMounted(loadWorks)
 </script>

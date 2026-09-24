@@ -5,7 +5,7 @@
     </button>
     <Teleport to="body">
       <div v-if="isOpen" ref="popover" class="plugin-selector__popover plugin-selector__popover--floating" :style="popoverStyle">
-        <header><span><strong>{{ capabilityLabel }}</strong><small>只显示支持当前能力的已安装或私有技能</small></span><RouterLink to="/capabilities" @click="setOpen(false)">管理</RouterLink></header>
+        <header><span><strong>{{ capabilityLabel }}</strong><small>只显示支持当前能力的内置、已安装或私有技能</small></span><RouterLink to="/capabilities" @click="setOpen(false)">管理</RouterLink></header>
         <button type="button" :class="{ 'is-active': !modelValue }" @click="select('')"><span><strong>不使用技能</strong><small>按当前模型和设置直接生成</small></span><Check v-if="!modelValue" :size="15" /></button>
         <button v-for="plugin in plugins" :key="plugin.id" type="button" :class="{ 'is-active': modelValue === plugin.id }" @click="select(plugin.id)">
           <span><strong>{{ plugin.name }}<em v-if="plugin.owned">私有</em></strong><small>{{ plugin.description || capabilityLabel }}</small></span><Check v-if="modelValue === plugin.id" :size="15" />

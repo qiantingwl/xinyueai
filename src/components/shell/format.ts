@@ -1,7 +1,6 @@
-export function formatServerDate(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
-}
+import { formatDayTime, formatFullDay } from '../../utils/datetime'
 
-export function formatInvitationExpiry(value: string) {
-  return `${new Date(value).toLocaleDateString()} 到期`
-}
+// 设置分区沿用这两个语义化名字；日期格式本身统一由 utils/datetime 决定。
+export const formatServerDate = (value: string) => formatDayTime(value)
+
+export const formatInvitationExpiry = (value: string) => `${formatFullDay(value)} 到期`

@@ -317,15 +317,16 @@
     type PromotionCampaign,
     type SubscriptionPlan
   } from '@/api/xinyue/subscriptions'
+  import { useXinyueAsync } from '@/hooks'
+  import { formatDateTime, formatMoneyCents } from '@/utils/xinyue/formatters'
 
   const props = defineProps<{
     section: 'promotions' | 'coupons'
     plans: SubscriptionPlan[]
     users: AdminUser[]
   }>()
-  const loading = ref(false),
-    saving = ref(false),
-    promotionDialog = ref(false),
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
+  const promotionDialog = ref(false),
     couponDialog = ref(false),
     grantDialog = ref(false)
   const promotions = ref<PromotionCampaign[]>([]),
@@ -362,9 +363,8 @@
   const promotionForm = reactive(emptyPromotion()),
     couponForm = reactive(emptyCoupon()),
     grantForm = reactive({ userId: '', templateId: '' })
-  const money = (cents: number) =>
-    new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(cents / 100)
-  const date = (value: string) => new Date(value).toLocaleString('zh-CN', { hour12: false })
+  const money = (cents: number) => formatMoneyCents(cents)
+  const date = (value: string) => formatDateTime(value)
   const planName = (id: string) => plans.value.find((row) => row.id === id)?.name || id
   const planPrice = (id: string) => plans.value.find((row) => row.id === id)?.priceCents || 0
   const couponValue = (row: CouponTemplate) =>
@@ -380,13 +380,10 @@
           ? { text: '已结束', type: 'info' as const }
           : { text: '进行中', type: 'success' as const }
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       if (props.section === 'promotions') promotions.value = await xinyueApi.promotions()
       else coupons.value = await xinyueApi.couponTemplates()
-    } finally {
-      loading.value = false
-    }
+    })
   }
   function openCreate() {
     if (props.section === 'promotions') {
@@ -425,8 +422,7 @@
   async function savePromotion() {
     if (!promotionForm.name || promotionForm.range.length !== 2 || !promotionForm.planIds.length)
       return ElMessage.warning('请填写活动名称、时间和参与套餐')
-    saving.value = true
-    try {
+    await withSaving(async () => {
       await xinyueApi.savePromotion(
         {
           name: promotionForm.name,
@@ -443,14 +439,11 @@
       )
       promotionDialog.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function saveCoupon() {
     if (!couponForm.name || !couponForm.code) return ElMessage.warning('请填写优惠券名称和代码')
-    saving.value = true
-    try {
+    await withSaving(async () => {
       await xinyueApi.saveCouponTemplate(
         {
           code: couponForm.code,
@@ -477,9 +470,7 @@
       )
       couponDialog.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function removePromotion(row: PromotionCampaign) {
     await ElMessageBox.confirm(`确认删除或停用“${row.name}”？`, '促销活动', { type: 'warning' })
@@ -495,15 +486,12 @@
   }
   async function grantCoupon() {
     if (!grantForm.userId || !grantForm.templateId) return ElMessage.warning('请选择用户和优惠券')
-    saving.value = true
-    try {
+    await withSaving(async () => {
       await xinyueApi.grantCoupon(grantForm)
       grantDialog.value = false
       Object.assign(grantForm, { userId: '', templateId: '' })
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   onMounted(load)
 </script>

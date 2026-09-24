@@ -7,6 +7,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { AuthService } from './auth.service'
 import { AuthGuard } from './auth.guard'
 import { CurrentUser, AuthenticatedUser, type AuthenticatedRequest } from '../common/request-user'
+import { Public } from './public.decorator'
 
 class RequestCodeDto { @IsEmail() email!: string }
 class VerifyCodeDto { @IsEmail() email!: string; @IsString() @Length(6, 6) code!: string }
@@ -42,6 +43,7 @@ class ExternalBindCompleteDto {
   @IsOptional() @IsString() @MinLength(8) @MaxLength(200) password?: string
 }
 
+@Public()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService, private readonly config: ConfigService) {}

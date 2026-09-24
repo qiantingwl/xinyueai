@@ -33,10 +33,12 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 import { Download, Hand, ImagePlus, Maximize2, MousePointer2, Quote, RefreshCw, Trash2, X, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import { useAssetPreviewTransform } from '../composables/useAssetPreviewTransform'
+import { useEscapeClose } from '../composables/useEscapeClose'
 import type { StudioAsset } from '../types'
 
 const props = defineProps<{ asset: StudioAsset }>()
 const emit = defineEmits<{ close: []; delete: []; download: []; reuse: []; quote: []; regenerate: [] }>()
+useEscapeClose(() => emit('close'))
 const isVideo = computed(() => props.asset.kind === 'video' || Boolean(props.asset.mimeType?.startsWith('video/')))
 const {
   canvasStyle,

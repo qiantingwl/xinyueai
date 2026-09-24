@@ -5,7 +5,7 @@
       <RouterLink class="shared-start" to="/chat">开始新对话</RouterLink>
     </header>
 
-    <section v-if="loading" class="shared-state">正在加载共享对话...</section>
+    <section v-if="loading" class="shared-state"><span class="shared-state__loading"><LoaderCircle class="is-spinning" :size="17" />正在加载共享对话...</span></section>
     <section v-else-if="error" class="shared-state shared-state--error">
       <h1>无法打开此共享对话</h1>
       <p>{{ error }}</p>
@@ -23,7 +23,8 @@
       <div class="shared-messages">
         <section v-for="message in visibleMessages" :key="message.id" class="shared-message" :class="`is-${message.role.toLowerCase()}`">
           <strong>{{ message.role === 'USER' ? '你' : 'Xinyue AI' }}</strong>
-          <p>{{ message.content }}</p>
+          <ChatMessageContent v-if="message.role === 'ASSISTANT'" class="shared-message__content" :content="message.content" />
+          <p v-else>{{ message.content }}</p>
         </section>
       </div>
     </article>
@@ -33,8 +34,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { LoaderCircle } from 'lucide-vue-next'
 import BrandMark from '../components/BrandMark.vue'
+import ChatMessageContent from '../components/ChatMessageContent.vue'
 import { api } from '../services/api'
+import { formatLongDay as formatDate } from '../utils/datetime'
 
 interface SharedMessage { id: string; role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL'; content: string; model?: string | null; createdAt: string }
 interface SharedConversation { title: string; model: string; createdAt: string; sharedAt?: string | null; messages: SharedMessage[] }
@@ -45,9 +49,6 @@ const error = ref('')
 const conversation = ref<SharedConversation | null>(null)
 const visibleMessages = computed(() => conversation.value?.messages.filter((message) => message.role === 'USER' || message.role === 'ASSISTANT') || [])
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(value))
-}
 
 function loadErrorMessage(reason: unknown) {
   const message = reason instanceof Error ? reason.message : ''

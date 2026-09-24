@@ -1,11 +1,11 @@
-export type StudioMode = 'chat' | 'images' | 'videos' | 'commerce' | 'office' | 'prompts' | 'plugins' | 'workspace' | 'projects' | 'assets' | 'api'
+export type StudioMode = 'chat' | 'images' | 'videos' | 'commerce' | 'office' | 'prompts' | 'plugins' | 'workspace' | 'projects' | 'assets'
 export type PluginCapability = 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE' | 'OFFICE'
 export interface PluginCategory { id: string; name: string; slug: string; description: string; icon: string; sortOrder: number; enabled: boolean; _count?: { plugins: number } }
-export interface Plugin { id: string; name: string; slug: string; description: string; instruction: string; icon: string; version: string; categoryId?: string | null; capabilities: PluginCapability[]; recommendedModel: string; outputRequirements: string; visibility: 'OFFICIAL' | 'PRIVATE'; status: 'DRAFT' | 'PUBLISHED' | 'DISABLED'; featured: boolean; priceCredits: number; installCount: number; usageCount: number; errorCount: number; installed?: boolean; owned?: boolean; category?: PluginCategory | null }
+export interface Plugin { id: string; name: string; slug: string; description: string; instruction: string; icon: string; version: string; categoryId?: string | null; capabilities: PluginCapability[]; recommendedModel: string; outputRequirements: string; visibility: 'OFFICIAL' | 'PRIVATE'; status: 'DRAFT' | 'PUBLISHED' | 'DISABLED'; featured: boolean; priceCredits: number; installCount: number; usageCount: number; errorCount: number; installed?: boolean; owned?: boolean; preinstalled?: boolean; category?: PluginCategory | null }
 export type ExternalMarketSource = 'skillsmp' | 'lobehub' | 'cocoloop' | 'skillhub'
 export type ExternalSkillCategory = '开发编程' | '办公效率' | '研究分析' | '内容创作' | '设计创意' | '营销运营' | 'Agent 自动化' | '通用技能'
 export interface ExternalSkill { id: string; source: ExternalMarketSource; sourceName: string; name: string; description: string; author: string; version: string; sourceUrl: string; githubUrl?: string; downloadUrl?: string; skillUrl?: string; installable: boolean; risk: 'unreviewed' | 'reviewed'; stars?: number; installs?: number; updatedAt?: string; category?: ExternalSkillCategory; installed?: boolean; licenseStatus?: 'unverified' | 'restricted'; licenseNote?: string }
-export interface AssistantProfile { id: string; name: string; description: string; defaultModel: string; templateIds?: string[]; tools?: Array<{ toolId: string }> }
+export interface AssistantProfile { id: string; name: string; description: string; defaultModel: string; templateIds?: string[]; tools?: Array<{ toolId: string; name?: string }> }
 export interface KnowledgeBaseAssetLink { assetId: string; chunkCount: number; asset: { id: string; name: string; mimeType: string; createdAt: string } }
 export interface KnowledgeBaseSummary { id: string; name: string; description: string; status: string; documentCount: number; chunkCount: number; assets?: KnowledgeBaseAssetLink[]; _count?: { assets: number; assistants: number } }
 
@@ -32,6 +32,10 @@ export interface Message {
   content: string
   /** Model-visible chain of thought when the provider exposes it. */
   reasoning?: string
+  /** Hidden/internal reasoning tokens, used to keep the thinking row after the stream ends. */
+  reasoningTokens?: number
+  /** Wall-clock seconds spent thinking/searching before the answer started. */
+  thinkingSeconds?: number
   createdAt: number
   generationJobId?: string
   attachmentIds?: string[]
@@ -43,6 +47,8 @@ export interface Message {
   branchIndex?: number
   branchCount?: number
   branches?: Array<{ id: string; branchIndex: number }>
+  /** 生成失败的助手占位（本地合成，服务器不会持久化失败回复） */
+  failed?: boolean
 }
 
 export interface CodeArtifact {
@@ -203,6 +209,8 @@ export interface GenerationOptions {
   modules?: number
   referenceAssetIds?: string[]
   maskAssetId?: string
+  firstFrameAssetId?: string
+  lastFrameAssetId?: string
   creationType?: string
   platform?: string
   outputFormat?: 'png' | 'jpeg' | 'webp'

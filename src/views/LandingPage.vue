@@ -230,7 +230,7 @@ const defaultNavGroups = [
   ] },
 ]
 
-const defaultPreviewNav = ['新对话', '图片生成', '电商中心', '项目', '文件库', 'API']
+const defaultPreviewNav = ['新对话', 'AI 创作', '电商中心', '办公中心', '工作空间']
 const defaultCapabilityLinks = [
   { title: '图片生成', description: '了解普通图片生成、参考图编辑与多张候选。', to: '/image' },
   { title: '商品素材包', description: '围绕同一商品生成一组各有用途的商品图片。', to: '/commerce' },

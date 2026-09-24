@@ -223,7 +223,9 @@ test.describe('无限画布基础能力', () => {
     try {
       await page.goto(`/canvas/${canvas.id}`)
       await page.getByTitle('添加图片节点').click()
-      await page.locator('.canvas-flow-node.is-image .canvas-node-empty').click()
+      const imageNode = page.locator('.canvas-flow-node.is-image')
+      await imageNode.hover()
+      await imageNode.getByRole('button', { name: '选择或替换素材', exact: true }).click()
       await expect(page.getByRole('heading', { name: '选择图片', exact: true })).toBeVisible()
 
       await page.locator('.canvas-media-dialog input[type="file"]').setInputFiles({
@@ -232,7 +234,7 @@ test.describe('无限画布基础能力', () => {
         buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nWQAAAAASUVORK5CYII=', 'base64'),
       })
       await expect(page.locator('.canvas-media-dialog')).toHaveCount(0)
-      await expect(page.locator('.canvas-flow-node.is-image img')).toBeVisible()
+      await expect(page.locator('.canvas-flow-node.is-image .canvas-node-body img')).toBeVisible()
       await page.locator('.canvas-flow-node.is-image').dblclick()
       await page.getByRole('button', { name: '裁剪', exact: true }).click()
       await expect(page.getByRole('heading', { name: '裁剪图片', exact: true })).toBeVisible()
@@ -278,7 +280,7 @@ test.describe('无限画布基础能力', () => {
       expect(assetId).toBeTruthy()
 
       await page.reload()
-      await expect(page.locator('.canvas-flow-node.is-image img')).toBeVisible()
+      await expect(page.locator('.canvas-flow-node.is-image .canvas-node-body img')).toBeVisible()
 
       const invalidVideo = await page.request.post('/v1/assets/uploads?kind=VIDEO&purpose=library', {
         multipart: { file: { name: 'not-a-video.txt', mimeType: 'text/plain', buffer: Buffer.from('not a video') } },

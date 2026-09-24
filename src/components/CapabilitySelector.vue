@@ -1,6 +1,6 @@
 <template>
   <div class="plugin-selector">
-    <button ref="trigger" type="button" :class="{ 'is-open': open }" :aria-expanded="open" :aria-label="`选择${capabilityLabel}`" @click="toggle"><Blocks :size="15" /><span>{{ label }}</span><ChevronDown class="plugin-selector__chevron" :size="13" /></button>
+    <button ref="trigger" type="button" :class="{ 'is-open': open }" :aria-expanded="open" :aria-label="`选择${capabilityLabel}`" @click="toggle"><span v-if="iconStack" class="plugin-icon-stack" aria-hidden="true"><i class="pi pi-ppt"><Presentation :size="9" /></i><i class="pi pi-sheet"><Table2 :size="9" /></i><i class="pi pi-doc"><FileText :size="9" /></i></span><Blocks v-else :size="15" /><span>{{ label }}</span><ChevronDown class="plugin-selector__chevron" :size="13" /></button>
     <Teleport to="body"><div v-if="open" ref="popover" class="plugin-selector__popover plugin-selector__popover--floating capability-selector-popover" :style="popoverStyle">
       <header><span><strong>{{ capabilityLabel }}</strong><small>为本次对话选择助手和对话技能</small></span><RouterLink to="/capabilities" @click="close">管理</RouterLink></header>
       <nav><button type="button" :class="{ active: tab === 'assistant' }" @click="tab = 'assistant'">助手</button><button type="button" :class="{ active: tab === 'skill' }" @click="tab = 'skill'">技能</button></nav>
@@ -12,11 +12,11 @@
 </template>
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Blocks, Check, ChevronDown } from 'lucide-vue-next'
+import { Blocks, Check, ChevronDown, FileText, Presentation, Table2 } from 'lucide-vue-next'
 import { api } from '../services/api'
 import { useAuthStore } from '../stores/auth'
 import type { AssistantProfile, Plugin, PluginCapability } from '../types'
-const props = withDefaults(defineProps<{ assistantId?: string; skillId?: string; capability?: PluginCapability }>(), { assistantId: '', skillId: '', capability: 'CHAT' })
+const props = withDefaults(defineProps<{ assistantId?: string; skillId?: string; capability?: PluginCapability; iconStack?: boolean }>(), { assistantId: '', skillId: '', capability: 'CHAT', iconStack: false })
 const emit = defineEmits<{ 'update:assistantId': [value: string]; 'update:skillId': [value: string] }>()
 const auth = useAuthStore()
 const open = ref(false); const tab = ref<'assistant' | 'skill'>('assistant'); const loading = ref(false); const assistants = ref<AssistantProfile[]>([]); const skills = ref<Plugin[]>([])
@@ -30,8 +30,8 @@ async function load() {
   finally { loading.value = false; if (open.value) void nextTick(position) }
 }
 function selectAssistant(id: string) { emit('update:assistantId', id); close() } function selectSkill(id: string) { emit('update:skillId', id); close() }
-function toggle() { if (open.value) return close(); document.dispatchEvent(new Event('xinyue:close-popovers')); open.value = true; void load(); void nextTick(position) }
-function position() { if (!trigger.value || !popover.value) return; const anchor = trigger.value.getBoundingClientRect(); const menu = popover.value.getBoundingClientRect(); const left = Math.min(window.innerWidth - menu.width - 12, Math.max(12, anchor.left)); const top = window.innerHeight - anchor.bottom >= Math.min(menu.height, 420) ? anchor.bottom + 8 : Math.max(12, anchor.top - menu.height - 8); popoverStyle.value = { left: `${left}px`, top: `${top}px`, visibility: 'visible' } }
+function toggle() { if (open.value) return close(); document.dispatchEvent(new Event('xinyue:close-popovers')); open.value = true; void load(); void nextTick(() => { position(); requestAnimationFrame(position) }) }
+function position() { if (!trigger.value || !popover.value) return; const anchor = trigger.value.getBoundingClientRect(); const menu = popover.value.getBoundingClientRect(); const left = Math.min(window.innerWidth - menu.width - 12, Math.max(12, anchor.left)); const openBelow = window.innerHeight - anchor.bottom >= Math.min(menu.height, 420); const top = openBelow ? Math.min(anchor.bottom + 8, Math.max(12, window.innerHeight - menu.height - 12)) : Math.max(12, anchor.top - menu.height - 8); popoverStyle.value = { left: `${left}px`, top: `${top}px`, visibility: 'visible' } }
 function close() { open.value = false; popoverStyle.value = { visibility: 'hidden' } } function outside(event: PointerEvent) { const target = event.target as Node; if (!trigger.value?.contains(target) && !popover.value?.contains(target)) close() }
 onMounted(() => { void load(); document.addEventListener('xinyue:close-popovers', close); document.addEventListener('pointerdown', outside); window.addEventListener('resize', position); window.addEventListener('scroll', position, true) })
 watch(() => auth.isAuthenticated, () => { void load() })

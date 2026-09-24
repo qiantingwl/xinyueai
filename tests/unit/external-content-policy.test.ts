@@ -34,9 +34,9 @@ test('explicitly disabled sources stay disabled', () => {
   assert.equal(isSourceEffectivelyEnabled({ external: true, configuredEnabled: false, reviewAcceptedAt: new Date(), environmentOptIn: 'true' }), false)
 })
 
-test('disabled external skill market neither queries installations nor allows installs', async (t) => {
+test('an unconfigured external skill market stays off and neither queries installations nor allows installs', async (t) => {
   const previous = process.env.EXTERNAL_SKILL_MARKET_ENABLED
-  process.env.EXTERNAL_SKILL_MARKET_ENABLED = 'false'
+  delete process.env.EXTERNAL_SKILL_MARKET_ENABLED
   t.after(() => {
     if (previous === undefined) delete process.env.EXTERNAL_SKILL_MARKET_ENABLED
     else process.env.EXTERNAL_SKILL_MARKET_ENABLED = previous
@@ -55,7 +55,7 @@ test('disabled external skill market neither queries installations nor allows in
   assert.deepEqual(result.items, [])
   await assert.rejects(
     () => service.install('user-1', { source: 'skillsmp', id: 'example' }),
-    /外部技能市场默认关闭/,
+    /外部技能市场已关闭/,
   )
   service.onModuleDestroy()
 })

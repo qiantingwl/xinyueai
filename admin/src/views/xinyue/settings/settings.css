@@ -84,6 +84,11 @@
     max-width: 100%;
   }
 
+  /* 表单标签保持中性色：勾选后仅勾选框保留品牌蓝，标签不着色 */
+  .smtp-secure {
+    --el-checkbox-checked-text-color: var(--el-text-color-regular);
+  }
+
   .card-title {
     display: flex;
     gap: 10px;
@@ -227,12 +232,31 @@
     border: 1px solid #555;
   }
 
+  .preset-preview--jixing {
+    background: #f2f6ff;
+  }
+
+  .preset-preview--jixing i {
+    background: #d4e0f8;
+  }
+
+  .preset-preview--jixing i:nth-child(3) {
+    background: #2f6bff;
+  }
+
   .form-block,
   .number-row {
     margin-top: 18px;
   }
 
   .wide {
+    width: 100%;
+  }
+
+  .avatar-color-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
     width: 100%;
   }
 

@@ -6,6 +6,8 @@ import { AssetsService, resolveRasterImageMime, resolveVideoMime } from '../asse
 import { AuthGuard } from '../auth/auth.guard'
 import { CurrentUser, AuthenticatedUser } from '../common/request-user'
 import { PrismaService } from '../prisma/prisma.service'
+import { asJsonRecord } from '../common/json-record'
+import { inspirationAdminMedia, inspirationPreviewAssetIds, inspirationPreviewVideoAssetId, inspirationStoredAssetIds } from '../inspirations/inspiration-options'
 import { AdminGuard } from './admin.guard'
 
 class CreateInspirationDto {
@@ -40,17 +42,7 @@ export class AdminInspirationsController {
   @Get()
   async list(@Query('mode') mode?: InspirationMode) {
     const rows = await this.prisma.inspiration.findMany({ where: mode ? { mode } : undefined, orderBy: [{ mode: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] })
-    return rows.map((item) => {
-      const options = this.record(item.options)
-      const previewVideoAssetId = this.previewVideoAssetId(options)
-      return {
-        ...item,
-        imageUrl: item.coverAssetId ? `/v1/inspirations/${item.id}/cover` : item.coverUrl,
-        videoUrl: previewVideoAssetId ? `/v1/inspirations/${item.id}/video` : this.previewVideoUrl(options),
-        uploadedPreviewVideo: previewVideoAssetId ? { assetId: previewVideoAssetId, url: `/v1/inspirations/${item.id}/video` } : null,
-        uploadedPreviewImages: this.previewAssetIds(options).map((assetId) => ({ assetId, url: `/v1/inspirations/${item.id}/previews/${assetId}` })),
-      }
-    })
+    return rows.map((item) => ({ ...item, ...inspirationAdminMedia(item.id, item.coverAssetId, item.coverUrl, item.options) }))
   }
 
   @Post()
@@ -103,8 +95,8 @@ export class AdminInspirationsController {
     const mimeType = resolveVideoMime(part.filename, part.mimetype)
     if (!mimeType) { part.file.resume(); throw new BadRequestException('演示视频仅支持 MP4、WebM 或 MOV') }
     const asset = await this.assets.storeUpload(admin.id, { stream: part.file, name: part.filename, mimeType, kind: AssetKind.VIDEO })
-    const options = this.record(item.options)
-    const previousAssetId = this.previewVideoAssetId(options)
+    const options = asJsonRecord(item.options)
+    const previousAssetId = inspirationPreviewVideoAssetId(options)
     await this.prisma.inspiration.update({ where: { id }, data: { options: { ...options, previewVideoAssetId: asset.id } as Prisma.InputJsonValue } })
     if (previousAssetId && previousAssetId !== asset.id) await this.assets.removeAsAdmin(previousAssetId).catch(() => undefined)
     await this.audit(admin.id, request, 'inspiration.video.upload', id, { assetId: asset.id })
@@ -114,8 +106,8 @@ export class AdminInspirationsController {
   @Delete(':id/preview-video')
   async removePreviewVideo(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Param('id') id: string) {
     const item = await this.prisma.inspiration.findUniqueOrThrow({ where: { id } })
-    const options = this.record(item.options)
-    const assetId = this.previewVideoAssetId(options)
+    const options = asJsonRecord(item.options)
+    const assetId = inspirationPreviewVideoAssetId(options)
     delete options.previewVideoAssetId
     await this.prisma.inspiration.update({ where: { id }, data: { options: options as Prisma.InputJsonValue } })
     if (assetId) await this.assets.removeAsAdmin(assetId).catch(() => undefined)
@@ -127,7 +119,7 @@ export class AdminInspirationsController {
   async uploadPreviewImages(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Param('id') id: string) {
     const item = await this.prisma.inspiration.findUniqueOrThrow({ where: { id } })
     const uploaded: string[] = []
-    const existingAssetIds = this.previewAssetIds(item.options)
+    const existingAssetIds = inspirationPreviewAssetIds(item.options)
     try {
       for await (const part of request.files()) {
         if (existingAssetIds.length + uploaded.length >= 30) { part.file.resume(); throw new BadRequestException('每条灵感最多保存 30 张成组预览图片') }
@@ -137,7 +129,7 @@ export class AdminInspirationsController {
         uploaded.push(asset.id)
       }
       if (!uploaded.length) throw new BadRequestException('请选择至少一张成组预览图片')
-      const options = this.record(item.options)
+      const options = asJsonRecord(item.options)
       const previewAssetIds = [...existingAssetIds, ...uploaded]
       await this.prisma.inspiration.update({ where: { id }, data: { options: { ...options, previewAssetIds } as Prisma.InputJsonValue } })
       await this.audit(admin.id, request, 'inspiration.previews.upload', id, { assetIds: uploaded })
@@ -151,8 +143,8 @@ export class AdminInspirationsController {
   @Delete(':id/preview-images/:assetId')
   async removePreviewImage(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Param('id') id: string, @Param('assetId') assetId: string) {
     const item = await this.prisma.inspiration.findUniqueOrThrow({ where: { id } })
-    const options = this.record(item.options)
-    const current = this.previewAssetIds(options)
+    const options = asJsonRecord(item.options)
+    const current = inspirationPreviewAssetIds(options)
     if (!current.includes(assetId)) throw new BadRequestException('该图片不属于当前灵感内容')
     const previewAssetIds = current.filter((value) => value !== assetId)
     await this.prisma.inspiration.update({ where: { id }, data: { options: { ...options, previewAssetIds } as Prisma.InputJsonValue } })
@@ -171,7 +163,7 @@ export class AdminInspirationsController {
   @Delete(':id')
   async remove(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest, @Param('id') id: string) {
     const row = await this.prisma.inspiration.delete({ where: { id } })
-    const assetIds = [...this.previewAssetIds(row.options), ...(this.previewVideoAssetId(row.options) ? [this.previewVideoAssetId(row.options)!] : []), ...(row.coverAssetId ? [row.coverAssetId] : [])]
+    const assetIds = inspirationStoredAssetIds(row.coverAssetId, row.options)
     await Promise.all(assetIds.map((assetId) => this.assets.removeAsAdmin(assetId).catch(() => undefined)))
     await this.audit(admin.id, request, 'inspiration.delete', id, { title: row.title })
     return { deleted: true }
@@ -180,8 +172,4 @@ export class AdminInspirationsController {
   private async audit(actorId: string, request: FastifyRequest, action: string, targetId: string | undefined, after: Prisma.InputJsonValue) {
     await this.prisma.auditLog.create({ data: { actorId, action, targetType: 'inspiration', targetId, ipAddress: request.ip, userAgent: request.headers['user-agent'], after } })
   }
-  private record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
-  private previewAssetIds(value: unknown) { const options = this.record(value); return Array.isArray(options.previewAssetIds) ? options.previewAssetIds.filter((item): item is string => typeof item === 'string').slice(0, 30) : [] }
-  private previewVideoAssetId(value: unknown) { const id = this.record(value).previewVideoAssetId; return typeof id === 'string' && id ? id : undefined }
-  private previewVideoUrl(value: unknown) { const url = this.record(value).previewVideoUrl; return typeof url === 'string' && /^(?:https?:\/\/|\/)/.test(url) ? url : '' }
 }

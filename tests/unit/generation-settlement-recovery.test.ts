@@ -277,7 +277,7 @@ test('rejected RECONCILING cancellation does not refund credits or release quota
     status: 'QUEUED',
     settlementStatus: 'RECONCILING',
     errorMessage: null,
-    conversationId: null,
+    conversationId: 'conversation-1',
     outputs: [],
     events: [],
     providerAttempts: [],

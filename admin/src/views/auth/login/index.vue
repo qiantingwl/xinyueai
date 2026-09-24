@@ -62,9 +62,10 @@
 <script setup lang="ts">
   import type { FormInstance, FormRules } from 'element-plus'
   import { ElNotification } from 'element-plus'
-  import { fetchLogin } from '@/api/auth'
+  import { fetchLogin, toAdminUserInfo } from '@/api/auth'
   import { isHttpError } from '@/utils/http/error'
   import { HOME_PAGE_PATH } from '@/router'
+  import { resetRouterStateNow } from '@/router/guards/beforeEach'
   import { useUserStore } from '@/store/modules/user'
   import { xinyueText as xt } from '@/locales/xinyue'
 
@@ -92,13 +93,16 @@
     loading.value = true
     loginError.value = ''
     try {
-      await fetchLogin({
+      const session = await fetchLogin({
         email: formData.email,
         password: formData.password,
         remember: formData.rememberPassword
       })
+      resetRouterStateNow()
+      userStore.setUserInfo(toAdminUserInfo(session.user))
       userStore.setToken('cookie-session')
       userStore.setLoginStatus(true)
+      userStore.checkAndClearWorktabs()
       ElNotification({
         title: xt('登录成功'),
         message: xt('欢迎回到 Xinyue AI 管理后台'),
@@ -151,9 +155,9 @@
   .login-security i {
     width: 7px;
     height: 7px;
-    background: #31a66a;
+    background: var(--el-color-success);
     border-radius: 50%;
-    box-shadow: 0 0 0 3px rgb(49 166 106 / 12%);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-color-success) 18%, transparent);
   }
 
   .login-note {

@@ -20,6 +20,8 @@ type Options = {
   closeTransientUi: () => void
   deselectAll: () => void
   deleteSelected: () => void
+  wrapSelectedInGroup: () => void
+  ungroupSelected: () => void
   screenToFlowCoordinate: (point: Point) => Point
   uploadFiles: (files: File[], origin: Point) => Promise<unknown>
   addTextNode: (position: Point) => string
@@ -66,6 +68,11 @@ export function useCanvasKeyboard(options: Options) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') {
       event.preventDefault()
       options.duplicateSelected()
+      return
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'g') {
+      event.preventDefault()
+      event.shiftKey ? options.ungroupSelected() : options.wrapSelectedInGroup()
       return
     }
     if ((event.ctrlKey || event.metaKey) && event.key === '0') {

@@ -51,7 +51,7 @@ import { useWorktabStore } from '@/store/modules/worktab'
 import { fetchGetUserInfo } from '@/api/auth'
 import { ApiStatus } from '@/utils/http/status'
 import { isHttpError } from '@/utils/http/error'
-import { RouteRegistry, MenuProcessor, IframeRouteManager, RoutePermissionValidator } from '../core'
+import { RouteRegistry, MenuProcessor, RoutePermissionValidator } from '../core'
 
 // 路由注册器实例
 let routeRegistry: RouteRegistry | null = null
@@ -211,10 +211,7 @@ function handleLoginStatus(
     return true
   }
 
-  // 未登录且访问需要权限的页面，跳转到登录页并携带 redirect 参数
-  // 初次访问受保护页面时没有会话，不应再调用受保护的 logout 接口。
-  // 只有已有本地登录状态时才通知服务端撤销会话。
-  if (userStore.isLogin) userStore.logOut()
+  // 未登录访问受保护页面：跳登录并带上 redirect，不要打受保护的 logout。
   next({
     name: 'Login',
     query: { redirect: to.fullPath }
@@ -287,10 +284,7 @@ async function handleDynamicRoutes(
     menuStore.setMenuList(menuList)
     menuStore.addRemoveRouteFns(routeRegistry?.getRemoveRouteFns() || [])
 
-    // 6. 保存 iframe 路由
-    IframeRouteManager.getInstance().save()
-
-    // 7. 验证工作标签页
+    // 6. 验证工作标签页
     useWorktabStore().validateWorktabs(router)
 
     // 8. 静态路由不依赖菜单权限，初始化后直接恢复目标地址。
@@ -371,10 +365,26 @@ async function handleDynamicRoutes(
  */
 async function fetchUserInfo(): Promise<void> {
   const userStore = useUserStore()
-  const data = await fetchGetUserInfo()
-  userStore.setUserInfo(data)
-  // 检查并清理工作台标签页（如果是不同用户登录）
+  try {
+    const data = await fetchGetUserInfo()
+    userStore.setUserInfo(data)
+  } catch (error) {
+    if (!userStore.info.userId) throw error
+  }
   userStore.checkAndClearWorktabs()
+}
+
+/**
+ * 立刻清掉动态路由，供重新登录使用。
+ */
+export function resetRouterStateNow(): void {
+  routeRegistry?.unregister()
+
+  const menuStore = useMenuStore()
+  menuStore.removeAllDynamicRoutes()
+  menuStore.setMenuList([])
+
+  resetRouteInitState()
 }
 
 /**
@@ -382,15 +392,7 @@ async function fetchUserInfo(): Promise<void> {
  */
 export function resetRouterState(delay: number): void {
   setTimeout(() => {
-    routeRegistry?.unregister()
-    IframeRouteManager.getInstance().clear()
-
-    const menuStore = useMenuStore()
-    menuStore.removeAllDynamicRoutes()
-    menuStore.setMenuList([])
-
-    // 重置路由初始化状态，允许重新登录后再次初始化
-    resetRouteInitState()
+    resetRouterStateNow()
   }, delay)
 }
 

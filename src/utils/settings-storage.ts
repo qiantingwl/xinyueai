@@ -1,4 +1,4 @@
-const SETTINGS_STORAGE_KEY = 'flux:settings'
+const SETTINGS_STORAGE_KEY = 'xinyue:settings'
 
 export interface PendingSettingsSync {
   appearance?: string
@@ -25,6 +25,7 @@ export interface StoredSettings extends Record<string, unknown> {
   temporaryChatDefault?: boolean
   dataRetentionDays?: number
   shareUsageAnalytics?: boolean
+  onboarded?: boolean
   pendingServerSync?: PendingSettingsSync
 }
 

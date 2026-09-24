@@ -13,6 +13,7 @@ export const DEFAULT_CHAT_HOME_CONTENT = {
     doubao: { modeEnabled: true, webSearchEnabled: true, modelSelectorEnabled: true, moreEnabled: true },
     qianwen: { modeEnabled: true, webSearchEnabled: true, modelSelectorEnabled: true, moreEnabled: true },
     kimi: { modeEnabled: true, webSearchEnabled: true, modelSelectorEnabled: true, moreEnabled: true },
+    jixing: { modeEnabled: false, webSearchEnabled: true, modelSelectorEnabled: true, moreEnabled: false },
   },
   quickActions: {
     gpt: [],
@@ -48,7 +49,21 @@ export const DEFAULT_CHAT_HOME_CONTENT = {
       { id: 'kimi-document', label: '文档', icon: 'document', placement: 'BAR', actionType: 'OFFICE', prompt: '', target: 'report', modelKey: '', webSearch: false, enabled: true, sortOrder: 40 },
       { id: 'kimi-website', label: '网站', icon: 'website', placement: 'BAR', actionType: 'OFFICE', prompt: '', target: 'development', modelKey: '', webSearch: false, enabled: true, sortOrder: 50 },
       { id: 'kimi-table', label: '表格', icon: 'table', placement: 'BAR', actionType: 'OFFICE', prompt: '', target: 'spreadsheet', modelKey: '', webSearch: false, enabled: true, sortOrder: 60 },
-      { id: 'kimi-design', label: '设计', icon: 'design', placement: 'BAR', actionType: 'ROUTE', prompt: '', target: '/image', modelKey: '', webSearch: false, enabled: true, sortOrder: 70 },
+      { id: 'kimi-design', label: '设计', icon: 'design', placement: 'BAR', actionType: 'ROUTE', prompt: '', target: '/canvases', modelKey: '', webSearch: false, enabled: true, sortOrder: 70 },
+    ],
+    jixing: [
+      { id: 'jixing-polish', label: '一键商品精修', icon: 'image', placement: 'BAR', actionType: 'ROUTE', prompt: '', target: '/image', modelKey: '', webSearch: false, enabled: true, sortOrder: 10 },
+      { id: 'jixing-mainimage', label: '电商主图直出', icon: 'design', placement: 'BAR', actionType: 'ROUTE', prompt: '', target: '/image', modelKey: '', webSearch: false, enabled: true, sortOrder: 20 },
+      { id: 'jixing-detail', label: '商品详情页/A+', icon: 'ppt', placement: 'BAR', actionType: 'PROMPT', prompt: '请为以下商品生成详情页/A+ 文案与版面方案：', target: '', modelKey: '', webSearch: false, enabled: true, sortOrder: 30 },
+      { id: 'jixing-scene', label: '商品场景图', icon: 'image', placement: 'BAR', actionType: 'ROUTE', prompt: '', target: '/image', modelKey: '', webSearch: false, enabled: true, sortOrder: 40 },
+      { id: 'jixing-card-main-set', label: '电商主图套图', icon: 'image', placement: 'MORE', actionType: 'ROUTE', prompt: '', target: '/image', modelKey: '', webSearch: false, enabled: true, sortOrder: 10, imageUrl: '/assets/jx-tools/main-set.jpg' },
+      { id: 'jixing-card-polish', label: '商品精修', icon: 'image', placement: 'MORE', actionType: 'ROUTE', prompt: '', target: '/image', modelKey: '', webSearch: false, enabled: true, sortOrder: 20, imageUrl: '/assets/jx-tools/polish.jpg' },
+      { id: 'jixing-card-replica', label: '爆款主图复刻', icon: 'design', placement: 'MORE', actionType: 'ROUTE', prompt: '', target: '/image', modelKey: '', webSearch: false, enabled: true, sortOrder: 30, imageUrl: '/assets/jx-tools/replica.jpg' },
+      { id: 'jixing-card-detail', label: '商品详情页/A+', icon: 'ppt', placement: 'MORE', actionType: 'ROUTE', prompt: '', target: '/commerce', modelKey: '', webSearch: false, enabled: true, sortOrder: 40, imageUrl: '/assets/jx-tools/detail.jpg' },
+      { id: 'jixing-card-scene', label: '商品场景图', icon: 'image', placement: 'MORE', actionType: 'ROUTE', prompt: '', target: '/image', modelKey: '', webSearch: false, enabled: true, sortOrder: 50, imageUrl: '/assets/jx-tools/scene.jpg' },
+      { id: 'jixing-card-poster', label: '电商海报', icon: 'design', placement: 'MORE', actionType: 'ROUTE', prompt: '', target: '/image', modelKey: '', webSearch: false, enabled: true, sortOrder: 60, imageUrl: '/assets/jx-tools/poster.jpg' },
+      { id: 'jixing-card-model', label: '模特试衣', icon: 'image', placement: 'MORE', actionType: 'ROUTE', prompt: '', target: '/image', modelKey: '', webSearch: false, enabled: true, sortOrder: 70, imageUrl: '/assets/jx-tools/model.jpg' },
+      { id: 'jixing-card-swap', label: '换模特', icon: 'image', placement: 'MORE', actionType: 'ROUTE', prompt: '', target: '/image', modelKey: '', webSearch: false, enabled: true, sortOrder: 80, imageUrl: '/assets/jx-tools/swap.jpg' },
     ],
   },
 }
@@ -61,6 +76,11 @@ export function normalizeChatHomeContent(value: Prisma.JsonValue | Record<string
     if (value.startsWith('/') && !value.startsWith('//') && !value.startsWith('/\\')) return value
     try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.toString() : fallback } catch { return fallback }
   }
+  const actionRouteTarget = (id: string, configured: unknown, fallback: string) => {
+    const target = destination(configured, fallback)
+    if (id === 'kimi-design' && (target === '/image' || target.startsWith('/image?'))) return '/canvases'
+    return target
+  }
   const defaultRecommendations = DEFAULT_CHAT_HOME_CONTENT.doubaoRecommendations as Array<{ title: string; prompt: string; targetUrl: string }>
   const recommendations = Array.isArray(input.doubaoRecommendations) ? input.doubaoRecommendations : defaultRecommendations
   const defaultBanners = DEFAULT_CHAT_HOME_CONTENT.qianwenBanners
@@ -68,7 +88,7 @@ export function normalizeChatHomeContent(value: Prisma.JsonValue | Record<string
   const rawProject = input.kimiProject && typeof input.kimiProject === 'object' && !Array.isArray(input.kimiProject) ? input.kimiProject as Record<string, unknown> : DEFAULT_CHAT_HOME_CONTENT.kimiProject
   const rawControls = input.composerControls && typeof input.composerControls === 'object' && !Array.isArray(input.composerControls) ? input.composerControls as Record<string, unknown> : {}
   const rawActions = input.quickActions && typeof input.quickActions === 'object' && !Array.isArray(input.quickActions) ? input.quickActions as Record<string, unknown> : {}
-  const presets = ['gpt', 'doubao', 'qianwen', 'kimi'] as const
+  const presets = ['gpt', 'doubao', 'qianwen', 'kimi', 'jixing'] as const
   const bool = (item: unknown, fallback: boolean) => typeof item === 'boolean' ? item : fallback
   const integer = (item: unknown, fallback: number) => typeof item === 'number' && Number.isFinite(item) ? Math.max(-10000, Math.min(10000, Math.trunc(item))) : fallback
   const composerControls = Object.fromEntries(presets.map((preset) => {
@@ -101,8 +121,9 @@ export function normalizeChatHomeContent(value: Prisma.JsonValue | Record<string
         placement,
         actionType,
         prompt: text(row.prompt, text(fallbackRow?.prompt, '', 4000), 4000),
-        target: actionType === 'ROUTE' ? destination(row.target, text(fallbackRow?.target, '/', 1000)) : text(row.target, text(fallbackRow?.target, '', 120), 120),
+        target: actionType === 'ROUTE' ? actionRouteTarget(id, row.target, text(fallbackRow?.target, '/', 1000)) : text(row.target, text(fallbackRow?.target, '', 120), 120),
         modelKey: text(row.modelKey, text(fallbackRow?.modelKey, '', 100), 100),
+        imageUrl: destination(row.imageUrl, destination(fallbackRow?.imageUrl, '')),
         webSearch: bool(row.webSearch, Boolean(fallbackRow?.webSearch)),
         enabled: bool(row.enabled, fallbackRow ? Boolean(fallbackRow.enabled) : true),
         sortOrder: integer(row.sortOrder, typeof fallbackRow?.sortOrder === 'number' ? fallbackRow.sortOrder : (index + 1) * 10),

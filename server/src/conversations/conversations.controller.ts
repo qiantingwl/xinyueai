@@ -10,6 +10,7 @@ import { publicGenerationListSelect, toPublicGeneration } from '../generations/p
 import { ResourceAccessService } from '../common/resource-access.service'
 import { publicAssetSelect } from '../assets/public-asset.dto'
 import { toPublicMessage } from './public-message.dto'
+import { Public } from '../auth/public.decorator'
 
 class CreateConversationDto { @IsOptional() @IsString() @MinLength(1) @MaxLength(100) projectId?: string; @IsOptional() @IsString() @Matches(/\S/) @MaxLength(160) model?: string; @IsOptional() @IsString() @Matches(/\S/) @MaxLength(120) title?: string; @IsOptional() @IsBoolean() temporary?: boolean }
 class AddMessageDto { @IsString() @Matches(/\S/) @MinLength(1) @MaxLength(50_000) content!: string; @IsOptional() @IsString() @MaxLength(100) parentId?: string; @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @IsNotEmpty({ each: true }) assetIds?: string[] }
@@ -53,7 +54,7 @@ export class ConversationsController {
     })
   }
   @Get(':id') async get(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
-    const conversation = await this.prisma.conversation.findFirst({ where: this.readableConversationWhere(user.id, id), include: { project: { select: { userId: true } }, messages: { where: { deletedAt: null }, orderBy: { createdAt: 'asc' }, include: { author: { select: { id: true, displayName: true } }, attachments: { include: { asset: { select: publicAssetSelect } } } } }, jobs: { where: { kind: { in: ['IMAGE', 'VIDEO', 'COMMERCE'] } }, orderBy: { createdAt: 'desc' }, take: 100, select: publicGenerationListSelect } } })
+    const conversation = await this.prisma.conversation.findFirst({ where: this.readableConversationWhere(user.id, id), include: { project: { select: { userId: true } }, messages: { where: { deletedAt: null }, orderBy: { createdAt: 'asc' }, include: { author: { select: { id: true, displayName: true } }, attachments: { include: { asset: { select: publicAssetSelect } } } } }, jobs: { where: { kind: { in: ['IMAGE', 'VIDEO', 'COMMERCE', 'CHAT'] } }, orderBy: { createdAt: 'desc' }, take: 100, select: publicGenerationListSelect } } })
     if (!conversation) throw new NotFoundException('对话不存在')
     const auditReadOnly = conversation.userId !== user.id
     const { jobs } = conversation
@@ -205,6 +206,7 @@ export class ConversationsController {
   }
 }
 
+@Public()
 @Controller('shares')
 export class ConversationSharesController {
   constructor(private readonly prisma: PrismaService) {}

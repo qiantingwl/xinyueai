@@ -1,4 +1,5 @@
 import { ProxyAgent, fetch as httpFetch, type Dispatcher } from "undici";
+import { fetchWithAllowedRedirects } from "../common/allowed-redirect-fetch";
 
 export type RemoteVideoPrompt = {
   id: string;
@@ -73,43 +74,18 @@ export async function requestText(
 }
 
 async function fetchRemote(value: string, init: HttpFetchInit) {
-  let current = allowedRemoteUrl(value);
-  for (let redirects = 0; ; redirects += 1) {
-    const response = await httpFetch(current, { ...init, redirect: "manual" });
-    if (response.status < 300 || response.status >= 400) return response;
-    await response.body?.cancel().catch(() => undefined);
-    if (redirects >= MAX_REMOTE_REDIRECTS) {
-      throw new Error("远程提示词重定向次数超过限制");
-    }
-    const location = response.headers.get("location");
-    if (!location) throw new Error("远程提示词重定向地址无效");
-    let next: URL;
-    try {
-      next = new URL(location, current);
-    } catch {
-      throw new Error("远程提示词重定向地址无效");
-    }
-    current = allowedRemoteUrl(next.toString());
-  }
-}
-
-function allowedRemoteUrl(value: string) {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error("远程提示词地址无效");
-  }
-  if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    (url.port && url.port !== "443") ||
-    !REMOTE_PROMPT_HOSTS.has(url.hostname.toLowerCase())
-  ) {
-    throw new Error("远程提示词来源不在允许列表");
-  }
-  return url;
+  const { response } = await fetchWithAllowedRedirects(value, {}, {
+    allowedHosts: REMOTE_PROMPT_HOSTS,
+    maxRedirects: MAX_REMOTE_REDIRECTS,
+    messages: {
+      invalidUrl: "远程提示词地址无效",
+      disallowedHost: "远程提示词来源不在允许列表",
+      invalidLocation: "远程提示词重定向地址无效",
+      tooManyRedirects: "远程提示词重定向次数超过限制",
+    },
+    fetch: (url) => httpFetch(url, { ...init, redirect: "manual" }),
+  });
+  return response;
 }
 
 function urlsFromSitemap(xml: string) {

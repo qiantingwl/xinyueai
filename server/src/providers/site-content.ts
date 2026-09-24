@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client'
+import { asJsonRecord } from '../common/json-record'
 
 export interface SiteContent {
   landing: {
@@ -50,8 +51,8 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
 }
 
 export function normalizeSiteContent(value: Prisma.JsonValue | Record<string, unknown> | null | undefined): SiteContent {
-  const root = object(value)
-  const landing = object(root.landing)
+  const root = asJsonRecord(value)
+  const landing = asJsonRecord(root.landing)
   const defaults = DEFAULT_SITE_CONTENT.landing
   const destination = (value: unknown, fallback: string) => {
     const candidate = text(value, fallback, 1000)
@@ -59,10 +60,10 @@ export function normalizeSiteContent(value: Prisma.JsonValue | Record<string, un
     try { const url = new URL(candidate); return ['http:', 'https:'].includes(url.protocol) ? url.toString() : fallback } catch { return fallback }
   }
   const modes = list(landing.modes, 6).map((entry, index) => {
-    const row = object(entry); const fallback = defaults.modes[index % defaults.modes.length]
-    return { key: text(row.key, fallback.key, 30).replace(/[^a-z0-9_-]/gi, '-'), title: text(row.title, fallback.title, 50), path: text(row.path, fallback.path, 80), image: destination(row.image, fallback.image), imageAlt: text(row.imageAlt, fallback.imageAlt, 120), lead: text(row.lead, fallback.lead, 160), description: text(row.description, fallback.description, 500), actions: list(row.actions, 4).map((item, actionIndex) => { const action = object(item); const base = fallback.actions[actionIndex % fallback.actions.length]; return { label: text(action.label, base.label, 50), to: destination(action.to, base.to) } }) }
+    const row = asJsonRecord(entry); const fallback = defaults.modes[index % defaults.modes.length]
+    return { key: text(row.key, fallback.key, 30).replace(/[^a-z0-9_-]/gi, '-'), title: text(row.title, fallback.title, 50), path: text(row.path, fallback.path, 80), image: destination(row.image, fallback.image), imageAlt: text(row.imageAlt, fallback.imageAlt, 120), lead: text(row.lead, fallback.lead, 160), description: text(row.description, fallback.description, 500), actions: list(row.actions, 4).map((item, actionIndex) => { const action = asJsonRecord(item); const base = fallback.actions[actionIndex % fallback.actions.length]; return { label: text(action.label, base.label, 50), to: destination(action.to, base.to) } }) }
   })
-  const navGroups = list(landing.navGroups, 6).map((entry, index) => { const row = object(entry); const fallback = defaults.navGroups[index % defaults.navGroups.length]; return { key: text(row.key, fallback.key, 30).replace(/[^a-z0-9_-]/gi, '-'), label: text(row.label, fallback.label, 40), items: list(row.items, 10).map((item, itemIndex) => { const child = object(item); const base = fallback.items[itemIndex % fallback.items.length]; return { label: text(child.label, base.label, 60), description: text(child.description, base.description, 160), to: destination(child.to, base.to) } }) } })
+  const navGroups = list(landing.navGroups, 6).map((entry, index) => { const row = asJsonRecord(entry); const fallback = defaults.navGroups[index % defaults.navGroups.length]; return { key: text(row.key, fallback.key, 30).replace(/[^a-z0-9_-]/gi, '-'), label: text(row.label, fallback.label, 40), items: list(row.items, 10).map((item, itemIndex) => { const child = asJsonRecord(item); const base = fallback.items[itemIndex % fallback.items.length]; return { label: text(child.label, base.label, 60), description: text(child.description, base.description, 160), to: destination(child.to, base.to) } }) } })
   return { landing: {
     heroLead: text(landing.heroLead, defaults.heroLead, 100),
     modes: modes.length ? modes : structuredClone(defaults.modes),
@@ -71,14 +72,13 @@ export function normalizeSiteContent(value: Prisma.JsonValue | Record<string, un
     trustTitle: text(landing.trustTitle, defaults.trustTitle, 160), trustDescription: text(landing.trustDescription, defaults.trustDescription, 500),
     trustItems: normalizeCards(landing.trustItems, defaults.trustItems, 6),
     linksTitle: text(landing.linksTitle, defaults.linksTitle, 160), linksDescription: text(landing.linksDescription, defaults.linksDescription, 500),
-    capabilityLinks: list(landing.capabilityLinks, 12).map((entry, index) => { const row = object(entry); const fallback = defaults.capabilityLinks[index % defaults.capabilityLinks.length]; return { title: text(row.title, fallback.title, 80), description: text(row.description, fallback.description, 240), to: destination(row.to, fallback.to) } }),
+    capabilityLinks: list(landing.capabilityLinks, 12).map((entry, index) => { const row = asJsonRecord(entry); const fallback = defaults.capabilityLinks[index % defaults.capabilityLinks.length]; return { title: text(row.title, fallback.title, 80), description: text(row.description, fallback.description, 240), to: destination(row.to, fallback.to) } }),
     faqTitle: text(landing.faqTitle, defaults.faqTitle, 160),
-    faqs: list(landing.faqs, 20).map((entry, index) => { const row = object(entry); const fallback = defaults.faqs[index % defaults.faqs.length]; return { question: text(row.question, fallback.question, 200), answer: text(row.answer, fallback.answer, 1000) } }),
+    faqs: list(landing.faqs, 20).map((entry, index) => { const row = asJsonRecord(entry); const fallback = defaults.faqs[index % defaults.faqs.length]; return { question: text(row.question, fallback.question, 200), answer: text(row.answer, fallback.answer, 1000) } }),
     finalTitle: text(landing.finalTitle, defaults.finalTitle, 160), finalDescription: text(landing.finalDescription, defaults.finalDescription, 500), footerDescription: text(landing.footerDescription, defaults.footerDescription, 300), copyright: text(landing.copyright, defaults.copyright, 120),
   } }
 }
 
-function object(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 function list(value: unknown, max: number): unknown[] { return Array.isArray(value) ? value.slice(0, max) : [] }
 function text(value: unknown, fallback: string, max: number): string { return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : fallback }
-function normalizeCards(value: unknown, fallback: Array<{ title: string; description: string }>, max: number) { const rows = list(value, max).map((entry, index) => { const row = object(entry); const base = fallback[index % fallback.length]; return { title: text(row.title, base.title, 120), description: text(row.description, base.description, 500) } }); return rows.length ? rows : structuredClone(fallback) }
+function normalizeCards(value: unknown, fallback: Array<{ title: string; description: string }>, max: number) { const rows = list(value, max).map((entry, index) => { const row = asJsonRecord(entry); const base = fallback[index % fallback.length]; return { title: text(row.title, base.title, 120), description: text(row.description, base.description, 500) } }); return rows.length ? rows : structuredClone(fallback) }

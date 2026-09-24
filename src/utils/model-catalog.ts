@@ -12,6 +12,7 @@ export type CatalogModel = {
   badge?: string
   source?: 'PLATFORM' | 'USER'
   availability?: 'AVAILABLE' | 'DEGRADED' | 'UNCONFIGURED'
+  availabilityReason?: 'NO_CHANNEL' | 'API_KEY_MISSING' | 'CHANNEL_COOLDOWN' | 'HEALTH_CHECK_REQUIRED'
   healthyRouteCount?: number
   routeCount?: number
   vendor?: { id?: string; key?: string; name: string } | null
@@ -68,11 +69,34 @@ export function isAgentModelEligible(model: CatalogModel) {
   return model.options?.agentCapabilities?.eligible !== false && (!contextWindow || contextWindow >= 8192)
 }
 
+export function isCatalogModelAvailable(model?: CatalogModel) {
+  if (!model || model.availability === 'UNCONFIGURED') return false
+  return model.routeCount === undefined || model.routeCount > 0
+}
+
+export function catalogModelUnavailableMessage(model?: CatalogModel) {
+  if (!model) return '暂无可用模型'
+  if (model.availabilityReason === 'API_KEY_MISSING') return `${model.displayName} 未配置渠道 API key`
+  if (model.availabilityReason === 'NO_CHANNEL') return `${model.displayName} 未绑定渠道`
+  if (model.availabilityReason === 'CHANNEL_COOLDOWN') return `${model.displayName} 渠道暂时冷却中`
+  if (model.availabilityReason === 'HEALTH_CHECK_REQUIRED') return `${model.displayName} 渠道待检测`
+  if (model.availability === 'UNCONFIGURED' || model.routeCount === 0) {
+    return `${model.displayName} 未配置可用渠道`
+  }
+  return '暂无可用模型'
+}
+
 export function agentModelDescription(model: CatalogModel) {
   const capability = model.options?.agentCapabilities
   if (!isAgentModelEligible(model)) return capability?.reason || '未开放 Agent 任务'
   const labels = [capability?.supportsReasoning ? '推理' : '', capability?.supportsTools ? '工具调用' : '', capability?.supportsStructuredOutput ? '结构化输出' : ''].filter(Boolean)
   return labels.length ? `Agent · ${labels.join(' · ')}` : 'Agent · 服务端工具编排'
+}
+
+export function catalogModelMatches(model: CatalogModel, value: string) {
+  const normalized = value.trim()
+  if (!normalized) return false
+  return model.key === normalized || model.displayName === normalized || model.upstreamModel === normalized
 }
 
 export function findCatalogModel(models: CatalogModel[], value: string, capability?: ModelCapability) {
@@ -84,9 +108,35 @@ export function findCatalogModel(models: CatalogModel[], value: string, capabili
     || candidates.find((item) => item.upstreamModel === normalized)
 }
 
+export function resolveCatalogModel(models: CatalogModel[], value: string, capability?: ModelCapability) {
+  return findCatalogModel(models, value, capability) || findCatalogModel(models, value)
+}
+
+export function catalogSelectionForValue<C extends ModelCapability | 'AGENT'>(
+  models: CatalogModel[],
+  value: string,
+  currentCapability: C,
+): { key: string; capability: C | 'CHAT' | 'IMAGE' | 'VIDEO'; modelCapability: ModelCapability } {
+  const preferred: ModelCapability = currentCapability === 'AGENT' ? 'CHAT' : currentCapability as ModelCapability
+  const chosen = resolveCatalogModel(models, value, preferred)
+  const nextCapability: C | 'CHAT' | 'IMAGE' | 'VIDEO' = currentCapability === 'AGENT'
+    ? currentCapability
+    : chosen?.capability === 'IMAGE' || chosen?.capability === 'VIDEO' || chosen?.capability === 'CHAT'
+      ? chosen.capability
+      : currentCapability
+  return {
+    key: chosen?.key || value.trim(),
+    capability: nextCapability,
+    modelCapability: nextCapability === 'AGENT' ? 'CHAT' : nextCapability as ModelCapability,
+  }
+}
+
 export function defaultCatalogModel(models: CatalogModel[], capability: ModelCapability) {
-  return models.find((item) => item.capability === capability && item.isDefault)
-    || models.find((item) => item.capability === capability)
+  const candidates = models.filter((item) => item.capability === capability)
+  return candidates.find((item) => item.isDefault && isCatalogModelAvailable(item))
+    || candidates.find(isCatalogModelAvailable)
+    || candidates.find((item) => item.isDefault)
+    || candidates[0]
 }
 
 export function catalogModelKey(models: CatalogModel[], value: string, capability?: ModelCapability) {
@@ -94,5 +144,5 @@ export function catalogModelKey(models: CatalogModel[], value: string, capabilit
 }
 
 export function catalogModelLabel(models: CatalogModel[], value: string, capability?: ModelCapability) {
-  return findCatalogModel(models, value, capability)?.displayName || value.trim()
+  return findCatalogModel(models, value, capability)?.displayName || resolveCatalogModel(models, value)?.displayName || value.trim()
 }

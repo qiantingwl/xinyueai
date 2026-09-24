@@ -1,5 +1,5 @@
 <template>
-  <div class="xinyue-page settings-page">
+  <div v-loading="loading" class="xinyue-page settings-page">
     <header class="page-title"
       ><div
         ><h1>{{ xt('业务系统配置') }}</h1
@@ -8,7 +8,17 @@
         ><ArtSvgIcon icon="ri:save-line" />{{ xt('保存配置') }}</ElButton
       ></header
     >
-    <ElTabs v-model="tab" class="settings-tabs">
+    <ElResult
+      v-if="!loading && !settings"
+      icon="warning"
+      :title="xt('配置加载失败')"
+      :sub-title="xt('请刷新后重试')"
+    >
+      <template #extra
+        ><ElButton type="primary" @click="load">{{ xt('重新加载') }}</ElButton></template
+      >
+    </ElResult>
+    <ElTabs v-if="settings" v-model="tab" class="settings-tabs">
       <ElTabPane :label="xt('站点与商业能力')" name="site"
         ><ElCard v-if="settings" shadow="never"
           ><template #header
@@ -55,6 +65,62 @@
               v-model="workspaceSidebarEnabled"
               :title="xt('工作空间')"
               :note="xt('统一管理项目、工作流、版本与文件资产')" /></div></ElCard
+        ><ElCard v-if="settings" shadow="never"
+          ><template #header
+            ><strong>{{ xt('左侧菜单') }}</strong></template
+          ><div class="toggle-grid"
+            ><ToggleRow
+              v-model="settings.sidebarCreationEnabled"
+              :title="xt('AI 创作')"
+              :note="xt('控制图片和视频创作入口')" /><ToggleRow
+              v-model="settings.sidebarCommerceEnabled"
+              :title="xt('电商中心')"
+              :note="xt('控制电商内容与商品视觉入口')" /><ToggleRow
+              v-model="settings.sidebarOfficeEnabled"
+              :title="xt('办公中心')"
+              :note="xt('控制文档和表格办公入口')" /><ToggleRow
+              v-model="settings.sidebarPromptsEnabled"
+              :title="xt('提示词库')"
+              :note="xt('控制提示词浏览入口')" /><ToggleRow
+              v-model="settings.sidebarPluginsEnabled"
+              :title="xt('插件市场')"
+              :note="xt('控制插件浏览与使用入口')" /><ToggleRow
+              v-model="settings.sidebarProjectsEnabled"
+              :title="xt('项目')"
+              :note="xt('控制协作项目入口')" /><ToggleRow
+              v-model="settings.sidebarAssetsEnabled"
+              :title="xt('文件库')"
+              :note="xt('控制用户文件管理入口')" /></div></ElCard
+        ><ElCard v-if="settings" shadow="never"
+          ><template #header
+            ><div class="card-title"
+              ><div
+                ><strong>{{ xt('侧边栏排序与名称') }}</strong
+                ><small>{{ xt('全站统一。可关闭入口，包括新对话。') }}</small></div
+              ></div
+            ></template
+          ><SidebarNavEditor
+            v-model:preference="settings.sidebarNav"
+            :catalog="sidebarNavCatalog"
+            :promoted="settings.sidebarNav.promoted"
+            @demote="demoteNav" /></ElCard
+        ><template v-for="group in nestedNavGroups" :key="group.id"
+          ><ElCard v-if="settings" shadow="never"
+            ><template #header
+              ><div class="card-title"
+                ><div
+                  ><strong>{{ xt(group.title) }}</strong
+                  ><small>{{ xt(group.note) }}</small></div
+                ></div
+              ></template
+            ><SidebarNavEditor
+              :preference="groupPreference(group.id)"
+              :catalog="group.items"
+              promoteable
+              :promoted="settings.sidebarNav.promoted"
+              @update:preference="setGroupPreference(group.id, $event)"
+              @promote="promoteNav"
+              @demote="demoteNav" /></ElCard></template
         ><ElCard v-if="settings" shadow="never"
           ><template #header
             ><strong>{{ xt('商业能力开关') }}</strong></template
@@ -116,7 +182,12 @@
           ><ElDivider content-position="left">{{ xt('模型自动定价') }}</ElDivider
           ><div class="pricing-preset-section">
             <div class="pricing-preset-heading">
-              <div><strong>{{ xt('计价基准预设') }}</strong><small>{{ xt('选择后只填充配置，保存后生效；不会自动覆盖模型价格。') }}</small></div>
+              <div
+                ><strong>{{ xt('计价基准预设') }}</strong
+                ><small>{{
+                  xt('选择后只填充配置，保存后生效；不会自动覆盖模型价格。')
+                }}</small></div
+              >
               <ElTag type="info">{{ pricingFormulaPreview }}</ElTag>
             </div>
             <div class="pricing-preset-grid">
@@ -126,7 +197,9 @@
                 type="button"
                 :class="{ active: activePricingPreset === preset.key }"
                 @click="applyPricingBasePreset(preset)"
-              ><strong>{{ preset.label }}</strong><small>{{ preset.note }}</small></button>
+                ><strong>{{ preset.label }}</strong
+                ><small>{{ preset.note }}</small></button
+              >
             </div>
           </div>
           <ElRow :gutter="16" class="number-row"
@@ -182,10 +255,15 @@
               :type="settings.modelImportMarkupPercent === preset.value ? 'primary' : 'default'"
               plain
               @click="settings.modelImportMarkupPercent = preset.value"
-            >{{ preset.label }}</ElButton>
+              >{{ preset.label }}</ElButton
+            >
           </div>
           <ElAlert
-            :title="xt('同步公式：目录 USD 参考成本 × 汇率 × 加价率 ÷ 每额度价值。保存基准后，到“模型与定价”预览并选择是否应用。')"
+            :title="
+              xt(
+                '同步公式：目录 USD 参考成本 × 汇率 × 加价率 ÷ 每额度价值。保存基准后，到“模型与定价”预览并选择是否应用。'
+              )
+            "
             type="info"
             :closable="false"
             show-icon /></ElCard
@@ -341,7 +419,7 @@
               ><ElCol :span="12"
                 ><ElFormItem :label="xt('发件邮箱')"
                   ><ElInput v-model.trim="settings.smtpFromEmail" /></ElFormItem></ElCol></ElRow
-            ><ElCheckbox v-model="settings.smtpSecure">{{
+            ><ElCheckbox v-model="settings.smtpSecure" class="smtp-secure">{{
               xt('使用 SSL / TLS 安全连接')
             }}</ElCheckbox></ElForm
           ></ElCard
@@ -494,7 +572,7 @@
               ><div
                 ><strong>{{ xt('官网首页') }}</strong
                 ><small>{{ xt('结构化内容保存后直接由用户端读取') }}</small></div
-              ><ElButton @click="router.push('/article/article-list')"
+              ><ElButton @click="router.push({ name: 'PublicContentPages' })"
                 ><ArtSvgIcon icon="ri:article-line" />{{ xt('法律与品牌页面') }}</ElButton
               ></div
             ></template
@@ -667,6 +745,50 @@
                 ><small>{{ preset.note }}</small></button
               ></div
             ></ElFormItem
+          ><ElFormItem :label="xt('助手头像动效')"
+            ><ElSelect v-model="settings.chatAvatarMotion" class="wide"
+              ><ElOption
+                value="ambient"
+                :label="xt('常驻轮动（空闲时也循环播放形态变化）')" /><ElOption
+                value="active"
+                :label="xt('仅生成时（思考/回答中播放，结束后定格）')" /><ElOption
+                value="off"
+                :label="xt('静态（始终定格）')" /></ElSelect></ElFormItem
+          ><ElFormItem :label="xt('助手头像小球')"
+            ><ElSwitch
+              v-model="settings.chatAvatarEnabled"
+              :active-text="xt('在对话和首页显示')" /></ElFormItem
+          ><template v-if="settings.chatAvatarEnabled"
+            ><ElFormItem :label="xt('头像形态风格')"
+              ><ElSelect v-model="settings.chatAvatarStyle" class="wide"
+                ><ElOption value="classic" :label="xt('经典（球体为主，六种形态轮换）')" /><ElOption
+                  value="lively"
+                  :label="xt('活泼（形变更密集，含彗星扫尾）')" /><ElOption
+                  value="calm"
+                  :label="xt('安静（只呼吸眨眼，偶尔 wink）')" /><ElOption
+                  value="geometric"
+                  :label="xt('几何变换（蛋形 / 六边形 / 三角旋涡）')" /><ElOption
+                  value="faces"
+                  :label="xt('表情包（wink / 瞪眼 / 消息点）')" /><ElOption
+                  value="orbit"
+                  :label="xt('星轨环绕（常驻）')" /><ElOption
+                  value="comet"
+                  :label="xt('彗星扫尾（常驻）')" /><ElOption
+                  value="thinker"
+                  :label="xt('三点脉冲（常驻）')" /><ElOption
+                  value="sleepy"
+                  :label="xt('弹跳小点（常驻）')" /></ElSelect></ElFormItem
+            ><ElFormItem :label="xt('头像配色')"
+              ><div class="avatar-color-row"
+                ><ElSelect v-model="avatarColorMode" class="wide"
+                  ><ElOption value="auto" :label="xt('跟随主题（明暗自动切换）')" /><ElOption
+                    value="brand"
+                    :label="xt('品牌蓝')" /><ElOption
+                    value="custom"
+                    :label="xt('自定义颜色')" /></ElSelect
+                ><ElColorPicker
+                  v-if="avatarColorMode === 'custom'"
+                  v-model="settings.chatAvatarColor" /></div></ElFormItem></template
           ><section v-if="settings.chatUiPreset === 'doubao'" class="home-content-editor"
             ><header
               ><div
@@ -881,28 +1003,96 @@
   import { xinyueText as xt } from '@/locales/xinyue'
   import AdminAccountCard from './admin-account-card.vue'
   import ToggleRow from './toggle-row.vue'
+  import SidebarNavEditor from './SidebarNavEditor.vue'
   import {
     buildSystemSettingsPayload,
     normalizeChatHomeContent,
     normalizeSiteContent
   } from './settings-form'
-  defineOptions({ name: 'XinyueSettings' })
+  import {
+    alignHiddenWithFlags,
+    demoteSidebarItem,
+    NESTED_NAV_GROUPS,
+    nestedParentKey,
+    parseSidebarNav,
+    parseSectionNav,
+    promoteSidebarItem,
+    SIDEBAR_NAV_CATALOG,
+    type NestedNavGroup,
+    type SidebarNavPreference
+  } from '@/utils/xinyue/sidebar-nav'
+  import { useXinyueAsync } from '@/hooks'
+  defineOptions({ name: 'XinyueSystemSettings' })
   const route = useRoute()
   const router = useRouter()
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
   const tab = ref(typeof route.query.tab === 'string' ? route.query.tab : 'site')
   const settings = ref<SystemSettings | null>(null)
   const groups = ref<UserGroup[]>([])
   const plans = ref<SubscriptionPlan[]>([])
   const models = ref<ModelPreset[]>([])
-  const saving = ref(false)
   const domainsText = ref('')
   const smtpPassword = ref('')
   const linuxSecret = ref('')
+  const nestedNavGroups = NESTED_NAV_GROUPS
+  const sidebarNavCatalog = computed(() => {
+    const promoted = new Set(settings.value?.sidebarNav.promoted || [])
+    const nested = NESTED_NAV_GROUPS.flatMap((group) => group.items).filter((item) =>
+      promoted.has(item.key)
+    )
+    return [...SIDEBAR_NAV_CATALOG.map((item) => ({ ...item })), ...nested]
+  })
+  function groupPreference(id: NestedNavGroup) {
+    if (!settings.value) return parseSidebarNav(null)
+    return id === 'workspace' ? settings.value.workspaceNav : settings.value.sectionNav[id]
+  }
+  function setGroupPreference(id: NestedNavGroup, value: SidebarNavPreference) {
+    if (!settings.value) return
+    if (id === 'workspace') settings.value.workspaceNav = value
+    else settings.value.sectionNav[id] = value
+  }
+  function promoteNav(key: string) {
+    if (!settings.value) return
+    settings.value.sidebarNav = promoteSidebarItem(
+      settings.value.sidebarNav,
+      key,
+      nestedParentKey(key)
+    )
+    const group = nestedParentKey(key) as NestedNavGroup | ''
+    if (!group) return
+    const nav = groupPreference(group)
+    setGroupPreference(group, { ...nav, hidden: nav.hidden.filter((item) => item !== key) })
+  }
+  function demoteNav(key: string) {
+    if (!settings.value) return
+    settings.value.sidebarNav = demoteSidebarItem(settings.value.sidebarNav, key)
+  }
   const bannerUploadingIndex = ref<number | null>(null)
   const pricingBasePresets = [
-    { key: 'cny-parity', label: xt('人民币 1:1'), note: xt('1 USD 按 ¥1；适合对标数值'), currency: 'CNY', exchangeRate: 1, creditValue: 0.01 },
-    { key: 'cny-market', label: xt('人民币市场参考'), note: xt('1 USD 按 ¥7.2；部署后可手动调整'), currency: 'CNY', exchangeRate: 7.2, creditValue: 0.01 },
-    { key: 'usd-parity', label: xt('美元 1:1'), note: xt('1 USD 按 $1；适合美元结算'), currency: 'USD', exchangeRate: 1, creditValue: 0.01 }
+    {
+      key: 'cny-parity',
+      label: xt('人民币 1:1'),
+      note: xt('1 USD 按 ¥1；适合对标数值'),
+      currency: 'CNY',
+      exchangeRate: 1,
+      creditValue: 0.01
+    },
+    {
+      key: 'cny-market',
+      label: xt('人民币市场参考'),
+      note: xt('1 USD 按 ¥7.2；部署后可手动调整'),
+      currency: 'CNY',
+      exchangeRate: 7.2,
+      creditValue: 0.01
+    },
+    {
+      key: 'usd-parity',
+      label: xt('美元 1:1'),
+      note: xt('1 USD 按 $1；适合美元结算'),
+      currency: 'USD',
+      exchangeRate: 1,
+      creditValue: 0.01
+    }
   ] as const
   const pricingMarkupPresets = [
     { label: xt('成本价 1.0x'), value: 100 },
@@ -914,53 +1104,195 @@
   const pricingUsdExchangeRate = computed({
     get: () => (settings.value?.pricingUsdExchangeRateMicros || 1_000_000) / 1_000_000,
     set: (value: number) => {
-      if (settings.value) settings.value.pricingUsdExchangeRateMicros = Math.max(1, Math.round(value * 1_000_000))
+      if (settings.value)
+        settings.value.pricingUsdExchangeRateMicros = Math.max(1, Math.round(value * 1_000_000))
     }
   })
   const creditUnitValue = computed({
     get: () => (settings.value?.creditValueMicros || 10_000) / 1_000_000,
     set: (value: number) => {
-      if (settings.value) settings.value.creditValueMicros = Math.max(1, Math.round(value * 1_000_000))
+      if (settings.value)
+        settings.value.creditValueMicros = Math.max(1, Math.round(value * 1_000_000))
     }
   })
-  const activePricingPreset = computed(() => pricingBasePresets.find((preset) =>
-    preset.currency === settings.value?.currency &&
-    Math.abs(preset.exchangeRate - pricingUsdExchangeRate.value) < 0.000001 &&
-    Math.abs(preset.creditValue - creditUnitValue.value) < 0.000001
-  )?.key || '')
+  const activePricingPreset = computed(
+    () =>
+      pricingBasePresets.find(
+        (preset) =>
+          preset.currency === settings.value?.currency &&
+          Math.abs(preset.exchangeRate - pricingUsdExchangeRate.value) < 0.000001 &&
+          Math.abs(preset.creditValue - creditUnitValue.value) < 0.000001
+      )?.key || ''
+  )
   const pricingFormulaPreview = computed(() => {
     const creditValueMicros = settings.value?.creditValueMicros || 10_000
     const exchangeRateMicros = settings.value?.pricingUsdExchangeRateMicros || 1_000_000
     const markupPercent = settings.value?.modelImportMarkupPercent || 130
-    const units = creditValueMicros > 0
-      ? Math.ceil(exchangeRateMicros * markupPercent / (creditValueMicros * 100))
-      : 0
+    const units =
+      creditValueMicros > 0
+        ? Math.ceil((exchangeRateMicros * markupPercent) / (creditValueMicros * 100))
+        : 0
     return `$1 × ${pricingUsdExchangeRate.value} × ${(markupPercent / 100).toFixed(1)} = ${units} ${xt('额度')}`
   })
-  function applyPricingBasePreset(preset: typeof pricingBasePresets[number]) {
+  function applyPricingBasePreset(preset: (typeof pricingBasePresets)[number]) {
     if (!settings.value) return
     settings.value.currency = preset.currency
     pricingUsdExchangeRate.value = preset.exchangeRate
     creditUnitValue.value = preset.creditValue
   }
   const workspaceSidebarEnabled = computed({
-    get: () =>
-      Boolean(settings.value?.sidebarProjectsEnabled || settings.value?.sidebarAssetsEnabled),
+    get: () => Boolean(settings.value && !settings.value.sidebarNav.hidden.includes('workspace')),
     set: (enabled: boolean) => {
-      if (!settings.value) return
-      settings.value.sidebarProjectsEnabled = enabled
-      settings.value.sidebarAssetsEnabled = enabled
+      syncNavHidden('sidebarNav', 'workspace', !enabled)
     }
   })
+  let navSyncing = false
+  function withNavSync(fn: () => void) {
+    if (!settings.value || navSyncing) return
+    navSyncing = true
+    try {
+      fn()
+    } finally {
+      navSyncing = false
+    }
+  }
+  function syncNavHidden(field: 'sidebarNav' | 'workspaceNav', key: string, hidden: boolean) {
+    withNavSync(() => {
+      if (!settings.value) return
+      const nav = settings.value[field]
+      const has = nav.hidden.includes(key)
+      if (hidden === has) return
+      settings.value[field] = {
+        ...nav,
+        hidden: hidden ? [...nav.hidden, key] : nav.hidden.filter((item) => item !== key)
+      }
+    })
+  }
+  watch(
+    () => settings.value?.sidebarNav.hidden,
+    (hidden) => {
+      if (!settings.value || !hidden) return
+      withNavSync(() => {
+        if (!settings.value) return
+        const set = new Set(hidden)
+        settings.value.sidebarCreationEnabled = !set.has('creation')
+        settings.value.sidebarCommerceEnabled = !set.has('commerce')
+        settings.value.sidebarOfficeEnabled = !set.has('office')
+        settings.value.sidebarPromptsEnabled = !set.has('prompts')
+        settings.value.sidebarPluginsEnabled = !set.has('plugins')
+      })
+    },
+    { flush: 'sync' }
+  )
+  watch(
+    () => settings.value?.workspaceNav.hidden,
+    (hidden) => {
+      if (!settings.value || !hidden) return
+      withNavSync(() => {
+        if (!settings.value) return
+        const set = new Set(hidden)
+        settings.value.sidebarProjectsEnabled = !set.has('projects')
+        settings.value.sidebarAssetsEnabled = !set.has('files')
+        settings.value.imagePromptEnabled = !set.has('image-prompts')
+      })
+    },
+    { flush: 'sync' }
+  )
+  watch(
+    () => settings.value?.sidebarCreationEnabled,
+    (enabled) => {
+      if (enabled !== undefined) syncNavHidden('sidebarNav', 'creation', !enabled)
+    },
+    { flush: 'sync' }
+  )
+  watch(
+    () => settings.value?.sidebarCommerceEnabled,
+    (enabled) => {
+      if (enabled !== undefined) syncNavHidden('sidebarNav', 'commerce', !enabled)
+    },
+    { flush: 'sync' }
+  )
+  watch(
+    () => settings.value?.sidebarOfficeEnabled,
+    (enabled) => {
+      if (enabled !== undefined) syncNavHidden('sidebarNav', 'office', !enabled)
+    },
+    { flush: 'sync' }
+  )
+  watch(
+    () => settings.value?.sidebarPromptsEnabled,
+    (enabled) => {
+      if (enabled !== undefined) syncNavHidden('sidebarNav', 'prompts', !enabled)
+    },
+    { flush: 'sync' }
+  )
+  watch(
+    () => settings.value?.sidebarPluginsEnabled,
+    (enabled) => {
+      if (enabled !== undefined) syncNavHidden('sidebarNav', 'plugins', !enabled)
+    },
+    { flush: 'sync' }
+  )
+  watch(
+    () => settings.value?.sidebarProjectsEnabled,
+    (enabled) => {
+      if (enabled !== undefined) syncNavHidden('workspaceNav', 'projects', !enabled)
+    },
+    { flush: 'sync' }
+  )
+  watch(
+    () => settings.value?.sidebarAssetsEnabled,
+    (enabled) => {
+      if (enabled !== undefined) syncNavHidden('workspaceNav', 'files', !enabled)
+    },
+    { flush: 'sync' }
+  )
+  watch(
+    () => settings.value?.imagePromptEnabled,
+    (enabled) => {
+      if (enabled !== undefined) syncNavHidden('workspaceNav', 'image-prompts', !enabled)
+    },
+    { flush: 'sync' }
+  )
+  watch(
+    () => settings.value?.sidebarNav.hidden,
+    (hidden) => {
+      if (!settings.value || !hidden) return
+      for (const key of hidden) {
+        const group = nestedParentKey(key) as NestedNavGroup | ''
+        if (!group) continue
+        const nav = groupPreference(group)
+        if (nav.hidden.includes(key)) continue
+        setGroupPreference(group, { ...nav, hidden: [...nav.hidden, key] })
+      }
+    },
+    { flush: 'sync' }
+  )
   const chatUiPresets = [
     { value: 'gpt', label: 'GPT', note: xt('紧凑居中') },
     { value: 'doubao', label: xt('豆包'), note: xt('推荐与双层输入') },
     { value: 'qianwen', label: xt('千问'), note: xt('能力入口布局') },
-    { value: 'kimi', label: 'Kimi', note: xt('品牌字标与任务入口') }
+    { value: 'kimi', label: 'Kimi', note: xt('品牌字标与任务入口') },
+    { value: 'jixing', label: xt('季星'), note: xt('创作广场与图文推荐') }
   ] as const
   const activePresetLabel = computed(
     () => chatUiPresets.find((item) => item.value === settings.value?.chatUiPreset)?.label || 'GPT'
   )
+  const avatarColorMode = computed({
+    get: () => {
+      const value = settings.value?.chatAvatarColor || 'auto'
+      return value === 'auto' || value === 'brand' ? value : 'custom'
+    },
+    set: (mode: string) => {
+      if (!settings.value) return
+      if (mode === 'custom') {
+        if (!settings.value.chatAvatarColor?.startsWith('#'))
+          settings.value.chatAvatarColor = '#4d6bfe'
+      } else {
+        settings.value.chatAvatarColor = mode
+      }
+    }
+  })
   const trialPlans = computed(() =>
     plans.value.filter((item) => item.enabled && item.trialDays > 0)
   )
@@ -1042,22 +1374,52 @@
       (settings.value?.hasSmtpPassword || smtpPassword.value)
     )
   )
+  function hydrateNav(loadedSettings: SystemSettings) {
+    loadedSettings.sidebarNav = alignHiddenWithFlags(
+      parseSidebarNav(loadedSettings.sidebarNav),
+      [
+        ...(loadedSettings.sidebarCreationEnabled ? [] : ['creation']),
+        ...(loadedSettings.sidebarCommerceEnabled ? [] : ['commerce']),
+        ...(loadedSettings.sidebarOfficeEnabled ? [] : ['office']),
+        ...(loadedSettings.sidebarPromptsEnabled ? [] : ['prompts']),
+        ...(loadedSettings.sidebarPluginsEnabled ? [] : ['plugins'])
+      ],
+      ['creation', 'commerce', 'office', 'prompts', 'plugins']
+    )
+    loadedSettings.workspaceNav = alignHiddenWithFlags(
+      parseSidebarNav(loadedSettings.workspaceNav),
+      [
+        ...(loadedSettings.sidebarProjectsEnabled ? [] : ['projects']),
+        ...(loadedSettings.sidebarAssetsEnabled ? [] : ['files']),
+        ...(loadedSettings.imagePromptEnabled ? [] : ['image-prompts'])
+      ],
+      ['projects', 'files', 'image-prompts']
+    )
+    loadedSettings.sectionNav = parseSectionNav(loadedSettings.sectionNav)
+    return loadedSettings
+  }
   async function load() {
-    const [loadedSettings, loadedGroups, loadedPlans, loadedModels] = await Promise.all([
-      xinyueApi.systemSettings(),
-      customerApi.groups(),
-      subscriptionApi.plans(),
-      modelApi.models()
-    ])
-    loadedSettings.chatHomeContent = normalizeChatHomeContent(loadedSettings.chatHomeContent)
-    loadedSettings.siteContent = normalizeSiteContent(loadedSettings.siteContent)
-    settings.value = loadedSettings
-    groups.value = loadedGroups
-    plans.value = loadedPlans
-    models.value = loadedModels
-    domainsText.value = settings.value.allowedEmailDomains.join('\n')
-    smtpPassword.value = ''
-    linuxSecret.value = ''
+    try {
+      await withLoading(async () => {
+        const [loadedSettings, loadedGroups, loadedPlans, loadedModels] = await Promise.all([
+          xinyueApi.systemSettings(),
+          customerApi.groups(),
+          subscriptionApi.plans(),
+          modelApi.models()
+        ])
+        loadedSettings.chatHomeContent = normalizeChatHomeContent(loadedSettings.chatHomeContent)
+        loadedSettings.siteContent = normalizeSiteContent(loadedSettings.siteContent)
+        settings.value = hydrateNav(loadedSettings)
+        groups.value = loadedGroups
+        plans.value = loadedPlans
+        models.value = loadedModels
+        domainsText.value = settings.value.allowedEmailDomains.join('\n')
+        smtpPassword.value = ''
+        linuxSecret.value = ''
+      })
+    } catch {
+      settings.value = null
+    }
   }
   function fillCallback() {
     if (settings.value)
@@ -1092,6 +1454,7 @@
       prompt: '',
       target: '',
       modelKey: '',
+      imageUrl: '',
       webSearch: false,
       enabled: true,
       sortOrder: nextOrder
@@ -1161,22 +1524,26 @@
       tab.value = 'auth'
       return ElMessage.warning(xt('启用 Linux.do 前请完整填写 Client ID、Secret 和回调地址'))
     }
-    saving.value = true
-    try {
-      settings.value = await xinyueApi.saveSystemSettings(
+    if (settings.value.smtpEnabled && !smtpReady.value) {
+      tab.value = 'email'
+      return ElMessage.warning(xt('启用邮件服务前请完整填写 SMTP 主机、发件邮箱和密码'))
+    }
+    await withSaving(async () => {
+      const saved = await xinyueApi.saveSystemSettings(
         buildSystemSettingsPayload(
-          settings.value,
+          settings.value!,
           domainsText.value,
           smtpPassword.value,
           linuxSecret.value
         )
       )
+      saved.chatHomeContent = normalizeChatHomeContent(saved.chatHomeContent)
+      saved.siteContent = normalizeSiteContent(saved.siteContent)
+      settings.value = hydrateNav(saved)
       domainsText.value = settings.value.allowedEmailDomains.join('\n')
       smtpPassword.value = ''
       linuxSecret.value = ''
-    } finally {
-      saving.value = false
-    }
+    })
   }
   onMounted(load)
   watch(tab, (value) => {

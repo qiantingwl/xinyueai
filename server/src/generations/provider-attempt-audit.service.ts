@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { ReconciliationRequiredError, TerminalSettlementError } from './generation-provider-errors'
 import { currentOutboundExecutionLease } from '../common/outbound-http'
+import { asJsonRecord } from '../common/json-record'
 
 type AttemptStartInput = {
   generationId: string
@@ -50,8 +51,8 @@ export class ProviderAttemptAuditService {
           },
           select: { id: true, status: true, metadata: true },
         })
-        const auxiliary = this.object(input.metadata).auxiliary === true
-        const unresolved = candidates.find((candidate) => this.object(candidate.metadata).auxiliary === true === auxiliary)
+        const auxiliary = asJsonRecord(input.metadata).auxiliary === true
+        const unresolved = candidates.find((candidate) => asJsonRecord(candidate.metadata).auxiliary === true === auxiliary)
         if (unresolved) {
           throw new ReconciliationRequiredError(`任务已有 ${unresolved.status} ProviderAttempt ${unresolved.id}，必须先对账`)
         }
@@ -130,9 +131,4 @@ export class ProviderAttemptAuditService {
     return new TerminalSettlementError(`ProviderAttempt ${action}记录失败：${reason}`)
   }
 
-  private object(value: unknown): Record<string, unknown> {
-    return value && typeof value === 'object' && !Array.isArray(value)
-      ? value as Record<string, unknown>
-      : {}
-  }
 }

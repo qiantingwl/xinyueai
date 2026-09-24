@@ -52,8 +52,8 @@ export class AssetsController {
 
   @Get(':id/content')
   async content(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
-    const result = await this.assets.readForUser(user.id, id)
-    return new StreamableFile(result.file, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name) })
+    const result = await this.assets.streamForUser(user.id, id)
+    return new StreamableFile(result.stream, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name), length: result.size || undefined })
   }
 
   @Delete(':id')

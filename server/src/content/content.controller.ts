@@ -6,6 +6,7 @@ import { AdminGuard } from '../admin/admin.guard'
 import { AuthGuard } from '../auth/auth.guard'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuthenticatedUser, CurrentUser } from '../common/request-user'
+import { Public } from '../auth/public.decorator'
 
 class CreateContentPageDto {
   @IsString() @MinLength(1) @MaxLength(160) title!: string
@@ -117,6 +118,7 @@ export class ContentController {
   }
 }
 
+@Public()
 @Controller('content-pages')
 export class PublicContentController {
   constructor(private readonly prisma: PrismaService) {}
@@ -128,9 +130,10 @@ export class PublicContentController {
 
   @Get(':slug')
   async detail(@Param('slug') slug: string) {
-    const page = await this.prisma.contentPage.findFirst({ where: { slug, published: true } })
+    const page = await this.prisma.contentPage.findFirst({ where: { slug, published: true }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }] })
     if (!page) throw new BadRequestException('内容不存在或尚未发布')
-    await this.prisma.contentPage.update({ where: { id: page.id }, data: { views: { increment: 1 } } })
+    // 用原生 SQL 累加浏览量，避免 Prisma update() 触发 @updatedAt 刷新导致「更新日期」随每次访问变化
+    await this.prisma.$executeRaw`UPDATE "ContentPage" SET views = views + 1 WHERE id = ${page.id}`
     return { ...page, views: page.views + 1 }
   }
 }

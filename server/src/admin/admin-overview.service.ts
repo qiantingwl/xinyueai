@@ -4,7 +4,8 @@ import { PrismaService } from '../prisma/prisma.service'
 
 type DailyCount = { day: Date; count: bigint }
 type DailyRevenue = { day: Date; revenue: bigint }
-type TrendItem = { date: string; newUsers: number; jobs: number; revenueCents: number }
+type DailyTokens = { day: Date; tokens: bigint }
+type TrendItem = { date: string; newUsers: number; jobs: number; revenueCents: number; tokens: number }
 
 @Injectable()
 export class AdminOverviewService {
@@ -38,6 +39,7 @@ export class AdminOverviewService {
       trendUsers,
       trendJobs,
       trendPayments,
+      trendTokens,
       paymentFailures,
       paidPending,
       unhealthyPaymentChannels,
@@ -94,6 +96,13 @@ export class AdminOverviewService {
         WHERE status = 'COMPLETED' AND "completedAt" >= ${trendSince}
         GROUP BY 1
       `),
+      this.prisma.$queryRaw<DailyTokens[]>(Prisma.sql`
+        SELECT date_trunc('day', "completedAt") AS day,
+               COALESCE(SUM("inputTokens" + "cachedInputTokens" + "outputTokens" + "reasoningTokens"), 0)::bigint AS tokens
+        FROM "GenerationJob"
+        WHERE "completedAt" >= ${trendSince}
+        GROUP BY 1
+      `),
       this.prisma.paymentTransaction.count({ where: { status: 'FAILED', createdAt: { gte: since } } }),
       this.prisma.paymentTransaction.count({ where: { status: 'PAID' } }),
       this.prisma.paymentChannel.count({ where: { enabled: true, lastHealthStatus: 'invalid' } }),
@@ -105,8 +114,8 @@ export class AdminOverviewService {
       })
     ])
 
-    const trend = this.createTrend(trendUsers, trendJobs, trendPayments)
-    const today = trend.at(-1) || { date: '', newUsers: 0, jobs: 0, revenueCents: 0 }
+    const trend = this.createTrend(trendUsers, trendJobs, trendPayments, trendTokens)
+    const today = trend.at(-1) || { date: '', newUsers: 0, jobs: 0, revenueCents: 0, tokens: 0 }
 
     return {
       users,
@@ -141,12 +150,12 @@ export class AdminOverviewService {
     }
   }
 
-  private createTrend(users: DailyCount[], jobs: DailyCount[], payments: DailyRevenue[]) {
+  private createTrend(users: DailyCount[], jobs: DailyCount[], payments: DailyRevenue[], tokens: DailyTokens[]) {
     const trend: TrendItem[] = Array.from({ length: 14 }, (_, offset) => {
       const date = new Date()
       date.setUTCHours(0, 0, 0, 0)
       date.setUTCDate(date.getUTCDate() - (13 - offset))
-      return { date: date.toISOString().slice(0, 10), newUsers: 0, jobs: 0, revenueCents: 0 }
+      return { date: date.toISOString().slice(0, 10), newUsers: 0, jobs: 0, revenueCents: 0, tokens: 0 }
     })
     const byDate = new Map(trend.map((item) => [item.date, item]))
     for (const row of users) {
@@ -160,6 +169,10 @@ export class AdminOverviewService {
     for (const row of payments) {
       const item = byDate.get(new Date(row.day).toISOString().slice(0, 10))
       if (item) item.revenueCents = Number(row.revenue)
+    }
+    for (const row of tokens) {
+      const item = byDate.get(new Date(row.day).toISOString().slice(0, 10))
+      if (item) item.tokens = Number(row.tokens)
     }
     return trend
   }

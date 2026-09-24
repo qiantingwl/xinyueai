@@ -204,11 +204,7 @@ export class MenuProcessor {
    * 判断是否为合法的绝对路径
    */
   private isValidAbsolutePath(path: string): boolean {
-    return (
-      path.startsWith('http://') ||
-      path.startsWith('https://') ||
-      path.startsWith('/outside/iframe/')
-    )
+    return path.startsWith('http://') || path.startsWith('https://')
   }
 
   /**

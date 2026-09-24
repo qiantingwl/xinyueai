@@ -37,10 +37,16 @@
                   ><template #default="{ row }">{{ row._count.users }}</template></ElTableColumn
                 ><ElTableColumn :label="xt('操作')" width="140"
                   ><template #default="{ row }"
-                    ><ElButton link type="primary" @click="openRole(row)">{{ xt('编辑') }}</ElButton
-                    ><ElButton v-if="!row.builtIn" link type="danger" @click="removeRole(row)">{{
-                      xt('删除')
-                    }}</ElButton></template
+                    ><ElButton link type="primary" @click="openRole(row as AdminRoleRecord)">{{
+                      xt('编辑')
+                    }}</ElButton
+                    ><ElButton
+                      v-if="!row.builtIn"
+                      link
+                      type="danger"
+                      @click="removeRole(row as AdminRoleRecord)"
+                      >{{ xt('删除') }}</ElButton
+                    ></template
                   ></ElTableColumn
                 ></ElTable
               >
@@ -99,19 +105,19 @@
                   v-if="row.status === 'REQUESTED'"
                   link
                   type="primary"
-                  @click="reviewInvoice(row)"
+                  @click="reviewInvoice(row as InvoiceRequestRecord)"
                   >{{ xt('开始审核') }}</ElButton
                 ><ElButton
                   v-if="['REQUESTED', 'REVIEWING'].includes(row.status)"
                   link
                   type="success"
-                  @click="openIssue(row)"
+                  @click="openIssue(row as InvoiceRequestRecord)"
                   >{{ xt('开具') }}</ElButton
                 ><ElButton
                   v-if="['REQUESTED', 'REVIEWING'].includes(row.status)"
                   link
                   type="danger"
-                  @click="rejectInvoice(row)"
+                  @click="rejectInvoice(row as InvoiceRequestRecord)"
                   >{{ xt('拒绝') }}</ElButton
                 ></template
               ></ElTableColumn
@@ -148,7 +154,7 @@
                   v-if="['REQUESTED', 'FAILED'].includes(row.status)"
                   link
                   type="danger"
-                  @click="processDeletion(row)"
+                  @click="processDeletion(row as AccountDeletionRecord)"
                   >{{ xt('立即处理') }}</ElButton
                 ></template
               ></ElTableColumn
@@ -185,7 +191,7 @@
                   v-if="['FAILED', 'PAYMENT_REQUIRED'].includes(row.status)"
                   link
                   type="primary"
-                  @click="retryRenewal(row)"
+                  @click="retryRenewal(row as RenewalAttemptRecord)"
                   >{{ xt('重试') }}</ElButton
                 ></template
               ></ElTableColumn
@@ -239,7 +245,7 @@
                   v-if="['REVIEW_REQUIRED', 'COOLING', 'APPROVED'].includes(row.status)"
                   link
                   type="success"
-                  @click="approveReferral(row)"
+                  @click="approveReferral(row as ReferralRecord)"
                   >{{ xt('审核通过') }}</ElButton
                 ><ElButton
                   v-if="
@@ -247,7 +253,7 @@
                   "
                   link
                   type="danger"
-                  @click="rejectReferral(row)"
+                  @click="rejectReferral(row as ReferralRecord)"
                   >{{ xt('拒绝') }}</ElButton
                 ></template
               ></ElTableColumn
@@ -281,7 +287,10 @@
         ></ElForm
       ><template #footer
         ><ElButton @click="roleDialog = false">{{ xt('取消') }}</ElButton
-        ><ElButton type="primary" @click="saveRole">{{ xt('保存') }}</ElButton></template
+        ><ElButton type="primary" :loading="saving" @click="saveRole">{{
+          xt('保存')
+        }}</ElButton></template
+      >
       ></ElDialog
     >
     <ElDialog v-model="issueDialog" :title="xt('开具发票')" width="520px"
@@ -294,7 +303,10 @@
             placeholder="https://..." /></ElFormItem></ElForm
       ><template #footer
         ><ElButton @click="issueDialog = false">{{ xt('取消') }}</ElButton
-        ><ElButton type="primary" @click="issueInvoice">{{ xt('确认开具') }}</ElButton></template
+        ><ElButton type="primary" :loading="saving" @click="issueInvoice">{{
+          xt('确认开具')
+        }}</ElButton></template
+      >
       ></ElDialog
     >
   </div>
@@ -314,8 +326,10 @@
     type RenewalAttemptRecord
   } from '@/api/xinyue/governance'
   import { xinyueText as xt } from '@/locales/xinyue'
+  import { useXinyueAsync } from '@/hooks'
+  import { formatDateTime, formatMoneyCents } from '@/utils/xinyue/formatters'
   const tab = ref('roles'),
-    loading = ref(false),
+    { loading, saving, withLoading, withSaving } = useXinyueAsync(),
     roles = ref<AdminRoleRecord[]>([]),
     permissions = ref<AdminPermission[]>([]),
     administrators = ref<AdministratorRecord[]>([]),
@@ -365,9 +379,8 @@
     REJECTED: '已拒绝',
     REVERSED: '已冲正'
   }
-  const date = (v?: string | null) => (v ? new Date(v).toLocaleString('zh-CN') : '-')
-  const money = (v: number, c = 'CNY') =>
-    new Intl.NumberFormat('zh-CN', { style: 'currency', currency: c }).format(v / 100)
+  const date = (v?: string | null) => formatDateTime(v, '-')
+  const money = (v: number, c = 'CNY') => formatMoneyCents(v, c)
   const statusType = (s: string) =>
     ['ISSUED', 'SUCCEEDED', 'COMPLETED'].includes(s)
       ? 'success'
@@ -377,8 +390,7 @@
           ? 'warning'
           : 'info'
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       ;[
         roles.value,
         permissions.value,
@@ -396,9 +408,7 @@
         xinyueApi.renewalAttempts(),
         xinyueApi.referrals()
       ])
-    } finally {
-      loading.value = false
-    }
+    })
   }
   function openRole(row?: AdminRoleRecord) {
     Object.assign(
@@ -410,50 +420,62 @@
     roleDialog.value = true
   }
   async function saveRole() {
-    await xinyueApi.saveAdminRole(
-      {
-        code: roleForm.code,
-        name: roleForm.name,
-        description: roleForm.description,
-        permissions: roleForm.permissions,
-        enabled: true
-      },
-      roleForm.id || undefined
-    )
-    roleDialog.value = false
-    await load()
+    await withSaving(async () => {
+      await xinyueApi.saveAdminRole(
+        {
+          code: roleForm.code,
+          name: roleForm.name,
+          description: roleForm.description,
+          permissions: roleForm.permissions,
+          enabled: true
+        },
+        roleForm.id || undefined
+      )
+      roleDialog.value = false
+      await load()
+    })
   }
   async function removeRole(row: AdminRoleRecord) {
     await ElMessageBox.confirm(`确认删除角色“${row.name}”？`, '删除角色', { type: 'warning' })
-    await xinyueApi.deleteAdminRole(row.id)
-    await load()
+    await withSaving(async () => {
+      await xinyueApi.deleteAdminRole(row.id)
+      await load()
+    })
   }
   async function assignRole(userId: string, value: unknown) {
-    await xinyueApi.assignAdminRole(userId, String(value) || null)
-    await load()
+    await withSaving(async () => {
+      await xinyueApi.assignAdminRole(userId, String(value) || null)
+      await load()
+    })
   }
   async function reviewInvoice(row: InvoiceRequestRecord) {
-    await xinyueApi.reviewInvoice(row.id)
-    await load()
+    await withSaving(async () => {
+      await xinyueApi.reviewInvoice(row.id)
+      await load()
+    })
   }
   function openIssue(row: InvoiceRequestRecord) {
     Object.assign(issueForm, { id: row.id, invoiceNumber: '', invoiceUrl: '' })
     issueDialog.value = true
   }
   async function issueInvoice() {
-    await xinyueApi.issueInvoice(issueForm.id, {
-      invoiceNumber: issueForm.invoiceNumber,
-      invoiceUrl: issueForm.invoiceUrl
+    await withSaving(async () => {
+      await xinyueApi.issueInvoice(issueForm.id, {
+        invoiceNumber: issueForm.invoiceNumber,
+        invoiceUrl: issueForm.invoiceUrl
+      })
+      issueDialog.value = false
+      await load()
     })
-    issueDialog.value = false
-    await load()
   }
   async function rejectInvoice(row: InvoiceRequestRecord) {
     const { value } = await ElMessageBox.prompt('请输入拒绝原因', '拒绝发票申请', {
       inputValidator: (v) => v.trim().length >= 2 || '至少填写 2 个字'
     })
-    await xinyueApi.rejectInvoice(row.id, value)
-    await load()
+    await withSaving(async () => {
+      await xinyueApi.rejectInvoice(row.id, value)
+      await load()
+    })
   }
   async function processDeletion(row: AccountDeletionRecord) {
     await ElMessageBox.confirm(
@@ -461,12 +483,16 @@
       '处理账户注销',
       { type: 'error', confirmButtonText: '确认删除' }
     )
-    await xinyueApi.processAccountDeletion(row.id)
-    await load()
+    await withSaving(async () => {
+      await xinyueApi.processAccountDeletion(row.id)
+      await load()
+    })
   }
   async function retryRenewal(row: RenewalAttemptRecord) {
-    await xinyueApi.retryRenewal(row.id)
-    await load()
+    await withSaving(async () => {
+      await xinyueApi.retryRenewal(row.id)
+      await load()
+    })
   }
   async function approveReferral(row: ReferralRecord) {
     const { value } = await ElMessageBox.confirm(
@@ -481,15 +507,19 @@
     )
       .then(() => ({ value: true }))
       .catch((action) => (action === 'cancel' ? { value: false } : Promise.reject(action)))
-    await xinyueApi.approveReferral(row.id, value)
-    await load()
+    await withSaving(async () => {
+      await xinyueApi.approveReferral(row.id, value)
+      await load()
+    })
   }
   async function rejectReferral(row: ReferralRecord) {
     const { value } = await ElMessageBox.prompt('请输入拒绝原因', '拒绝邀请奖励', {
       inputValidator: (v) => v.trim().length >= 2 || '至少填写 2 个字'
     })
-    await xinyueApi.rejectReferral(row.id, value)
-    await load()
+    await withSaving(async () => {
+      await xinyueApi.rejectReferral(row.id, value)
+      await load()
+    })
   }
   onMounted(load)
 </script>
