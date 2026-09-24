@@ -8,6 +8,7 @@
 
 <script setup lang="ts">
   import { ref, computed, watchEffect } from 'vue'
+  import { sanitizeSvg, isTrustedAssetSrc } from '@/utils/sanitize'
 
   interface Props {
     size?: string | number
@@ -57,24 +58,33 @@
     )
   }
 
+  let abortController: AbortController | null = null
+
   // 加载 SVG 文件内容
   const loadSvgContent = async () => {
-    if (!props.src) {
+    abortController?.abort()
+    if (!props.src || !isTrustedAssetSrc(props.src)) {
       svgContent.value = ''
       return
     }
 
+    const controller = new AbortController()
+    abortController = controller
+
     try {
-      const response = await fetch(props.src)
+      const response = await fetch(props.src, { signal: controller.signal })
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      const content = await response.text()
-      svgContent.value = applyThemeToSvg(content)
+      const raw = await response.text()
+      const clean = sanitizeSvg(raw)
+      svgContent.value = clean ? applyThemeToSvg(clean) : ''
     } catch (error) {
-      console.error('Failed to load SVG:', error)
-      svgContent.value = ''
+      if ((error as Error).name !== 'AbortError') {
+        console.error('Failed to load SVG:', error)
+        svgContent.value = ''
+      }
     }
   }
 

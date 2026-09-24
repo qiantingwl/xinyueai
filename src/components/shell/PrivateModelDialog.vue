@@ -4,6 +4,7 @@
 
 <script setup lang="ts">
 import { CirclePlus, Trash2, X } from 'lucide-vue-next'
+import { useEscapeClose } from '../../composables/useEscapeClose'
 import type { ApiCredential, PrivateModelEditor } from './types'
 
 const props = defineProps<{
@@ -18,6 +19,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
 }>()
+
+useEscapeClose(() => emit('close'))
 
 function addPrivateModelRoute() {
   props.editor.routes.push({ credentialId: props.apiCredentials[0]?.id || '', upstreamModel: '', enabled: true, priority: 0, weight: 100 })

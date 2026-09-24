@@ -4,13 +4,13 @@
       <header class="prompt-library-header">
         <div>
           <h1>提示词库</h1>
-          <p>{{ loading && !items.length ? `正在加载${activeTypeMeta.label}提示词` : `${total.toLocaleString('zh-CN')} 条${activeTypeMeta.label}提示词` }}</p>
+          <p>{{ headerSummary }}</p>
         </div>
         <label><Search :size="17" /><input v-model="query" :placeholder="`搜索${activeTypeMeta.label}提示词、标题或标签`" /></label>
       </header>
 
-      <nav class="prompt-library-type-tabs" :class="{ 'is-video': activeType === 'VIDEO' }" aria-label="提示词类型">
-        <button v-for="item in promptTypes" :key="item.value" type="button" :class="{ active: activeType === item.value }" :aria-pressed="activeType === item.value" @click="selectPromptType(item.value)">
+      <nav v-if="visiblePromptTypes.length > 1" class="prompt-library-type-tabs" :class="{ 'is-video': activeType === 'VIDEO' }" aria-label="提示词类型">
+        <button v-for="item in visiblePromptTypes" :key="item.value" type="button" :class="{ active: activeType === item.value }" :aria-pressed="activeType === item.value" @click="selectPromptType(item.value)">
           <span>{{ item.label }}</span><em>{{ item.description }}</em>
         </button>
       </nav>
@@ -34,7 +34,10 @@
 
         <section class="prompt-library-results" aria-live="polite" :aria-busy="loading">
           <div v-if="loading && !items.length" class="prompt-library-grid prompt-library-grid--skeleton" aria-label="正在加载提示词"><article v-for="index in 8" :key="index"><i /><span /><span /><span /></article></div>
-          <div v-else-if="!items.length" class="prompt-library-empty"><FileText :size="28" /><strong>没有找到提示词</strong><button type="button" @click="clearFilters">清除筛选</button></div>
+          <EmptyState v-else-if="!items.length" class="prompt-library-empty" :icon="FileText" :title="emptyTitle" :description="emptyDescription">
+            <RouterLink v-if="isCommunitySource" to="/works">去作品中心发布</RouterLink>
+            <button v-else type="button" @click="clearFilters">清除筛选</button>
+          </EmptyState>
           <div v-else class="prompt-library-grid" :class="`is-${activeType.toLowerCase()}`">
             <article v-for="item in items" :key="item.id" class="prompt-library-card" :class="`is-${item.promptType.toLowerCase()}`">
               <button class="prompt-library-card__open" type="button" :aria-label="`查看 ${item.title}`" @click="selected = item">
@@ -76,7 +79,11 @@
           <img v-else-if="selected.coverUrl && !brokenMedia.has(selected.id)" class="prompt-library-modal__image" :src="selected.coverUrl" :alt="selected.title" referrerpolicy="no-referrer" @error="markMediaBroken(selected.id)" />
           <section><div class="prompt-library-modal__tags"><span v-for="itemTag in selected.tags" :key="itemTag">{{ itemTag }}</span></div><p>{{ selected.prompt }}</p></section>
         </div>
-        <footer><button type="button" @click="copyPrompt(selected)"><Copy :size="15" />复制提示词</button><button class="primary" type="button" @click="usePrompt(selected)"><component :is="typeMeta(selected.promptType).icon" :size="15" />{{ typeMeta(selected.promptType).useLabel }}</button></footer>
+        <footer>
+          <RouterLink v-if="selected.sourceUrl" :to="selected.sourceUrl">查看作品</RouterLink>
+          <button type="button" @click="copyPrompt(selected)"><Copy :size="15" />复制提示词</button>
+          <button class="primary" type="button" @click="usePrompt(selected)"><component :is="typeMeta(selected.promptType).icon" :size="15" />{{ typeMeta(selected.promptType).useLabel }}</button>
+        </footer>
       </article>
     </div>
   </Teleport>
@@ -87,11 +94,16 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Check, ChevronLeft, ChevronRight, CircleAlert, Copy, FileText, Image as ImageIcon, Play, Search, Video, X } from 'lucide-vue-next'
 import { api } from '../services/api'
+import EmptyState from '../components/common/EmptyState.vue'
+import { useEscapeClose } from '../composables/useEscapeClose'
 import { useAuthStore } from '../stores/auth'
+import { useCatalogStore } from '../stores/catalog'
+import { visibleGroupTabs } from '../utils/sidebar-nav'
 import { stageCreationPrompt, type PromptTransferType } from '../utils/prompt-transfer'
+import { useCopyFeedback } from '../composables/useCopyFeedback'
 
 type PromptType = Exclude<PromptTransferType, 'TEXT'>
-type PromptItem = { id: string; sourceId: string; sourceName: string; promptType: PromptType; title: string; prompt: string; description: string; tags: string[]; author: string; imageModel: string; coverUrl: string; previewVideoUrl: string }
+type PromptItem = { id: string; sourceId: string; sourceName: string; promptType: PromptType; title: string; prompt: string; description: string; tags: string[]; author: string; imageModel: string; coverUrl: string; previewVideoUrl: string; sourceUrl?: string }
 type Source = { id: string; name: string; count: number }
 type PromptResponse = { items: PromptItem[]; total: number; page: number; pageSize: number; sources: Source[]; tags: Array<{ name: string; count: number }>; partial: boolean; promptType: PromptType }
 
@@ -103,8 +115,16 @@ const promptTypes = [
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const catalog = useCatalogStore()
 const normalizeType = (value: unknown): PromptType => String(value).toUpperCase() === 'VIDEO' ? 'VIDEO' : 'IMAGE'
 const activeType = ref<PromptType>(normalizeType(route.query.type))
+const visiblePromptTypes = computed(() => {
+  const ordered = visibleGroupTabs('prompts', catalog.settings)
+  return ordered.map((item) => {
+    const entry = promptTypes.find((row) => (item.key === 'prompt-video' ? 'VIDEO' : 'IMAGE') === row.value)
+    return entry ? { ...entry, label: item.label } : null
+  }).filter((item): item is typeof promptTypes[number] => Boolean(item))
+})
 const activeTypeMeta = computed(() => typeMeta(activeType.value))
 const pageElement = ref<HTMLElement | null>(null)
 const items = ref<PromptItem[]>([])
@@ -113,18 +133,30 @@ const tags = ref<Array<{ name: string; count: number }>>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(24)
-const query = ref('')
+const query = ref(typeof route.query.q === 'string' ? route.query.q : '')
+watch(() => route.query.q, (value) => { query.value = typeof value === 'string' ? value : '' })
 const sourceId = ref('')
 const tag = ref('')
 const loading = ref(true)
 const error = ref('')
 const selected = ref<PromptItem | null>(null)
-const copiedId = ref('')
+const { copiedKey: copiedId, copy } = useCopyFeedback()
 const brokenMedia = ref(new Set<string>())
 const sourceTotal = computed(() => sources.value.reduce((sum, source) => sum + source.count, 0))
+const selectedSource = computed(() => sources.value.find((item) => item.id === sourceId.value) || null)
+const isCommunitySource = computed(() => sourceId.value.startsWith('published-works-'))
+const headerSummary = computed(() => {
+  if (loading.value && !items.value.length) return `正在加载${activeTypeMeta.value.label}提示词`
+  const label = selectedSource.value?.name || `${activeTypeMeta.value.label}提示词`
+  return `${total.value.toLocaleString('zh-CN')} 条${label}`
+})
+const emptyTitle = computed(() => isCommunitySource.value ? '还没有社区作品提示词' : '没有找到提示词')
+const emptyDescription = computed(() => isCommunitySource.value ? '把图片或视频发布到作品广场后，生成提示词会同步到这里。' : '试试其他分类、标签或关键词。')
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 let requestSequence = 0
 let searchTimer = 0
+
+useEscapeClose(() => { selected.value = null }, { enabled: () => Boolean(selected.value) })
 
 function typeMeta(type: PromptType) { return promptTypes.find((item) => item.value === type) || promptTypes[0] }
 function cacheKey(type: PromptType) { return `xinyue:prompt-library:${type.toLowerCase()}:v3` }
@@ -155,7 +187,7 @@ async function loadPage(nextPage = 1, scroll = false) {
     const result = await api<PromptResponse>(`/prompt-library?${params}`)
     if (sequence !== requestSequence) return
     applyResult(result)
-    if (result.partial && !result.items.length) error.value = '部分提示词分类暂时不可用'
+    if (result.partial && !result.items.length && !sourceId.value.startsWith('published-works-')) error.value = '部分提示词分类暂时不可用'
     if (nextPage === 1 && !query.value.trim() && !sourceId.value && !tag.value) {
       try { sessionStorage.setItem(cacheKey(activeType.value), JSON.stringify({ savedAt: Date.now(), data: result })) } catch { /* Private browsing can disable storage. */ }
     }
@@ -188,7 +220,7 @@ function compactPrompt(prompt: string) { return prompt.replace(/\s+/g, ' ').slic
 function markMediaBroken(id: string) { brokenMedia.value = new Set(brokenMedia.value).add(id) }
 function playPreview(event: MouseEvent) { void (event.currentTarget as HTMLVideoElement).play().catch(() => undefined) }
 function pausePreview(event: MouseEvent) { const video = event.currentTarget as HTMLVideoElement; video.pause(); video.currentTime = 0 }
-async function copyPrompt(item: PromptItem) { await navigator.clipboard.writeText(item.prompt); copiedId.value = item.id; window.setTimeout(() => { if (copiedId.value === item.id) copiedId.value = '' }, 1600) }
+const copyPrompt = (item: PromptItem) => copy(item.prompt, item.id)
 async function usePrompt(item: PromptItem) {
   const transfer = { type: item.promptType, prompt: item.prompt, title: item.title, sourceName: item.sourceName }
   stageCreationPrompt(transfer)
@@ -204,5 +236,8 @@ async function usePrompt(item: PromptItem) {
 watch(query, () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(() => { void loadPage(1) }, 320) })
 watch([sourceId, tag], () => { void loadPage(1) })
 watch(() => route.query.type, (value) => { const type = normalizeType(value); if (type !== activeType.value) selectPromptType(type, false) })
+watch(visiblePromptTypes, (rows) => {
+  if (rows.length && !rows.some((item) => item.value === activeType.value)) selectPromptType(rows[0].value)
+}, { immediate: true })
 onMounted(() => { const cached = readCache(activeType.value); if (cached) applyResult(cached); void loadPage(1) })
 </script>

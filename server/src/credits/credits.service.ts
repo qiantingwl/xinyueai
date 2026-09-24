@@ -11,18 +11,37 @@ export class CreditsService {
   async mutate(userId: string, amount: number, type: LedgerType, description: string, idempotencyKey?: string, reference?: { type: string; id: string }) {
     if (!Number.isInteger(amount) || amount === 0) throw new ConflictException('无效的创作点变更')
     return this.prisma.$transaction(async (tx) => {
-      if (idempotencyKey) {
-        const existing = await tx.creditLedger.findUnique({ where: { idempotencyKey } })
-        if (existing) return existing
-      }
-      await this.assertGenerationChargeable(tx, userId, reference, undefined, type === LedgerType.REFUND)
-      const account = await tx.creditAccount.findUniqueOrThrow({ where: { userId } })
-      const next = account.balance + amount
-      if (next < 0) throw new HttpException('创作点不足', HttpStatus.PAYMENT_REQUIRED)
-      const updated = await tx.creditAccount.updateMany({ where: { id: account.id, version: account.version }, data: { balance: next, version: { increment: 1 } } })
-      if (updated.count !== 1) throw new ConflictException('创作点账户发生并发更新，请重试')
-      return tx.creditLedger.create({ data: { accountId: account.id, type, amount, balanceAfter: next, description, idempotencyKey, referenceType: reference?.type, referenceId: reference?.id } })
+      return this.mutateInTransaction(tx, userId, amount, type, description, idempotencyKey, reference)
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  }
+
+  /**
+   * The body of {@link mutate}, callable from an existing serializable
+   * transaction so a caller can bind the grant to its own atomic gate (for
+   * example a redemption code's use counter) instead of crediting first and
+   * hoping the follow-up write lands.
+   */
+  async mutateInTransaction(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    amount: number,
+    type: LedgerType,
+    description: string,
+    idempotencyKey?: string,
+    reference?: { type: string; id: string },
+  ) {
+    if (!Number.isInteger(amount) || amount === 0) throw new ConflictException('无效的创作点变更')
+    if (idempotencyKey) {
+      const existing = await tx.creditLedger.findUnique({ where: { idempotencyKey } })
+      if (existing) return existing
+    }
+    await this.assertGenerationChargeable(tx, userId, reference, undefined, type === LedgerType.REFUND)
+    const account = await tx.creditAccount.findUniqueOrThrow({ where: { userId } })
+    const next = account.balance + amount
+    if (next < 0) throw new HttpException('创作点不足', HttpStatus.PAYMENT_REQUIRED)
+    const updated = await tx.creditAccount.updateMany({ where: { id: account.id, version: account.version }, data: { balance: next, version: { increment: 1 } } })
+    if (updated.count !== 1) throw new ConflictException('创作点账户发生并发更新，请重试')
+    return tx.creditLedger.create({ data: { accountId: account.id, type, amount, balanceAfter: next, description, idempotencyKey, referenceType: reference?.type, referenceId: reference?.id } })
   }
 
   /**

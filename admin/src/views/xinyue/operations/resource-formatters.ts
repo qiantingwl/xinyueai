@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/xinyue/formatters'
 import type { ResourceRow } from './resource-types'
 
 type Translate = (value: string) => string
@@ -90,11 +91,9 @@ export function createResourceFormatters(translate: Translate, locale: () => str
   }
 
   function formatDate(value: unknown) {
-    if (!value) return '-'
-    const date = new Date(String(value))
-    return Number.isNaN(date.getTime())
-      ? String(value)
-      : new Intl.DateTimeFormat(locale(), { dateStyle: 'medium', timeStyle: 'short' }).format(date)
+    if (value instanceof Date) return formatDateTime(value, '-')
+    if (typeof value === 'string' || typeof value === 'number') return formatDateTime(value, '-')
+    return value ? formatDateTime(String(value), '-') : '-'
   }
 
   function formatBytes(value: number) {

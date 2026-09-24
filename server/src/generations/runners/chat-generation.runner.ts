@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common'
-import { GenerationJob, PluginCapability, Prisma, TokenLedgerType, TokenSettlementStatus, TokenUsageSource } from '@prisma/client'
+import { GenerationJob, Prisma, TokenLedgerType, TokenSettlementStatus, TokenUsageSource } from '@prisma/client'
 import { AssetsService } from '../../assets/assets.service'
+import { OFFICE_TEXT_MAX_BYTES, OfficeTextService } from '../../assets/office-text.service'
+import { followUpSuggestions } from '../follow-up-suggestions'
 import { WebSearchService } from '../../agent-tasks/web-search.service'
 import { AgentToolsService, type AgentToolDescriptor } from '../../agent-tasks/agent-tools.service'
 import { BillingTransactionsService } from '../../credits/billing-transactions.service'
@@ -9,7 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service'
 import { ProvidersService, ResolvedProvider } from '../../providers/providers.service'
 import { GenerationJobCancelledError, GenerationRunner } from '../generation-runners'
 import { ChatUsage, mergeChatUsage, normalizeChatUsage } from '../chat-usage'
-import { anthropicMessageContent, chatJsonResult, chatStreamChunk, consumeTaggedReasoning, geminiMessageParts, reasoningText, type ChatProviderContent, type ChatStreamResult } from '../chat-response-parser'
+import { anthropicMessageContent, chatJsonResult, chatStreamChunk, consumeTaggedReasoning, geminiMessageParts, reasoningText, stripLeakedModeInstruction, type ChatProviderContent, type ChatStreamResult } from '../chat-response-parser'
 import { ProviderRequestError, ReconciliationRequiredError, TerminalSettlementError } from '../generation-provider-errors'
 import { PricingResolverService, type PricingSnapshot } from '../../billing/pricing-resolver.service'
 import { TokenizerService } from '../../billing/tokenizer.service'
@@ -17,9 +19,11 @@ import { TokenQuotaService } from '../../billing/token-quota.service'
 import { GenerationEventsService } from '../generation-events.service'
 import { ChatContextService } from '../chat-context.service'
 import { ToolLoopRunner } from '../tool-loop.runner'
-import { calculateChatTokenSettlement, parseChatBillingOptions, type ChatBillingOptions } from '../chat-billing'
+import { calculateChatTokenSettlement, parseChatBillingOptions, parseQuotaReservationRefs, type ChatBillingOptions } from '../chat-billing'
 import { fetchNoRedirect, fetchPublicNoRedirect } from '../../common/outbound-http'
+import { canFailoverHttpStatus, postProviderForm, postProviderJson, providerFetch } from '../provider-request.client'
 import { ProviderAttemptAuditService } from '../provider-attempt-audit.service'
+import { pluginInstructionForTask } from '../plugin-prompt'
 
 const officeSkillPrompts: Record<string, string> = {
   daily: '你是专业办公助理。输出应清晰、可直接使用，并使用标题、清单或表格组织内容。',
@@ -37,30 +41,6 @@ const officeSkillPrompts: Record<string, string> = {
 }
 const textAttachmentExtensions = new Set(['.txt', '.md', '.markdown', '.csv', '.json', '.xml', '.html', '.css', '.js', '.jsx', '.ts', '.tsx', '.py', '.java', '.go', '.rs', '.sql', '.log'])
 
-function followUpSuggestions(prompt: string, answer: string) {
-  const normalizeQuestion = (value: string) => value.toLowerCase().replace(/[\s，。！？,.!?；;：:“”"'‘’]/g, '')
-  const currentQuestion = normalizeQuestion(prompt)
-  const candidates: string[] = []
-  const add = (value: string) => {
-    const suggestion = value.replace(/^[：:、，,\s]+|[。；;，,\s]+$/g, '').trim()
-    if (!suggestion || suggestion.length < 4 || suggestion.length > 70) return
-    const question = /[？?]$/.test(suggestion) || /^(请|帮我)/.test(suggestion) ? suggestion : `${suggestion}？`
-    if (normalizeQuestion(question) !== currentQuestion) candidates.push(question)
-  }
-  for (const match of answer.matchAll(/[（(](?:比如|例如|如)[：:\s]*([^）)\n]{4,140})[）)]/g)) {
-    if (!/(?:怎么|如何|为什么|哪些|什么|哪种|是否|能否|可以)/.test(match[1])) continue
-    match[1].split(/[、；;]|，(?=(?:怎么|如何|为什么|哪些|什么|哪种|是否|能否|可以))/).forEach(add)
-  }
-  if (/步骤|阶段|执行|落地|排期|里程碑/.test(answer)) add('请把这些步骤整理成可执行的项目计划')
-  if (/风险|限制|隐患|注意事项/.test(answer)) add('这些风险分别应该如何规避？')
-  if (/对比|区别|优缺点|差异/.test(answer)) add('请把回答中提到的关键差异整理成对比表')
-  if (/```[\s\S]*?```/.test(answer)) {
-    add('请补充这段代码的测试用例')
-    add('这段代码有哪些边界情况？')
-  }
-  if (/数据|指标|统计|报表/.test(answer)) add('回答中提到的哪些指标最值得优先跟踪？')
-  return [...new Set(candidates)].slice(0, 3)
-}
 type ProviderPayload = {
   [key: string]: unknown
   choices?: Array<{ message?: { content?: unknown } }>
@@ -125,6 +105,7 @@ export class ChatGenerationRunner implements GenerationRunner {
     private readonly toolLoop: ToolLoopRunner,
     private readonly agentTools: AgentToolsService,
     private readonly attemptAudit: ProviderAttemptAuditService,
+    private readonly officeText: OfficeTextService,
   ) {}
 
   run(task: GenerationJob) {
@@ -134,34 +115,38 @@ export class ChatGenerationRunner implements GenerationRunner {
       : this.runChat(task)
   }
 
-  private async provider(resolved: ResolvedProvider, path: string, body: unknown, timeoutMs = resolved.timeoutMs) {
-    if (!resolved.apiKey) throw new ProviderRequestError('AI provider is not configured')
-    let response: Response
-    try {
-      response = await this.providerFetch(resolved, `${resolved.baseUrl}${path}`, { method: 'POST', headers: this.providers.buildRequestHeaders(resolved), body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) })
-    } catch (error) {
-      throw new ProviderRequestError(error instanceof Error ? error.message : 'Provider network request failed')
-    }
-    if (!response.ok) throw new ProviderRequestError(`Provider returned ${response.status}: ${(await response.text()).slice(0, 500)}`, response.status)
-    return response.json() as Promise<ProviderPayload>
+  private provider(resolved: ResolvedProvider, path: string, body: unknown, timeoutMs = resolved.timeoutMs) {
+    return postProviderJson<ProviderPayload>(resolved, path, body, this.providers.buildRequestHeaders(resolved), ProviderRequestError, timeoutMs)
   }
 
   private async providerChatStream(resolved: ResolvedProvider, messages: ChatProviderMessage[], maxTokens: number, onDelta: (delta: string, reasoningDelta?: string) => Promise<void>): Promise<ChatStreamResult> {
     if (!resolved.apiKey) throw new ProviderRequestError('AI provider is not configured')
+    // 思考模型的推理 token 也占 max_tokens：预算太小（如检索规划的 220）会全部耗在思考上、
+    // 正文为空而被判成空响应。开启思考时给一个保底预算。
+    if (!this.thinkingDisabled(resolved) && /deepseek.*(?:r1|reason)|qwq|qwen.*think|kimi.*think|grok|claude-(?:3[.-]7|(?:opus|sonnet|haiku)[.-]4)|gemini-(?:2.5|3)|^(?:gpt-5(?:[.-]|$)|o[134](?:[.-]|$))|reasoning/i.test(resolved.model)) maxTokens = Math.max(maxTokens, 2048)
     const system = messages.filter((message) => message.role === 'system').map((message) => typeof message.content === 'string' ? message.content : message.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')).join('\n\n')
     const conversation = messages.filter((message) => message.role !== 'system')
     let path = '/chat/completions'
     let protocol: 'openai' | 'claude' | 'gemini' = 'openai'
     const reasoningOptions = this.reasoningRequestOptions(resolved)
     let body: Record<string, unknown> = { model: resolved.model, messages, max_tokens: maxTokens, stream: true, stream_options: { include_usage: true }, ...reasoningOptions }
+    // 部分中转渠道会拒绝可选的思考参数：准备一份去掉这些参数的回退请求体，4xx 时重试
+    let fallbackBody: Record<string, unknown> | null = Object.keys(reasoningOptions).length
+      ? Object.fromEntries(Object.entries(body).filter(([key]) => !(key in reasoningOptions)))
+      : null
     if (resolved.apiProtocol === 'anthropic') {
       protocol = 'claude'
       path = '/messages'
-      body = { model: resolved.model, max_tokens: maxTokens, stream: true, ...(system ? { system } : {}), messages: conversation.map((message) => ({ role: message.role === 'assistant' ? 'assistant' : 'user', content: anthropicMessageContent(message.content) })) }
+      const baseBody: Record<string, unknown> = { model: resolved.model, max_tokens: maxTokens, stream: true, ...(system ? { system } : {}), messages: conversation.map((message) => ({ role: message.role === 'assistant' ? 'assistant' : 'user', content: anthropicMessageContent(message.content) })) }
+      const thinking = this.anthropicThinkingOptions(resolved, maxTokens)
+      body = { ...baseBody, ...thinking }
+      fallbackBody = Object.keys(thinking).length ? baseBody : null
     } else if (resolved.apiProtocol === 'gemini') {
       protocol = 'gemini'
       path = `/models/${encodeURIComponent(resolved.model)}:streamGenerateContent?alt=sse`
-      body = { ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents: conversation.map((message) => ({ role: message.role === 'assistant' ? 'model' : 'user', parts: geminiMessageParts(message.content) })), generationConfig: { maxOutputTokens: maxTokens } }
+      const generationConfig: Record<string, unknown> = { maxOutputTokens: maxTokens, ...this.geminiThinkingOptions(resolved, maxTokens) }
+      body = { ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents: conversation.map((message) => ({ role: message.role === 'assistant' ? 'model' : 'user', parts: geminiMessageParts(message.content) })), generationConfig }
+      fallbackBody = 'thinkingConfig' in generationConfig ? { ...body, generationConfig: { maxOutputTokens: maxTokens } } : null
     }
 
     let response: Response
@@ -170,17 +155,20 @@ export class ChatGenerationRunner implements GenerationRunner {
     } catch (error) {
       throw new ProviderRequestError(error instanceof Error ? error.message : 'Provider network request failed')
     }
-    if (!response.ok && protocol === 'openai' && Object.keys(reasoningOptions).length) {
-      // Some OpenAI-compatible relays reject optional reasoning parameters. Retry
-      // the same request without them so a configured model still produces an answer.
+    if (!response.ok && fallbackBody) {
+      // Some relays reject optional reasoning/thinking parameters. Retry the same
+      // request without them so a configured model still produces an answer.
       const errorText = await response.text()
       if (response.status >= 400 && response.status < 500) {
-        response = await this.providerFetch(resolved, `${resolved.baseUrl}${path}`, { method: 'POST', headers: this.providers.buildRequestHeaders(resolved, protocol), body: JSON.stringify(Object.fromEntries(Object.entries(body).filter(([key]) => !(key in reasoningOptions)))), signal: AbortSignal.timeout(resolved.timeoutMs) })
+        response = await this.providerFetch(resolved, `${resolved.baseUrl}${path}`, { method: 'POST', headers: this.providers.buildRequestHeaders(resolved, protocol), body: JSON.stringify(fallbackBody), signal: AbortSignal.timeout(resolved.timeoutMs) })
       } else {
-        throw new ProviderRequestError(`Provider returned ${response.status}: ${errorText.slice(0, 500)}`, response.status)
+        throw new ProviderRequestError(`Provider returned ${response.status}`, response.status)
       }
     }
-    if (!response.ok) throw new ProviderRequestError(`Provider returned ${response.status}: ${(await response.text()).slice(0, 500)}`, response.status)
+    if (!response.ok) {
+      await response.text().catch(() => '')
+      throw new ProviderRequestError(`Provider returned ${response.status}`, response.status)
+    }
 
     const contentType = response.headers.get('content-type') || ''
     const headerRequestId = response.headers.get('x-request-id') || response.headers.get('request-id') || undefined
@@ -274,49 +262,45 @@ export class ChatGenerationRunner implements GenerationRunner {
     }
   }
 
+  private thinkingDisabled(resolved: ResolvedProvider): boolean {
+    const options = resolved.options || {}
+    const nested = options.reasoning && typeof options.reasoning === 'object' && !Array.isArray(options.reasoning) ? options.reasoning as Record<string, unknown> : {}
+    return (options.reasoning_effort ?? options.reasoningEffort ?? nested.reasoning_effort ?? nested.effort) === false
+      || (options.enable_thinking ?? options.enableThinking ?? nested.enable_thinking) === false
+  }
+
+  // Claude 3.7 / 4 系列默认不开扩展思考：需要显式 thinking 参数才会返回 thinking_delta。
+  // budget_tokens 必须小于 max_tokens 且至少 1024，所以输出预算小的辅助调用（标题/追问）不开思考。
+  private anthropicThinkingOptions(resolved: ResolvedProvider, maxTokens: number): Record<string, unknown> {
+    if (maxTokens < 2048 || this.thinkingDisabled(resolved)) return {}
+    if (!/claude-(?:3[.-]7|(?:opus|sonnet|haiku)[.-]4)/i.test(resolved.model)) return {}
+    return { thinking: { type: 'enabled', budget_tokens: Math.max(1024, Math.min(8000, Math.floor(maxTokens / 2))) } }
+  }
+
+  // Gemini 2.5+ 默认在内部思考但不返回内容，includeThoughts 才会带回 thought parts。
+  private geminiThinkingOptions(resolved: ResolvedProvider, maxTokens: number): Record<string, unknown> {
+    if (maxTokens < 2048 || this.thinkingDisabled(resolved)) return {}
+    if (!/gemini-(?:2.5|3)/i.test(resolved.model)) return {}
+    return { thinkingConfig: { includeThoughts: true } }
+  }
+
   private reasoningRequestOptions(resolved: ResolvedProvider): Record<string, unknown> {
     const options = resolved.options || {}
     const nested = options.reasoning && typeof options.reasoning === 'object' && !Array.isArray(options.reasoning) ? options.reasoning as Record<string, unknown> : {}
     const configuredEffort = options.reasoning_effort ?? options.reasoningEffort ?? nested.reasoning_effort ?? nested.effort
     const configuredThinking = options.enable_thinking ?? options.enableThinking ?? nested.enable_thinking
-    if (configuredEffort === false || configuredThinking === false) return {}
+    if (this.thinkingDisabled(resolved)) return {}
     const model = resolved.model.toLowerCase()
     const isOpenAiReasoning = /^(gpt-5(?:[.-]|$)|o[134](?:[.-]|$))/.test(model) || model.includes('reasoning')
+    const isGrok = /grok/.test(model)
     const isThinkingModel = /deepseek.*(r1|reason)|qwq|qwen.*think|kimi.*think/.test(model)
-    if (typeof configuredEffort === 'string' && configuredEffort.trim()) return { reasoning_effort: configuredEffort.trim() }
+    if (typeof configuredEffort === 'string' && configuredEffort.trim()) {
+      return isGrok ? { reasoning_effort: configuredEffort.trim(), include_reasoning: true } : { reasoning_effort: configuredEffort.trim() }
+    }
+    if (isGrok) return { include_reasoning: true, reasoning_effort: 'medium' }
     if (isOpenAiReasoning) return { reasoning_effort: 'medium' }
-    if (configuredThinking === true || isThinkingModel) return { enable_thinking: true }
+    if (configuredThinking === true || isThinkingModel) return { enable_thinking: true, include_reasoning: true }
     return {}
-  }
-
-  private async modelFollowUpSuggestions(resolved: ResolvedProvider, prompt: string, answer: string) {
-    const answerContext = answer.length > 10_000 ? `${answer.slice(0, 5_000)}\n\n[中间内容已省略]\n\n${answer.slice(-5_000)}` : answer
-    const result = await this.providerChatStream(resolved, [
-      {
-        role: 'system',
-        content: [
-          '你是对话后续问题生成器。根据用户问题和助手回答，生成 0 到 3 条用户最可能继续追问的问题。',
-          '每条问题必须直接基于回答中已经出现的主题、概念或尚可展开的内容，不得引入回答之外的新事实。',
-          '不要重复用户原问题，不要询问回答已经完整解决的内容，不要使用“围绕上述内容”之类空泛表达。',
-          '问题应自然、具体、简短，保持用户当前使用的语言，每条通常不超过 30 个字。',
-          '只输出严格 JSON 字符串数组，例如：["问题一？","问题二？"]；没有可靠问题时输出 []。',
-        ].join('\n'),
-      },
-      { role: 'user', content: `用户问题：\n${prompt.slice(0, 2_000)}\n\n助手回答：\n${answerContext}` },
-    ], 180, async () => undefined)
-    const fenced = result.content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
-    const start = fenced.indexOf('[')
-    const end = fenced.lastIndexOf(']')
-    if (start < 0 || end <= start) throw new Error('Follow-up model returned invalid JSON')
-    const parsed = JSON.parse(fenced.slice(start, end + 1)) as unknown
-    if (!Array.isArray(parsed)) throw new Error('Follow-up model returned a non-array value')
-    const currentQuestion = prompt.toLowerCase().replace(/[\s，。！？,.!?；;：:“”"'‘’]/g, '')
-    const suggestions = [...new Set(parsed
-      .filter((item): item is string => typeof item === 'string')
-      .map((item) => item.replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '').trim())
-      .filter((item) => item.length >= 4 && item.length <= 80 && item.toLowerCase().replace(/[\s，。！？,.!?；;：:“”"'‘’]/g, '') !== currentQuestion))]
-      .slice(0, 3)
-    return { suggestions, usage: result.usage }
   }
 
   private localWebSearchQueries(prompt: string) {
@@ -620,11 +604,7 @@ export class ChatGenerationRunner implements GenerationRunner {
     }
     let reservedUnits = 0n
     if (billing.quotaEnabled === true && reservationEstimate) {
-      const reservations = Array.isArray(billing.quotaReservations)
-        ? billing.quotaReservations.flatMap((row) => row && typeof row.quotaId === 'string'
-          ? [{ reservationId: typeof row.reservationId === 'string' ? row.reservationId : undefined, quotaId: row.quotaId }]
-          : [])
-        : billing.quotaId ? [{ reservationId: undefined, quotaId: billing.quotaId }] : []
+      const reservations = parseQuotaReservationRefs(billing)
       reservedUnits = this.pricing.chargedUnits(pricingSnapshot, reservationEstimate)
       if (!reservations.length) {
         await this.markProviderAttemptFailed(task.id, providerAttempt.id, 'PREAUTH_MISSING', 'Auxiliary reservation is missing')
@@ -1007,7 +987,10 @@ export class ChatGenerationRunner implements GenerationRunner {
     let response: Response
     try { response = await this.providerFetch(resolved, `${resolved.baseUrl}${path}`, { method: 'POST', headers: this.providers.buildRequestHeaders(resolved, protocol), body: JSON.stringify(body), signal: signal || AbortSignal.timeout(resolved.timeoutMs) }) }
     catch (error) { throw new ProviderRequestError(error instanceof Error ? error.message : 'Agent planning request failed') }
-    if (!response.ok) throw new ProviderRequestError(`Provider returned ${response.status}: ${(await response.text()).slice(0, 500)}`, response.status)
+    if (!response.ok) {
+      await response.text().catch(() => '')
+      throw new ProviderRequestError(`Provider returned ${response.status}`, response.status)
+    }
     const payload = await response.json() as Record<string, unknown>
     const providerRequestId = [
       response.headers.get('x-request-id'),
@@ -1083,28 +1066,16 @@ export class ChatGenerationRunner implements GenerationRunner {
     return results
   }
 
-  private async providerForm(resolved: ResolvedProvider, path: string, form: FormData) {
-    if (!resolved.apiKey) throw new ProviderRequestError('AI provider is not configured')
-    let response: Response
-    try {
-      response = await this.providerFetch(resolved, `${resolved.baseUrl}${path}`, { method: 'POST', headers: this.providers.buildRequestHeaders(resolved, 'openai', undefined), body: form, signal: AbortSignal.timeout(resolved.timeoutMs) })
-    } catch (error) {
-      throw new ProviderRequestError(error instanceof Error ? error.message : 'Provider network request failed')
-    }
-    if (!response.ok) throw new ProviderRequestError(`Provider returned ${response.status}: ${(await response.text()).slice(0, 500)}`, response.status)
-    return response.json() as Promise<ProviderPayload>
+  private providerForm(resolved: ResolvedProvider, path: string, form: FormData) {
+    return postProviderForm<ProviderPayload>(resolved, path, form, this.providers.buildRequestHeaders(resolved, 'openai', undefined), ProviderRequestError)
   }
 
   private providerFetch(resolved: ResolvedProvider, input: string | URL, init: RequestInit) {
-    return resolved.type === 'LOCAL_WORKER'
-      ? fetchNoRedirect(input, init)
-      : fetchPublicNoRedirect(input, init)
+    return providerFetch(resolved, input, init)
   }
 
   private canFailover(error: unknown) {
-    if (!(error instanceof ProviderRequestError)) return false
-    if (error.status === undefined) return true
-    return [401, 403, 404, 408, 409, 425, 429].includes(error.status) || error.status >= 500
+    return canFailoverHttpStatus(error, (value): value is ProviderRequestError => value instanceof ProviderRequestError)
   }
 
   private async withProviderFailover<T>(task: GenerationJob, capability: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE', execute: (provider: ResolvedProvider) => Promise<T>) {
@@ -1300,17 +1271,11 @@ export class ChatGenerationRunner implements GenerationRunner {
     }
     const provider = `${resolved.source}:${resolved.type}`
     const snapshot = this.pricing.snapshot({ ...(task.pricingSnapshot && typeof task.pricingSnapshot === 'object' && !Array.isArray(task.pricingSnapshot) ? task.pricingSnapshot as Record<string, unknown> : {}), model: resolved.model, provider, inputRate: userBilled ? resolved.inputCreditsPerMillion : 0, outputRate: userBilled ? resolved.outputCreditsPerMillion : 0, baseInputRate: resolved.baseInputCreditsPerMillion, baseOutputRate: resolved.baseOutputCreditsPerMillion, groupRatePercent: resolved.creditRatePercent, billingSource: billing.billingSource, overageRatePercent: billing.overageRatePercent, creditValueMicros: resolved.creditValueMicros, pricingUsdExchangeRateMicros: resolved.pricingUsdExchangeRateMicros, inputCostMicrosPerMillion: resolved.inputCostMicrosPerMillion, outputCostMicrosPerMillion: resolved.outputCostMicrosPerMillion })
-    const quotaRows = Array.isArray(billing.quotaReservations) && billing.quotaReservations.length
-      ? billing.quotaReservations
-      : billing.quotaId ? [{ reservationId: undefined, quotaId: billing.quotaId, reservedUnits: billing.reservedTokenCredits || 0 }] : []
-    const quotaReservationRefs = quotaRows.flatMap((row) => row && typeof row.quotaId === 'string'
-      ? [{ reservationId: typeof row.reservationId === 'string' ? row.reservationId : undefined, quotaId: row.quotaId }]
-      : [])
+    const quotaReservationRefs = parseQuotaReservationRefs(billing, { fallbackOnEmptyList: true })
     const incrementalReservedUnits = Math.max(0, actualTokenCredits - reservedTokenUnits)
     const quotaSettlements: Array<Parameters<TokenQuotaService['settleMany']>[0][number]> = []
-    if (quotaEnabled) for (const row of quotaRows) {
-      if (!row || typeof row.quotaId !== 'string') continue
-      quotaSettlements.push({ userId: task.userId, reservationId: typeof row.reservationId === 'string' ? row.reservationId : undefined, quotaId: row.quotaId, generationId: task.id, chargedUnits: BigInt(Math.max(0, Math.trunc(actualTokenCredits))), inputTokens, outputTokens, cachedInputTokens, reasoningTokens, metadata: { model: resolved.model, scope: row.quotaId === billing.quotaId ? 'monthly' : 'daily' } as Prisma.InputJsonValue })
+    if (quotaEnabled) for (const row of quotaReservationRefs) {
+      quotaSettlements.push({ userId: task.userId, reservationId: row.reservationId, quotaId: row.quotaId, generationId: task.id, chargedUnits: BigInt(Math.max(0, Math.trunc(actualTokenCredits))), inputTokens, outputTokens, cachedInputTokens, reasoningTokens, metadata: { model: resolved.model, scope: row.quotaId === billing.quotaId ? 'monthly' : 'daily' } as Prisma.InputJsonValue })
     }
     try {
       if (quotaEnabled && !quotaReservationRefs.length) throw new Error('Token 计费预留不存在')
@@ -1372,13 +1337,18 @@ export class ChatGenerationRunner implements GenerationRunner {
     const projectSkillPrompt = projectSkill && typeof projectSkill.content === 'string' && projectSkill.content.trim()
       ? `当前项目启用了技能“${String(projectSkill.name || '项目技能')}”（v${Number(projectSkill.version || 1)}）。请持续遵守以下项目级规范：\n${projectSkill.content.trim()}`
       : ''
-    const pluginPrompt = await this.pluginInstruction(task, officeSkill ? PluginCapability.OFFICE : PluginCapability.CHAT)
+    const pluginPrompt = await pluginInstructionForTask(this.prisma, task)
     const executionMode = officeMode || responseMode
+    // 「快速」是默认对话档，不再额外塞系统提示。旧文案「给出最终结果」会被模型抄成正文里的「## 最终结果」。
     const executionDepth = executionMode === 'agent'
       ? '你正在执行办公任务模式。围绕用户最终目标自主组织步骤，充分使用已授权资料与工具，校验关键结论，最后直接交付完整成品内容；不要把工作重新推给用户。'
-      : executionMode === 'expert' ? '先分析任务约束与缺失信息，再给出完整、专业、可复用的结果。不要省略关键推理依据、限制条件和执行建议。' : executionMode === 'fast' ? '直接给出简洁、可用的最终结果，避免不必要的展开。' : ''
+      : executionMode === 'expert' ? '先分析任务约束与缺失信息，再给出完整、专业、可复用的结果。不要省略关键推理依据、限制条件和执行建议。' : ''
     const systemParts = [assistant?.systemPrompt?.trim(), projectInstructions ? `项目默认指令：\n${projectInstructions}` : '', projectSkillPrompt, pluginPrompt, officePrompt, executionDepth, knowledgeContext ? `以下是已授权知识库上下文，仅在相关时参考，不要臆造：\n${knowledgeContext}` : '', attachmentContext].filter(Boolean)
-    const providerMessages = systemParts.length ? [{ role: 'system', content: systemParts.join('\n\n') }, ...messages.map((message) => ({ role: message.role.toLowerCase(), content: message.content }))] : messages.map((message) => ({ role: message.role.toLowerCase(), content: message.content }))
+    const historyMessages = messages.map((message) => ({
+      role: message.role.toLowerCase(),
+      content: message.role === 'ASSISTANT' ? stripLeakedModeInstruction(message.content) : message.content,
+    }))
+    const providerMessages = systemParts.length ? [{ role: 'system', content: systemParts.join('\n\n') }, ...historyMessages] : historyMessages
     const availableAgentTools = assistantId
       ? await this.agentTools.available({ id: task.id, userId: task.userId, assistantId, projectId: task.projectId, webSearchEnabled: false })
       : []
@@ -1395,6 +1365,9 @@ export class ChatGenerationRunner implements GenerationRunner {
     const streamMessage = await this.attemptAudit.withActiveLease(task.id, (tx) => persistedResult
       ? tx.message.update({ where: { id: persistedResult.id }, data: { content: '', metadata: { jobId: task.id, streaming: true, reasoning: '', ...(initialWebSearch ? { webSearch: initialWebSearch } : {}) } }, select: { id: true } })
       : tx.message.create({ data: { conversationId: conversation.id, role: 'ASSISTANT', content: '', model: task.model, parentId: streamParentId, branchIndex: streamBranchIndex, metadata: { jobId: task.id, streaming: true, reasoning: '', ...(initialWebSearch ? { webSearch: initialWebSearch } : {}) } }, select: { id: true } }))
+    // SSE clients append text deltas, so live events are cut from the append-only raw buffer;
+    // the persisted copy is the cleaned text, which may shrink when a leaked instruction is stripped.
+    let rawStreamedContent = ''
     let streamedContent = ''
     let streamedReasoning = ''
     let lastFlushAt = 0
@@ -1406,11 +1379,11 @@ export class ChatGenerationRunner implements GenerationRunner {
       if (!force && now - lastFlushAt < 80) return
       lastFlushAt = now
       if (force || now - lastEventAt >= 250) {
-        const textDelta = streamedContent.slice(emittedContentLength)
+        const textDelta = rawStreamedContent.slice(emittedContentLength)
         const reasoningDelta = streamedReasoning.slice(emittedReasoningLength)
         if (textDelta || reasoningDelta) {
           lastEventAt = now
-          emittedContentLength = streamedContent.length
+          emittedContentLength = rawStreamedContent.length
           emittedReasoningLength = streamedReasoning.length
           void this.generationEvents.append(task.id, reasoningDelta && !textDelta ? 'thinking_delta' : 'text_delta', { textDelta, reasoningDelta }).catch(() => undefined)
         }
@@ -1430,6 +1403,7 @@ export class ChatGenerationRunner implements GenerationRunner {
       if (!auxiliaryTraces.some((item) => item.providerAttemptId === trace.providerAttemptId)) auxiliaryTraces.push(trace)
     }
     const execution = await this.withProviderFailover(task, 'CHAT', async (resolved) => {
+      rawStreamedContent = ''
       streamedContent = ''
       streamedReasoning = ''
       await flushStream(true)
@@ -1498,7 +1472,8 @@ export class ChatGenerationRunner implements GenerationRunner {
       const runtimeContext = [candidateSearchMetadata ? this.webSearchContext(candidateSearchMetadata) : '', candidateAgentContext].filter(Boolean).join('\n\n')
       const executionMessages = runtimeContext ? [{ role: 'system', content: runtimeContext }, ...providerMessages] : providerMessages
       const response = await this.providerChatStream(resolved, executionMessages, maxOutputTokens, async (delta, reasoningDelta = '') => {
-        streamedContent += delta
+        rawStreamedContent += delta
+        streamedContent = stripLeakedModeInstruction(rawStreamedContent)
         streamedReasoning += reasoningDelta
         await flushStream()
         await this.assertNotCancelled(task.id)
@@ -1512,7 +1487,7 @@ export class ChatGenerationRunner implements GenerationRunner {
     // contain the same visible tail.
     await flushStream(true)
     searchMetadata = execution.result.searchMetadata
-    content = this.validateSearchCitations(execution.result.response.content, searchMetadata)
+    content = stripLeakedModeInstruction(this.validateSearchCitations(execution.result.response.content, searchMetadata))
     const reasoning = execution.result.response.reasoning || streamedReasoning
     const primaryUsage = this.completeUsage(
       execution.result.response.usage,
@@ -1621,7 +1596,7 @@ export class ChatGenerationRunner implements GenerationRunner {
       if (attemptUpdated.count !== 1) throw new Error('ProviderAttempt usage state changed concurrently')
       const active = await tx.generationJob.updateMany({ where: { id: task.id, status: 'RUNNING' }, data: { inputTokens, outputTokens, cachedInputTokens, reasoningTokens, upstreamCostMicros, creditCost: finalCreditCost, revenueMicros: Math.min(2_000_000_000, finalCreditCost * Number(billing.creditValueMicros || resolved.creditValueMicros)) } })
       if (!active.count) throw new JobCancelledError('Generation job was cancelled')
-      await tx.message.update({ where: { id: streamMessage.id }, data: { content, model: resolved.model, inputTokens, outputTokens, metadata: { jobId: task.id, streaming: false, reasoning, providerSource: resolved.source, providerType: resolved.type, presetKey: resolved.presetKey, apiProtocol: resolved.apiProtocol, suggestionVersion: 3, suggestions, ...(searchMetadata ? { webSearch: searchMetadata } : {}) } } })
+      await tx.message.update({ where: { id: streamMessage.id }, data: { content, model: resolved.model, inputTokens, outputTokens, metadata: { jobId: task.id, streaming: false, reasoning, thinkingSeconds: Math.max(1, Math.round((Date.now() - (task.startedAt?.getTime?.() || Date.now())) / 1000)), ...(reasoningTokens > 0 ? { reasoningTokens } : {}), providerSource: resolved.source, providerType: resolved.type, presetKey: resolved.presetKey, apiProtocol: resolved.apiProtocol, suggestionVersion: 3, suggestions, ...(searchMetadata ? { webSearch: searchMetadata } : {}) } } })
       await tx.conversation.update({ where: { id: conversation.id }, data: { activeLeafId: streamMessage.id, updatedAt: new Date() } })
       if (resolved.credentialId && (primaryInputTokens || primaryOutputTokens)) {
         await tx.userApiCredential.updateMany({
@@ -1680,16 +1655,10 @@ export class ChatGenerationRunner implements GenerationRunner {
         attributedUpstreamCostMicros: trace.upstreamCostMicros,
       })),
     })
-    const rows = Array.isArray(billing.quotaReservations) && billing.quotaReservations.length
-      ? billing.quotaReservations
-      : billing.quotaId ? [{ reservationId: undefined, quotaId: billing.quotaId, reservedUnits: billing.reservedTokenCredits || 0 }] : []
-    const reservationRefs = rows.flatMap((row) => row && typeof row.quotaId === 'string'
-      ? [{ reservationId: typeof row.reservationId === 'string' ? row.reservationId : undefined, quotaId: row.quotaId }]
-      : [])
+    const reservationRefs = parseQuotaReservationRefs(billing, { fallbackOnEmptyList: true })
     const inputs: Array<Parameters<TokenQuotaService['settleMany']>[0][number]> = []
-    if (quotaEnabled) for (const row of rows) {
-      if (!row || typeof row.quotaId !== 'string') continue
-      inputs.push({ userId: task.userId, reservationId: typeof row.reservationId === 'string' ? row.reservationId : undefined, quotaId: row.quotaId, generationId: task.id, chargedUnits: BigInt(Math.max(0, Math.trunc(actualTokenCredits))), inputTokens, outputTokens, cachedInputTokens, reasoningTokens, metadata: { model: resolved.model, scope: row.quotaId === billing.quotaId ? 'monthly' : 'daily' } as Prisma.InputJsonValue })
+    if (quotaEnabled) for (const row of reservationRefs) {
+      inputs.push({ userId: task.userId, reservationId: row.reservationId, quotaId: row.quotaId, generationId: task.id, chargedUnits: BigInt(Math.max(0, Math.trunc(actualTokenCredits))), inputTokens, outputTokens, cachedInputTokens, reasoningTokens, metadata: { model: resolved.model, scope: row.quotaId === billing.quotaId ? 'monthly' : 'daily' } as Prisma.InputJsonValue })
     }
     const detailLedgers = accountedAuxiliaryTraces.map((trace) => this.auxiliaryUsageDetailLedger(task, billing, trace))
     try {
@@ -1728,14 +1697,31 @@ export class ChatGenerationRunner implements GenerationRunner {
     let remaining = 30_000
     for (const asset of uniqueAssets) {
       const extension = asset.name.toLowerCase().match(/\.[a-z0-9]+$/)?.[0] || ''
+      const officeKind = this.officeText.kind(asset.name, asset.mimeType)
       const isText = asset.mimeType.startsWith('text/') || asset.mimeType === 'application/json' || textAttachmentExtensions.has(extension)
-      if (!isText) {
-        sections.push(`[附件“${asset.name}”未解析：当前仅支持文本、Markdown、CSV、JSON 和代码文件。]`)
+      if (!officeKind && !isText) {
+        sections.push(`[附件“${asset.name}”未解析：当前仅支持 Word、Excel、文本、Markdown、CSV、JSON 和代码文件。]`)
         continue
       }
       if (remaining <= 0) break
       const content = await this.assets.readForUser(userId, asset.id)
-      const text = content.file.toString('utf8').replaceAll('\u0000', '').trim().slice(0, remaining)
+      let text: string
+      if (officeKind) {
+        const extracted = await this.officeText.extract(content.file, asset.name, asset.mimeType).catch(() => null)
+        if (!extracted) {
+          sections.push(`[附件“${asset.name}”无法解析，请确认文件未加密或损坏。]`)
+          continue
+        }
+        if (!extracted.text && extracted.truncated) {
+          sections.push(`[附件“${asset.name}”超出 ${OFFICE_TEXT_MAX_BYTES / 1024 / 1024} MB 解析上限，未被引用。]`)
+          continue
+        }
+        text = extracted.truncated
+          ? `${extracted.text.slice(0, remaining)}\n[内容已按解析上限截断]`
+          : extracted.text.slice(0, remaining)
+      } else {
+        text = content.file.toString('utf8').replaceAll('\u0000', '').trim().slice(0, remaining)
+      }
       if (!text) continue
       sections.push(`附件：${asset.name}\n${text}`)
       remaining -= text.length
@@ -1745,23 +1731,6 @@ export class ChatGenerationRunner implements GenerationRunner {
   private async assertNotCancelled(jobId: string) {
     const job = await this.prisma.generationJob.findUnique({ where: { id: jobId }, select: { status: true } })
     if (!job || job.status === 'CANCELLED') throw new JobCancelledError('Generation job was cancelled')
-  }
-
-  private async pluginInstruction(task: GenerationJob, capability: PluginCapability) {
-    const options = task.options as Record<string, unknown>
-    const pluginId = typeof options.pluginId === 'string' ? options.pluginId : ''
-    if (!pluginId) return ''
-    // Capability validation happens when the job is created. External
-    // instruction-only skills may be reused across capabilities, so do not
-    // apply the stored capability array a second time in the worker.
-    const plugin = await this.prisma.plugin.findFirst({ where: { id: pluginId, status: 'PUBLISHED', OR: [{ ownerId: task.userId, visibility: 'PRIVATE' }, { visibility: 'OFFICIAL', installations: { some: { userId: task.userId, enabled: true } } }] }, select: { name: true, instruction: true, outputRequirements: true } })
-    if (!plugin) throw new Error('插件已停用、未安装或不支持当前创作类型')
-    return [`当前启用插件：${plugin.name}`, plugin.instruction.trim(), plugin.outputRequirements.trim() ? `输出要求：${plugin.outputRequirements.trim()}` : ''].filter(Boolean).join('\n')
-  }
-
-  private async pluginPrompt(task: GenerationJob, capability: PluginCapability) {
-    const instruction = await this.pluginInstruction(task, capability)
-    return instruction ? `${task.prompt}\n\n插件增强要求（在不改变用户核心意图的前提下执行）：\n${instruction}` : task.prompt
   }
 
 }

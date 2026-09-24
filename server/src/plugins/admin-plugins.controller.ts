@@ -10,6 +10,7 @@ export class AdminPluginsController {
   constructor(private readonly plugins: PluginsService) {}
   @Get('plugins') list() { return this.plugins.adminList() }
   @Get('plugins/stats') stats() { return this.plugins.stats() }
+  @Post('plugins/restore-defaults') restoreDefaults() { return this.plugins.restoreDefaults() }
   @Post('plugins') create(@Body() body: AdminPluginDto) { return this.plugins.createOfficial(body) }
   @Patch('plugins/:id') update(@Param('id') id: string, @Body() body: AdminPluginDto) { return this.plugins.updateOfficial(id, body) }
   @Delete('plugins/:id') remove(@Param('id') id: string) { return this.plugins.deleteOfficial(id) }

@@ -23,7 +23,9 @@
               ><div
                 ><strong>{{ plan.name }}</strong
                 ><small>{{ plan.code }} · {{ xt(cycleText[plan.billingCycle]) }}</small></div
-              ><ElTag v-if="plan.recommended" type="warning">{{ xt('推荐') }}</ElTag></header
+              ><ElTag v-if="plan.recommended" type="primary" effect="dark">{{
+                xt('推荐')
+              }}</ElTag></header
             ><h2
               >{{ money(plan.priceCents, plan.currency)
               }}<small>/{{ xt(cycleShort[plan.billingCycle]) }}</small></h2
@@ -96,7 +98,7 @@
               }}</template></ElTableColumn
             ><ElTableColumn :label="xt('操作')" width="100"
               ><template #default="{ row }"
-                ><ElButton link type="danger" @click="terminate(row)">{{
+                ><ElButton link type="danger" @click="terminate(row as UserSubscription)">{{
                   xt('终止')
                 }}</ElButton></template
               ></ElTableColumn
@@ -137,10 +139,10 @@
             ><ElTableColumn :label="xt('操作')" width="160"
               ><template #default="{ row }"
                 ><template v-if="row.status === 'PENDING'"
-                  ><ElButton link type="primary" @click="markPaid(row)">{{
+                  ><ElButton link type="primary" @click="markPaid(row as SubscriptionOrder)">{{
                     xt('确认到账')
                   }}</ElButton
-                  ><ElButton link type="danger" @click="cancelOrder(row)">{{
+                  ><ElButton link type="danger" @click="cancelOrder(row as SubscriptionOrder)">{{
                     xt('取消')
                   }}</ElButton></template
                 ><span v-else class="note">{{ xt('无需处理') }}</span></template
@@ -216,31 +218,56 @@
         ><ElAlert
           type="info"
           :closable="false"
-          :title="xt('文字对话按模型输入/输出 Token 价格折算为计费额度；图片和视频仍只使用创作点。默认额度不足时阻止请求。')"
-          class="billing-note"
-        />
+          :title="
+            xt(
+              '文字对话按模型输入/输出 Token 价格折算为计费额度；图片和视频仍只使用创作点。默认额度不足时阻止请求。'
+            )
+          "
+          class="billing-note" />
         <ElRow :gutter="14"
           ><ElCol :span="8"
             ><ElFormItem :label="xt('每月计费额度')"
-              ><ElInputNumber v-model="planForm.monthlyQuotaUnits" :min="0" :max="1_000_000_000_000" class="wide" /></ElFormItem></ElCol
+              ><ElInputNumber
+                v-model="planForm.monthlyQuotaUnits"
+                :min="0"
+                :max="1_000_000_000_000"
+                class="wide" /></ElFormItem></ElCol
           ><ElCol :span="8"
             ><ElFormItem :label="xt('每日计费额度')"
-              ><ElInputNumber v-model="planForm.dailyQuotaUnits" :min="0" :max="1_000_000_000_000" class="wide" /></ElFormItem></ElCol
+              ><ElInputNumber
+                v-model="planForm.dailyQuotaUnits"
+                :min="0"
+                :max="1_000_000_000_000"
+                class="wide" /></ElFormItem></ElCol
           ><ElCol :span="8"
             ><ElFormItem :label="xt('BYOK 计费')"
               ><ElSelect v-model="planForm.byokMode" class="wide"
                 ><ElOption :label="xt('消耗套餐额度')" value="QUOTA" />
-                <ElOption :label="xt('不消耗额度')" value="FREE" /></ElSelect></ElFormItem></ElCol></ElRow
+                <ElOption
+                  :label="xt('不消耗额度')"
+                  value="FREE" /></ElSelect></ElFormItem></ElCol></ElRow
         ><ElRow :gutter="14"
           ><ElCol :span="12"
             ><ElFormItem :label="xt('额度用尽后')"
               ><ElSelect v-model="planForm.tokenOverageMode" class="wide"
                 ><ElOption :label="xt('阻止继续调用')" value="BLOCK" />
-                <ElOption :label="xt('改用创作点支付')" value="OVERAGE_CREDITS" /></ElSelect></ElFormItem></ElCol
+                <ElOption
+                  :label="xt('改用创作点支付')"
+                  value="OVERAGE_CREDITS" /></ElSelect></ElFormItem></ElCol
           ><ElCol :span="12"
             ><ElFormItem :label="xt('超额换算比例（%）')"
-              ><ElInputNumber v-model="planForm.tokenOverageRate" :min="0" :max="100_000_000" :disabled="planForm.tokenOverageMode !== 'OVERAGE_CREDITS'" class="wide" />
-              <small class="note">{{ xt('100% 表示 1 计费额度折算 1 创作点；设为 0 时不启用超额支付。') }}</small></ElFormItem></ElCol></ElRow
+              ><ElInputNumber
+                v-model="planForm.tokenOverageRate"
+                :min="0"
+                :max="100_000_000"
+                :disabled="planForm.tokenOverageMode !== 'OVERAGE_CREDITS'"
+                class="wide"
+              />
+              <small class="note">{{
+                xt('100% 表示 1 计费额度折算 1 创作点；设为 0 时不启用超额支付。')
+              }}</small></ElFormItem
+            ></ElCol
+          ></ElRow
         ><ElSpace wrap
           ><ElCheckbox v-model="planForm.imageAccess">{{ xt('图片生成') }}</ElCheckbox
           ><ElCheckbox v-model="planForm.videoAccess">{{ xt('视频生成') }}</ElCheckbox
@@ -321,7 +348,9 @@
     type UserSubscription
   } from '@/api/xinyue/subscriptions'
   import { customerApi, type AdminUser } from '@/api/xinyue/customers'
-  import { xinyueLocale, xinyueText as xt } from '@/locales/xinyue'
+  import { useXinyueAsync } from '@/hooks'
+  import { xinyueText as xt } from '@/locales/xinyue'
+  import { formatCompactNumber, formatDateTime, formatMoneyCents } from '@/utils/xinyue/formatters'
   import CommerceMarketingPanel from './CommerceMarketingPanel.vue'
   defineOptions({ name: 'XinyueSubscriptions' })
   type Cycle = SubscriptionPlan['billingCycle']
@@ -380,8 +409,7 @@
   const subscriptions = ref<UserSubscription[]>([])
   const orders = ref<SubscriptionOrder[]>([])
   const users = ref<AdminUser[]>([])
-  const loading = ref(false)
-  const saving = ref(false)
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
   const tab = ref('plans')
   const planDialog = ref(false)
   const grantDialog = ref(false)
@@ -391,15 +419,9 @@
     planId: '',
     days: undefined
   })
-  const money = (cents: number, currency = 'CNY') =>
-    new Intl.NumberFormat(xinyueLocale(), { style: 'currency', currency }).format(cents / 100)
-  const quota = (value: number) => new Intl.NumberFormat(xinyueLocale(), { notation: 'compact', maximumFractionDigits: 1 }).format(Number(value || 0))
-  const date = (value?: string | null) =>
-    value
-      ? new Intl.DateTimeFormat(xinyueLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(
-          new Date(value)
-        )
-      : xt('长期有效')
+  const money = (cents: number, currency = 'CNY') => formatMoneyCents(cents, currency)
+  const quota = (value: number) => formatCompactNumber(value)
+  const date = (value?: string | null) => formatDateTime(value, xt('长期有效'))
   const statusType = (status: string) =>
     status === 'PAID'
       ? 'success'
@@ -409,17 +431,14 @@
           ? 'info'
           : 'danger'
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       ;[plans.value, subscriptions.value, orders.value, users.value] = await Promise.all([
         xinyueApi.plans(),
         xinyueApi.subscriptions(),
         xinyueApi.subscriptionOrders(),
         customerApi.users()
       ])
-    } finally {
-      loading.value = false
-    }
+    })
   }
   function openCreate() {
     Object.assign(planForm, emptyPlan(), { sortOrder: plans.value.length * 10 })
@@ -440,8 +459,7 @@
   }
   async function savePlan() {
     if (!planForm.code || !planForm.name) return ElMessage.warning(xt('请填写套餐代码和名称'))
-    saving.value = true
-    try {
+    await withSaving(async () => {
       const body = {
         code: planForm.code,
         name: planForm.name,
@@ -455,7 +473,8 @@
         dailyQuotaUnits: planForm.dailyQuotaUnits,
         tokenQuotaMode: planForm.tokenQuotaMode,
         tokenOverageMode: planForm.tokenOverageMode,
-        tokenOverageRate: planForm.tokenOverageMode === 'OVERAGE_CREDITS' ? planForm.tokenOverageRate : 0,
+        tokenOverageRate:
+          planForm.tokenOverageMode === 'OVERAGE_CREDITS' ? planForm.tokenOverageRate : 0,
         byokMode: planForm.byokMode,
         trialDays: planForm.trialDays,
         concurrency: planForm.concurrency,
@@ -479,9 +498,7 @@
       await xinyueApi.savePlan(body, planForm.id || undefined)
       planDialog.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function removePlan(row: SubscriptionPlan) {
     await ElMessageBox.confirm(`${xt('确认删除或下架')} "${row.name}"?`, xt('套餐操作'), {
@@ -492,15 +509,12 @@
   }
   async function grant() {
     if (!grantForm.userId || !grantForm.planId) return ElMessage.warning(xt('请选择用户和套餐'))
-    saving.value = true
-    try {
+    await withSaving(async () => {
       await xinyueApi.grantSubscription({ ...grantForm, days: grantForm.days || undefined })
       grantDialog.value = false
       tab.value = 'active'
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function terminate(row: UserSubscription) {
     await ElMessageBox.confirm(

@@ -5,6 +5,7 @@ import { CredentialCryptoService } from '../providers/credential-crypto.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { PublicEndpointPolicyService } from '../common/public-endpoint-policy.service'
 import { fetchPublicNoRedirect } from '../common/outbound-http'
+import { publicUpstreamHealthMessage } from '../providers/upstream-errors'
 
 type RuleInput = { enabled?: boolean; severity?: string; cooldownMinutes?: number; notifyInApp?: boolean; notifyWebhook?: boolean; webhookUrl?: string; webhookSecret?: string }
 type Candidate = { fingerprint: string; title: string; message: string; source: string; targetId?: string; metadata?: Record<string, unknown> }
@@ -31,7 +32,7 @@ export class AlertsService implements OnModuleInit {
   }
 
   listEvents(status?: string) {
-    return this.prisma.alertEvent.findMany({ where: status ? { status } : undefined, orderBy: [{ status: 'asc' }, { lastSeenAt: 'desc' }], take: 300, include: { rule: { select: { key: true, name: true, severity: true, mutedUntil: true } } } })
+    return this.prisma.alertEvent.findMany({ where: status ? { status } : undefined, orderBy: [{ status: 'asc' }, { lastSeenAt: 'desc' }], take: 300, include: { rule: { select: { key: true, name: true, severity: true, mutedUntil: true } } } }).then((rows) => rows.map((row) => ({ ...row, message: publicUpstreamHealthMessage(row.message) })))
   }
 
   async updateRule(id: string, input: RuleInput) {
@@ -56,7 +57,11 @@ export class AlertsService implements OnModuleInit {
   async muteRule(id: string, minutes: number) {
     if (!Number.isInteger(minutes) || minutes < 1 || minutes > 43200) throw new BadRequestException('静默时长必须为 1 到 43200 分钟')
     const mutedUntil = new Date(Date.now() + minutes * 60_000)
-    return this.prisma.alertRule.update({ where: { id }, data: { mutedUntil } }).catch(() => { throw new NotFoundException('告警规则不存在') })
+    // 只把「记录不存在」映射成 404，连接失败等其它异常原样抛出，避免误导排障
+    return this.prisma.alertRule.update({ where: { id }, data: { mutedUntil } }).catch((reason) => {
+      if (reason instanceof Prisma.PrismaClientKnownRequestError && reason.code === 'P2025') throw new NotFoundException('告警规则不存在')
+      throw reason
+    })
   }
 
   async acknowledge(id: string, adminId: string) {
@@ -78,7 +83,7 @@ export class AlertsService implements OnModuleInit {
       this.prisma.generationJob.aggregate({ where: { status: 'SUCCEEDED', completedAt: { gte: new Date(Date.now() - 86_400_000) } }, _count: { _all: true }, _sum: { revenueMicros: true, upstreamCostMicros: true } }),
       this.prisma.userApiCredential.count({ where: { enabled: true, OR: [{ lastHealthStatus: 'unhealthy' }, { expiresAt: { lte: new Date(Date.now() + 14 * 86_400_000) } }] } }),
     ])
-    active.set('provider_unhealthy', providers.map((item) => ({ fingerprint: item.id, title: `模型渠道异常：${item.name}`, message: item.lastHealthMessage || `连续失败 ${item.consecutiveFailures} 次`, source: 'provider_channel', targetId: item.id, metadata: { consecutiveFailures: item.consecutiveFailures, cooldownUntil: item.cooldownUntil } })))
+    active.set('provider_unhealthy', providers.map((item) => ({ fingerprint: item.id, title: `模型渠道异常：${item.name}`, message: publicUpstreamHealthMessage(item.lastHealthMessage || '', `连续失败 ${item.consecutiveFailures} 次`), source: 'provider_channel', targetId: item.id, metadata: { consecutiveFailures: item.consecutiveFailures, cooldownUntil: item.cooldownUntil } })))
     active.set('payment_channel_invalid', paymentChannels.map((item) => ({ fingerprint: item.id, title: `支付渠道异常：${item.name}`, message: item.lastError || '渠道配置校验失败', source: 'payment_channel', targetId: item.id, metadata: { providerKey: item.providerKey } })))
     active.set('moderation_backlog', moderationOpen ? [{ fingerprint: 'global', title: '内容审核积压', message: `当前有 ${moderationOpen} 条内容审核事件待处理`, source: 'moderation', metadata: { openCount: moderationOpen } }] : [])
     active.set('support_urgent', supportUrgent ? [{ fingerprint: 'global', title: '存在紧急客服工单', message: `当前有 ${supportUrgent} 个紧急工单未关闭`, source: 'support', metadata: { openCount: supportUrgent } }] : [])
@@ -102,21 +107,23 @@ export class AlertsService implements OnModuleInit {
     const muted = Boolean(rule.mutedUntil && rule.mutedUntil > now)
     if (existing) {
       await this.prisma.alertEvent.update({ where: { id: existing.id }, data: { status: muted ? 'MUTED' : existing.status === 'RESOLVED' ? 'OPEN' : existing.status, severity: rule.severity, title: candidate.title, message: candidate.message, metadata: candidate.metadata as Prisma.InputJsonValue, lastSeenAt: now, ...(muted ? {} : { resolvedAt: null }) } })
-      const shouldNotify = !muted && existing.status === 'RESOLVED' || (!muted && now.getTime() - existing.lastSeenAt.getTime() >= rule.cooldownMinutes * 60_000)
-      if (shouldNotify) await this.notify(rule, { ...candidate, id: existing.id, severity: rule.severity })
-      return shouldNotify
+      const reopened = !muted && existing.status === 'RESOLVED'
+      const cooldownDue = !muted && existing.status !== 'RESOLVED' && now.getTime() - existing.lastSeenAt.getTime() >= rule.cooldownMinutes * 60_000
+      if (reopened) await this.notify(rule, { ...candidate, id: existing.id, severity: rule.severity }, { inApp: true, webhook: true })
+      else if (cooldownDue) await this.notify(rule, { ...candidate, id: existing.id, severity: rule.severity }, { inApp: false, webhook: true })
+      return reopened || cooldownDue
     }
     const created = await this.prisma.alertEvent.create({ data: { ruleId: rule.id, fingerprint: candidate.fingerprint, status: muted ? 'MUTED' : 'OPEN', severity: rule.severity, title: candidate.title, message: candidate.message, source: candidate.source, targetId: candidate.targetId, metadata: candidate.metadata as Prisma.InputJsonValue } })
-    if (!muted) await this.notify(rule, { ...candidate, id: created.id, severity: rule.severity })
+    if (!muted) await this.notify(rule, { ...candidate, id: created.id, severity: rule.severity }, { inApp: true, webhook: true })
     return !muted
   }
 
-  private async notify(rule: { id: string; key: string; name: string; severity: string; notifyInApp: boolean; notifyWebhook: boolean; webhookUrl: string; encryptedWebhookSecret: string }, event: Candidate & { id: string; severity: string }) {
-    if (rule.notifyInApp) {
+  private async notify(rule: { id: string; key: string; name: string; severity: string; notifyInApp: boolean; notifyWebhook: boolean; webhookUrl: string; encryptedWebhookSecret: string }, event: Candidate & { id: string; severity: string }, channels: { inApp: boolean; webhook: boolean }) {
+    if (channels.inApp && rule.notifyInApp) {
       const admins = await this.prisma.user.findMany({ where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] }, status: 'ACTIVE' }, select: { id: true } })
       if (admins.length) await this.prisma.notification.createMany({ data: admins.map((admin) => ({ userId: admin.id, type: NotificationType.SYSTEM, title: event.title, body: event.message, metadata: { alertEventId: event.id, ruleKey: rule.key, severity: event.severity } as Prisma.InputJsonValue })) })
     }
-    if (rule.notifyWebhook && rule.webhookUrl) {
+    if (channels.webhook && rule.notifyWebhook && rule.webhookUrl) {
       const payload = JSON.stringify({ eventId: event.id, rule: rule.key, severity: event.severity, title: event.title, message: event.message, source: event.source, targetId: event.targetId, metadata: event.metadata, occurredAt: new Date().toISOString() })
       const secret = rule.encryptedWebhookSecret ? this.crypto.decrypt(rule.encryptedWebhookSecret) : ''
       const signature = secret ? createHmac('sha256', secret).update(payload).digest('hex') : ''

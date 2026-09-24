@@ -58,7 +58,7 @@
         <ElTableColumn :label="xt('席位')" width="130"
           ><template #default="{ row }"
             ><ElProgress
-              :percentage="seatPercent(row)"
+              :percentage="seatPercent(row as AdminTeam)"
               :stroke-width="6"
               :show-text="false"
             /><small class="block-note"
@@ -95,9 +95,13 @@
         >
         <ElTableColumn :label="xt('操作')" width="220" fixed="right"
           ><template #default="{ row }"
-            ><ElButton link type="primary" @click="openDetail(row)">{{ xt('查看') }}</ElButton
-            ><ElButton link @click="openEditor(row)">{{ xt('编辑') }}</ElButton
-            ><ElButton link @click="openCredits(row)">{{ xt('调账') }}</ElButton></template
+            ><ElButton link type="primary" @click="openDetail(row as AdminTeam)">{{
+              xt('查看')
+            }}</ElButton
+            ><ElButton link @click="openEditor(row as AdminTeam)">{{ xt('编辑') }}</ElButton
+            ><ElButton link @click="openCredits(row as AdminTeam)">{{
+              xt('调账')
+            }}</ElButton></template
           ></ElTableColumn
         >
       </ElTable>
@@ -212,9 +216,11 @@
                   :max="100000000"
                   :placeholder="xt('不限额')"
                   controls-position="right"
-                /><ElButton :loading="quotaSavingId === row.userId" @click="saveQuota(row)">{{
-                  xt('保存')
-                }}</ElButton></div
+                /><ElButton
+                  :loading="quotaSavingId === row.userId"
+                  @click="saveQuota(row as AdminTeam['members'][number])"
+                  >{{ xt('保存') }}</ElButton
+                ></div
               ></template
             ></ElTableColumn
           ></ElTable
@@ -295,11 +301,12 @@
     type AdminTeamResources,
     type TeamAuditLog
   } from '@/api/xinyue/customers'
+  import { useXinyueAsync } from '@/hooks'
   import { xinyueText as xt } from '@/locales/xinyue'
+  import { formatDateTime } from '@/utils/xinyue/formatters'
   defineOptions({ name: 'XinyueTeams' })
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
   const rows = ref<AdminTeam[]>([])
-  const loading = ref(false)
-  const saving = ref(false)
   const editorDialog = ref(false)
   const creditDialog = ref(false)
   const detailDrawer = ref(false)
@@ -328,17 +335,11 @@
   )
   const seatPercent = (row: AdminTeam) =>
     Math.min(100, Math.round((row._count.members / Math.max(1, row.seatLimit)) * 100))
-  const formatTime = (value: string) =>
-    new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
-      new Date(value)
-    )
+  const formatTime = (value: string) => formatDateTime(value)
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       rows.value = await xinyueApi.teams()
-    } finally {
-      loading.value = false
-    }
+    })
   }
   function openEditor(row: AdminTeam) {
     Object.assign(editor, {
@@ -353,8 +354,7 @@
   }
   async function save() {
     if (!editor.name) return ElMessage.warning(xt('请填写团队名称'))
-    saving.value = true
-    try {
+    await withSaving(async () => {
       await xinyueApi.saveTeam(editor.id, {
         name: editor.name,
         seatLimit: editor.seatLimit,
@@ -363,9 +363,7 @@
       })
       editorDialog.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   function openCredits(row: AdminTeam) {
     Object.assign(creditEditor, { id: row.id, name: row.name, amount: 0, reason: '' })
@@ -374,17 +372,14 @@
   async function adjustCredits() {
     if (!creditEditor.amount) return ElMessage.warning(xt('调整点数不能为 0'))
     if (creditEditor.reason.length < 2) return ElMessage.warning(xt('请填写调整原因'))
-    saving.value = true
-    try {
+    await withSaving(async () => {
       await xinyueApi.adjustTeamCredits(creditEditor.id, {
         amount: creditEditor.amount,
         reason: creditEditor.reason
       })
       creditDialog.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function saveQuota(member: AdminTeam['members'][number]) {
     if (!detail.value) return

@@ -67,10 +67,15 @@ $fade-easing: transition-config('fade-easing');
   }
 
   &-leave-active {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    width: 100%;
     transition:
       opacity calc($duration * 0.7) $easing,
       transform calc($duration * 0.7) $easing;
     will-change: opacity, transform;
+    pointer-events: none;
   }
 
   &-enter-from {

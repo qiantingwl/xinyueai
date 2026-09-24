@@ -61,6 +61,7 @@ try {
   }
   await page.waitForURL(/#\/dashboard\/console$/)
   await page.getByText('工作台', { exact: true }).first().waitFor({ state: 'visible' })
+  await page.locator('.el-notification, .el-message').first().waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {})
   await stabilize()
   await page.screenshot({ path: resolve(outputDir, 'xinyue-admin-dashboard.png'), fullPage: false })
 } finally {

@@ -9,6 +9,9 @@ allowBuilds:
   esbuild: true
   vue-demi: true
 
+minimumReleaseAgeExclude:
+  - element-plus@2.14.6
+
 onlyBuiltDependencies:
   - '@parcel/watcher'
   - '@tailwindcss/oxide'

@@ -1,6 +1,6 @@
 const PENDING_CREATION_PROMPT_KEY = 'xinyue:pending-creation-prompt:v2'
 
-export type PromptTransferType = 'IMAGE' | 'VIDEO' | 'TEXT'
+export type PromptTransferType = 'IMAGE' | 'VIDEO' | 'TEXT' | 'COMMERCE'
 
 export type PendingCreationPrompt = {
   type: PromptTransferType
@@ -29,7 +29,7 @@ export function consumeCreationPrompt(type: PromptTransferType): PendingCreation
     try {
       const value = JSON.parse(prompt) as Partial<PendingCreationPrompt>
       if (typeof value.prompt !== 'string' || !value.prompt.trim()) return null
-      const promptType = value.type === 'VIDEO' || value.type === 'TEXT' ? value.type : 'IMAGE'
+      const promptType = value.type === 'VIDEO' || value.type === 'TEXT' || value.type === 'COMMERCE' ? value.type : 'IMAGE'
       if (promptType !== type) return null
       sessionStorage.removeItem(PENDING_CREATION_PROMPT_KEY)
       return {

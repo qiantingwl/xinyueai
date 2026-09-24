@@ -48,7 +48,9 @@ export function cookieMutationAllowed(input: {
   origin?: string
 }, allowedOrigins: readonly string[]) {
   if (SAFE_METHODS.has(input.method.toUpperCase()) || !input.hasSessionCookie) return true
-  if (input.requestMarker === '1') return true
   const origin = normalizedOrigin(input.origin)
-  return Boolean(origin && allowedOrigins.includes(origin))
+  if (origin) {
+    return allowedOrigins.includes(origin)
+  }
+  return input.requestMarker === '1'
 }

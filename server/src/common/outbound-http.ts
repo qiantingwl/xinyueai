@@ -2,8 +2,9 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { lookup as dnsLookup } from 'node:dns'
 import type { LookupAddress, LookupOptions } from 'node:dns'
 import type { LookupFunction } from 'node:net'
-import { Agent } from 'undici'
-import { isPrivateNetworkAddress, publicHttpUrl } from './public-endpoint-policy.service'
+import { Agent, ProxyAgent, type Dispatcher } from 'undici'
+import { isIP } from 'node:net'
+import { isPrivateNetworkAddress, normalizedHostname, publicHttpUrl } from './public-endpoint-policy.service'
 
 export type OutboundExecutionLease = Readonly<{ workerId: string; leaseVersion: number }>
 type OutboundExecutionContext = Readonly<{ signal: AbortSignal; lease?: OutboundExecutionLease }>
@@ -27,19 +28,36 @@ export function createPublicNetworkLookup(resolve: PublicAddressResolver = dnsLo
       callback(error, [])
       return
     }
-    if (!addresses.length || addresses.some((entry) => isPrivateNetworkAddress(entry.address))) {
+    const publicAddresses = addresses.filter((entry) => !isPrivateNetworkAddress(entry.address))
+    if (!publicAddresses.length) {
       const denied = Object.assign(new Error('Outbound HTTP target resolved to a non-public address'), { code: 'EACCES' })
       callback(denied, [])
       return
     }
-    if (options.all) callback(null, addresses)
-    else callback(null, addresses[0].address, addresses[0].family)
+    if (options.all) callback(null, publicAddresses)
+    else callback(null, publicAddresses[0].address, publicAddresses[0].family)
   })
 }
 
 const publicNetworkLookup = createPublicNetworkLookup()
 const publicNetworkDispatcher = new Agent({ connect: { lookup: publicNetworkLookup } })
-type FetchInitWithDispatcher = RequestInit & { dispatcher?: Agent }
+type FetchInitWithDispatcher = RequestInit & { dispatcher?: Dispatcher }
+
+let mediaProxyUrl = ''
+let mediaProxyDispatcher: Dispatcher | undefined
+
+function configuredOutboundProxy() {
+  return String(process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || '').trim()
+}
+
+function mediaDispatcher() {
+  const proxy = configuredOutboundProxy()
+  if (!proxy) return publicNetworkDispatcher
+  if (mediaProxyDispatcher && mediaProxyUrl === proxy) return mediaProxyDispatcher
+  mediaProxyDispatcher = new ProxyAgent(proxy)
+  mediaProxyUrl = proxy
+  return mediaProxyDispatcher
+}
 
 export class OutboundRedirectError extends Error {
   constructor(status?: number) {
@@ -78,17 +96,58 @@ export async function fetchPublicNoRedirect(input: string | URL | Request, init:
   return fetchWithPolicy(input, init, 'error', publicNetworkDispatcher)
 }
 
+/**
+ * Download a Provider-returned media URL. Hostnames may be Clash fake-ip
+ * (198.18/15) when HTTPS_PROXY is set; private IP literals stay blocked.
+ */
+/**
+ * The proxy resolves hostnames itself, so socket-level private-IP checks cannot run on that path.
+ * Only callers whose result URLs come from admin-managed upstreams may set `allowProxy`.
+ */
+export async function fetchPublicMedia(input: string | URL | Request, init: RequestInit = {}, options: { allowProxy?: boolean } = {}) {
+  const url = publicHttpUrl(requestUrl(input))
+  if (options.allowProxy && configuredOutboundProxy() && !isIP(normalizedHostname(url))) {
+    return fetchWithPolicy(url, init, 'error', mediaDispatcher())
+  }
+  return fetchPublicNoRedirect(url, init)
+}
+
 /** Used only by callers that validate every Location hop themselves. */
 export async function fetchPublicManualRedirect(input: string | URL | Request, init: RequestInit = {}) {
   publicHttpUrl(requestUrl(input))
   return fetchWithPolicy(input, init, 'manual', publicNetworkDispatcher)
 }
 
+/**
+ * Follow same-host public redirects so OpenAI-compatible / Sub2API gateways
+ * that issue a trailing-slash or https hop still work for BYOK discovery.
+ * Cross-host hops are rejected so the API key never leaves the approved host.
+ */
+export async function fetchPublicSameHostRedirects(input: string | URL, init: RequestInit = {}, maxRedirects = 3) {
+  let current = publicHttpUrl(input)
+  for (let hops = 0; hops <= maxRedirects; hops += 1) {
+    const response = await fetchPublicManualRedirect(current, init)
+    if (response.status < 300 || response.status >= 400) return response
+    const location = response.headers.get('location')
+    await response.body?.cancel().catch(() => undefined)
+    if (!location) throw new OutboundRedirectError(response.status)
+    let next: URL
+    try {
+      next = new URL(location, current)
+    } catch {
+      throw new OutboundRedirectError(response.status)
+    }
+    if (next.hostname.toLowerCase() !== current.hostname.toLowerCase()) throw new OutboundRedirectError(response.status)
+    current = publicHttpUrl(next)
+  }
+  throw new OutboundRedirectError()
+}
+
 function requestUrl(input: string | URL | Request) {
   return typeof input === 'string' || input instanceof URL ? input : input.url
 }
 
-async function fetchWithPolicy(input: string | URL | Request, init: RequestInit, redirect: RequestRedirect, dispatcher?: Agent) {
+async function fetchWithPolicy(input: string | URL | Request, init: RequestInit, redirect: RequestRedirect, dispatcher?: Dispatcher) {
   const inheritedSignal = outboundContext.getStore()?.signal
   const signals = [init.signal, inheritedSignal].filter((signal): signal is AbortSignal => Boolean(signal))
   const requestInit: FetchInitWithDispatcher = {

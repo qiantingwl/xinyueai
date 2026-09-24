@@ -1,0 +1,906 @@
+/*
+ * 季星预设样式（chatUiPreset = jixing）——全部挂在 .chat-ui--jixing 作用域
+ * （StudioPage 聊天首页根节点；对话态会回落 doubao 预设，根节点不带该类），
+ * 只影响聊天首页一个页面。
+ * 配色令牌见 tokens.css 的 .chat-ui--jixing 块；关键尺寸按 jixingai.com 实际采样对齐
+ * （脚本 scripts/jx-inspect*.mjs）。
+ */
+
+/* 季星首页底色与字体（令牌在 .chat-ui--jixing 作用域内取季星值） */
+.chat-ui--jixing {
+  background: var(--studio-bg);
+  font-family: "Source Han Sans SC", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+/* 空白态从「垂直居中的绝对定位」改为「顶部起排的流式布局」，给 chips/卡片留出空间。
+   relative（而非 static）保持流式排版的同时继续充当附件面板等弹层的定位祖先。 */
+.chat-ui--jixing:not(.has-messages) .chat-dialog-pane {
+  position: relative;
+  overflow-y: auto;
+}
+
+.chat-ui--jixing:not(.has-messages) .chat-center {
+  position: relative;
+  left: 0;
+  top: auto;
+  transform: none;
+  width: min(1120px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 8px 0 28px;
+}
+
+.chat-ui--jixing.is-temporary:not(.has-messages) .chat-center {
+  width: min(1040px, calc(100% - 64px));
+  padding-top: clamp(72px, 14vh, 140px);
+}
+
+.chat-ui--jixing .jx-home-hero--temporary .jx-home-hero__title {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+/* 季星首页不显示 preset 自带的「当前热点」等建议条（版式固定为季星结构） */
+.chat-ui--jixing:not(.has-messages) .chat-home-suggestions {
+  display: none;
+}
+
+/* ── 首页输入框：白卡 + 细边（采样：radius 20、无阴影）───────────────── */
+.chat-ui--jixing .chat-composer {
+  background: var(--studio-panel);
+  border: 1px solid var(--studio-line);
+  border-radius: var(--studio-radius-lg);
+  transition: border-color var(--studio-duration-fast) var(--studio-ease), box-shadow var(--studio-duration-base) var(--studio-ease);
+}
+
+.chat-ui--jixing .chat-composer:focus-within {
+  border-color: var(--studio-brand);
+  box-shadow: 0 0 0 3px var(--studio-brand-soft);
+}
+
+/* 首页内的弹层跟随季星大圆角 */
+.chat-ui--jixing .composer-attachment-panel,
+.chat-ui--jixing .composer-popover {
+  border-color: var(--studio-line);
+  border-radius: var(--studio-radius-lg);
+  box-shadow: var(--studio-shadow-sm);
+}
+
+/* ── 聊天首页英雄区（采样：标题 34/800+900，tabs 390x44 三列等宽）────── */
+.chat-ui--jixing .jx-home-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.chat-ui--jixing .jx-home-hero__avatar { margin-bottom: 10px; }
+
+.chat-ui--jixing .jx-home-hero__title {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: .01em;
+  color: var(--studio-text);
+}
+
+.chat-ui--jixing .jx-home-hero__title em {
+  font-style: normal;
+  font-weight: 900;
+  color: var(--studio-brand);
+}
+
+.chat-ui--jixing .jx-home-hero__subtitle {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--studio-muted);
+}
+
+.chat-ui--jixing .jx-home-hero__tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  box-sizing: border-box;
+  width: min(390px, 100%);
+  height: 44px;
+  margin-top: 14px;
+  padding: 3px;
+  border-radius: var(--studio-radius-pill);
+  background: var(--studio-control);
+}
+
+.chat-ui--jixing .jx-home-hero__tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  border-radius: var(--studio-radius-pill);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--studio-text-secondary);
+  text-decoration: none;
+  transition: background var(--studio-duration-fast) var(--studio-ease), color var(--studio-duration-fast) var(--studio-ease);
+}
+
+.chat-ui--jixing .jx-home-hero__tab:hover {
+  color: var(--studio-text);
+}
+
+.chat-ui--jixing .jx-home-hero__tab.is-active {
+  background: var(--studio-panel);
+  color: var(--studio-text);
+  font-weight: 600;
+}
+
+/* ── 季星首页 composer：82px 左上传列 + 大 textarea + 通栏工具栏（采样对齐）─ */
+.chat-ui--jixing .chat-composer--jx {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: start;
+  gap: 12px 16px;
+  max-height: none;
+  padding: 16px 18px 12px;
+  box-shadow: none;
+}
+
+.chat-ui--jixing .chat-composer--jx > .attachment-list {
+  grid-column: 1 / -1;
+}
+
+.chat-ui--jixing .chat-composer--jx > .jx-composer__upload {
+  display: flex;
+  grid-column: 1;
+  grid-row: 1;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  min-height: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--studio-control);
+  color: var(--studio-muted);
+  cursor: pointer;
+  transition: background var(--studio-duration-fast) var(--studio-ease), color var(--studio-duration-fast) var(--studio-ease);
+}
+
+.chat-ui--jixing .chat-composer--jx > .jx-composer__upload:hover,
+.chat-ui--jixing .chat-composer--jx > .jx-composer__upload.is-open {
+  background: var(--studio-brand-soft);
+  color: var(--studio-brand);
+}
+
+/* 上传框的加号套圆形描边（对齐季星的圆圈加号） */
+.chat-ui--jixing .chat-composer--jx > .jx-composer__upload svg {
+  box-sizing: content-box;
+  padding: 5px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.chat-ui--jixing .jx-composer__body {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.chat-ui--jixing .chat-composer--jx .jx-composer__body textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 7px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--studio-text);
+  font-size: 14px;
+  line-height: 22.4px;
+  resize: none;
+}
+
+.chat-ui--jixing .jx-composer__toolbar {
+  display: flex;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.chat-ui--jixing .jx-composer__spacer {
+  flex: 1;
+}
+
+.chat-ui--jixing .jx-composer__rail {
+  position: static;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  display: flex;
+  flex: 1;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.chat-ui--jixing .jx-composer__rail::-webkit-scrollbar { display: none; }
+
+.chat-ui--jixing .jx-composer__rail button,
+.chat-ui--jixing .jx-composer__rail .plugin-selector > button {
+  align-items: center;
+  justify-content: flex-start;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: none;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--studio-text);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  gap: 5px;
+}
+
+.chat-ui--jixing .jx-composer__rail button:hover,
+.chat-ui--jixing .jx-composer__rail button.is-open,
+.chat-ui--jixing .jx-composer__rail .plugin-selector > button:hover {
+  background: var(--studio-control);
+  transform: none;
+}
+
+.chat-ui--jixing .jx-composer__toolbar .composer-model > button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  width: auto;
+  height: 34px;
+  padding: 0 9px 0 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--studio-text);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background var(--studio-duration-fast) var(--studio-ease);
+}
+
+.chat-ui--jixing .jx-composer__toolbar .composer-model > button:hover {
+  background: var(--studio-control);
+}
+
+.chat-ui--jixing .jx-composer__toolbar .composer-web-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--studio-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.chat-ui--jixing .jx-composer__toolbar .composer-web-search:hover {
+  background: var(--studio-control);
+}
+
+.chat-ui--jixing .jx-composer__toolbar .composer-web-search.is-active {
+  background: var(--studio-brand-soft);
+  color: var(--studio-brand);
+}
+
+.chat-ui--jixing .jx-composer__submit.is-voice-entry {
+  width: 34px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--studio-control);
+  color: var(--studio-muted);
+}
+
+.chat-ui--jixing .jx-composer__submit.is-voice-entry:hover,
+.chat-ui--jixing .jx-composer__submit.is-listening {
+  background: var(--studio-brand-soft);
+  color: var(--studio-brand);
+}
+
+.chat-ui--jixing .jx-composer__submit {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: auto;
+  height: 34px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 17px;
+  background: var(--studio-brand);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--studio-duration-fast) var(--studio-ease), opacity var(--studio-duration-fast) var(--studio-ease);
+}
+
+.chat-ui--jixing .jx-composer__submit:hover:not(:disabled) {
+  background: var(--studio-brand-hover);
+}
+
+.chat-ui--jixing .jx-composer__submit:disabled {
+  opacity: .45;
+}
+
+/* ── 快捷入口：四列网格卡片（采样：960 宽、h72、左缩略图）────────────── */
+.chat-ui--jixing .jx-home-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.chat-ui--jixing .jx-chips {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  width: min(960px, 100%);
+  margin: 0 auto;
+  container-type: inline-size;
+}
+
+.chat-ui--jixing .jx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 72px;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid var(--studio-line);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-panel);
+  color: var(--studio-text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--studio-duration-fast) var(--studio-ease), box-shadow var(--studio-duration-fast) var(--studio-ease), transform var(--studio-duration-fast) var(--studio-ease);
+}
+
+.chat-ui--jixing .jx-chip:hover {
+  border-color: var(--studio-brand);
+  transform: translateY(-1px);
+}
+
+.chat-ui--jixing .jx-chip > span:last-child {
+  min-width: 0;
+  line-height: 1.25;
+  text-align: left;
+  word-break: keep-all;
+  text-wrap: balance;
+}
+
+/* 侧栏占宽后四列卡片变窄，缩小缩略图和字号，避免标题被拆成孤字 */
+@container (max-width: 860px) {
+  .chat-ui--jixing .jx-chip {
+    gap: 8px;
+    height: 64px;
+    padding: 8px 10px 8px 8px;
+    font-size: 13px;
+  }
+
+  .chat-ui--jixing .jx-chip__thumb,
+  .chat-ui--jixing .jx-chip__icon {
+    flex-basis: 40px;
+    width: 40px;
+    height: 40px;
+  }
+}
+
+.chat-ui--jixing .jx-chip__thumb,
+.chat-ui--jixing .jx-chip__icon {
+  display: block;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--studio-control);
+}
+
+.chat-ui--jixing .jx-chip__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--studio-brand);
+  background: var(--studio-brand-soft);
+}
+
+/* ── 下半区：左轮播横幅 + 右热门推荐网格（采样：推荐卡 #F1F4F9、r16、gap 8）─ */
+.chat-ui--jixing .jx-home-lower {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+}
+
+.chat-ui--jixing .jx-banner {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.chat-ui--jixing .jx-banner__slide {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--studio-line);
+  border-radius: var(--studio-radius-lg);
+  background: linear-gradient(135deg, var(--studio-brand-soft), var(--studio-control));
+  cursor: pointer;
+  transition: box-shadow var(--studio-duration-base) var(--studio-ease), transform var(--studio-duration-base) var(--studio-ease);
+}
+
+.chat-ui--jixing .jx-banner__slide:hover {
+  box-shadow: var(--studio-shadow);
+  transform: translateY(-2px);
+}
+
+.chat-ui--jixing .jx-banner__slide img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 兜底水印图标：定位在文案区（底部 scrim 约 96px 高）之上的区域居中，
+   避免与左下标题/按钮叠压 */
+.chat-ui--jixing .jx-banner__fallback {
+  position: absolute;
+  inset: 0 0 96px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--studio-brand);
+  opacity: .38;
+}
+
+.chat-ui--jixing .jx-banner__copy {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 20px;
+  background: linear-gradient(transparent, rgba(9, 14, 28, .78));
+  color: #fff;
+  text-align: left;
+}
+
+.chat-ui--jixing .jx-banner__copy strong {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.chat-ui--jixing .jx-banner__copy small {
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: .85;
+}
+
+.chat-ui--jixing .jx-banner__copy em {
+  margin-top: 6px;
+  padding: 5px 14px;
+  border-radius: var(--studio-radius-pill);
+  background: var(--studio-brand);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* 浅色主题：深色 scrim + 白字在浅蓝渐变底上对比度不足（且过渡带像突兀黑块），
+   换成面板色 scrim + 主题文字色；暗色主题保持原样 */
+html[data-studio-theme="light"] .chat-ui--jixing .jx-banner__copy {
+  background: linear-gradient(transparent, var(--studio-panel));
+  color: var(--studio-text);
+}
+
+html[data-studio-theme="light"] .chat-ui--jixing .jx-banner__copy em {
+  color: var(--studio-inverse-text);
+}
+
+.chat-ui--jixing .jx-banner nav {
+  position: absolute;
+  z-index: 2;
+  bottom: 14px;
+  left: 16px;
+  display: flex;
+  gap: 5px;
+}
+
+.chat-ui--jixing .jx-banner nav button {
+  width: 14px;
+  height: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .45);
+  cursor: pointer;
+  transition: width var(--studio-duration-fast) var(--studio-ease), background var(--studio-duration-fast) var(--studio-ease);
+}
+
+.chat-ui--jixing .jx-banner nav button.is-active {
+  width: 22px;
+  background: var(--studio-brand);
+}
+
+.chat-ui--jixing .jx-recommend {
+  flex: 0 0 55.6%;
+  min-width: 0;
+}
+
+.chat-ui--jixing .jx-recommend__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.chat-ui--jixing .jx-recommend__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  color: var(--studio-text);
+}
+
+.chat-ui--jixing .jx-recommend__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--studio-muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.chat-ui--jixing .jx-recommend__more:hover {
+  color: var(--studio-brand);
+}
+
+.chat-ui--jixing .jx-recommend__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.chat-ui--jixing .jx-recommend__card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 131px;
+  padding: 12px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--studio-control);
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow var(--studio-duration-fast) var(--studio-ease), transform var(--studio-duration-fast) var(--studio-ease);
+}
+
+.chat-ui--jixing .jx-recommend__card:hover {
+  box-shadow: var(--studio-shadow-sm);
+  transform: translateY(-1px);
+}
+
+.chat-ui--jixing .jx-recommend__card strong {
+  font-size: 15px;
+  font-weight: 750;
+  color: var(--studio-text);
+  text-wrap: balance;
+}
+
+.chat-ui--jixing .jx-recommend__card small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--studio-muted);
+  text-wrap: balance;
+}
+
+.chat-ui--jixing .jx-recommend__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  background: var(--studio-brand-soft);
+  color: var(--studio-brand);
+}
+
+.chat-ui--jixing .jx-recommend__card--media {
+  gap: 8px;
+  padding: 0 0 12px;
+  overflow: hidden;
+}
+
+.chat-ui--jixing .jx-recommend__card--media strong,
+.chat-ui--jixing .jx-recommend__card--media small {
+  padding: 0 12px;
+}
+
+.chat-ui--jixing .jx-recommend__thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  background: var(--studio-control);
+  transition: transform var(--studio-duration-fast) var(--studio-ease);
+}
+
+.chat-ui--jixing .jx-recommend__card--media:hover .jx-recommend__thumb {
+  transform: scale(1.04);
+}
+
+/* ── 游客促销浮卡（采样：右上米色卡，可关闭）────────────────────────── */
+.chat-ui--jixing .jx-promo-toast {
+  position: absolute;
+  z-index: 30;
+  top: 76px;
+  right: 24px;
+  width: 300px;
+  padding: 14px 16px;
+  border: 1px solid #f3e2c2;
+  border-radius: var(--studio-radius-md);
+  background: #fff7ea;
+  color: #b25e09;
+  box-shadow: var(--studio-shadow-sm);
+}
+
+.chat-ui--jixing .jx-promo-toast strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chat-ui--jixing .jx-promo-toast p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.chat-ui--jixing .jx-promo-toast > button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #b25e09;
+  cursor: pointer;
+}
+
+.chat-ui--jixing .jx-promo-toast > button:hover {
+  background: rgba(178, 94, 9, .1);
+}
+
+/* ── 季星首页 composer 对 preset 定位的免疫（豆包/移动端的绝对定位与网格布局全部复位）─ */
+.chat-ui--jixing .chat-composer--jx {
+  /* relative 而非 static：弹层已 Teleport 到 body 不再依赖表单包含块，与移动端规则保持一致 */
+  position: relative;
+  bottom: auto;
+  display: grid;
+  height: auto;
+  min-height: 0;
+}
+
+.chat-ui--jixing .chat-composer--jx textarea {
+  position: static;
+  top: auto;
+  left: auto;
+  width: 100%;
+  height: auto;
+}
+
+.chat-ui--jixing .chat-composer--jx > button:first-of-type {
+  position: static;
+  bottom: auto;
+  left: auto;
+}
+
+.chat-ui--jixing .chat-composer--jx .composer-model {
+  position: static;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  width: auto;
+  height: auto;
+}
+
+.chat-ui--jixing .chat-composer--jx .composer-model > button {
+  display: inline-flex;
+}
+
+/* ── 窄屏适配 ─────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .chat-ui--jixing .jx-home-lower {
+    flex-direction: column;
+  }
+
+  .chat-ui--jixing .jx-banner__slide {
+    min-height: 180px;
+  }
+
+  /* 移动端横幅更矮：水印图标同步缩小并上移，继续避开底部文案区 */
+  .chat-ui--jixing .jx-banner__fallback {
+    inset: 0 0 104px 0;
+  }
+
+  .chat-ui--jixing .jx-banner__fallback svg {
+    width: 40px;
+    height: 40px;
+  }
+
+  .chat-ui--jixing .jx-recommend {
+    flex: 1 1 auto;
+  }
+
+  .chat-ui--jixing .jx-recommend__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chat-ui--jixing .jx-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chat-ui--jixing .jx-promo-toast {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .chat-ui--jixing .chat-composer--jx {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    min-height: 0;
+  }
+
+  .chat-ui--jixing .chat-composer--jx .jx-composer__body {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .chat-ui--jixing .chat-composer--jx .jx-composer__body textarea {
+    grid-column: auto;
+    grid-row: auto;
+    min-height: 64px;
+  }
+
+  .chat-ui--jixing .jx-composer__toolbar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-left: 42px;
+  }
+
+  /* 上传按钮收成小圆钮，吸附在工具栏左侧，避免全宽横条挤占文本区。
+     选择器带 button 标签（0,3,1）：否则免疫块的
+     `> button:first-of-type { position: static }` 会以同等特异性按源序胜出，
+     小圆钮变回 82px 大块压住 placeholder。 */
+  .chat-ui--jixing .chat-composer--jx > button.jx-composer__upload {
+    position: absolute;
+    left: 14px;
+    bottom: 12px;
+    z-index: 1;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+  }
+
+  .chat-ui--jixing .chat-composer--jx > .jx-composer__upload svg {
+    padding: 3px;
+  }
+
+  /* 工具行图标体系统一：联网与模型 chip 套用与「+」同规格的圆角容器（32px、圆角 9、control 底），
+     只保留语音/发送主键为实色圆底 */
+  .chat-ui--jixing .jx-composer__toolbar .composer-web-search {
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 9px;
+    background: var(--studio-control);
+  }
+
+  .chat-ui--jixing .jx-composer__toolbar .composer-web-search.is-active {
+    background: var(--studio-brand-soft);
+  }
+
+  .chat-ui--jixing .jx-composer__toolbar .composer-model > button {
+    height: 32px;
+    border-radius: 9px;
+    background: var(--studio-control);
+  }
+
+  /* 快捷工具卡：移动端文字正常横排，别竖着挤 */
+  .chat-ui--jixing .jx-chip {
+    gap: 6px;
+    height: auto;
+    min-height: 56px;
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .chat-ui--jixing .jx-chip span {
+    min-width: 0;
+    text-align: left;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    /* 两行时均衡折行，避免「一键商品精/修」这类孤字行 */
+    text-wrap: balance;
+  }
+
+  .chat-ui--jixing .jx-chip__thumb,
+  .chat-ui--jixing .jx-chip__icon {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+  }
+}
+
+
+/* ── 提交钮豁免全局 .chat-composer-submit 交互：保持 pill 形态，不缩放，脉冲环跟随圆角 ── */
+.chat-ui--jixing .chat-composer .jx-composer__submit:not(:disabled):hover,
+.chat-ui--jixing .chat-composer .jx-composer__submit:not(:disabled):active {
+  transform: none;
+}
+
+.chat-ui--jixing .chat-composer .jx-composer__submit.is-generating::after {
+  border-radius: 999px;
+}
+
+/* ── 首页入场动效：与其他预设的 chat-home-rise 一致 ── */
+.chat-page:not(.has-messages).chat-ui--jixing .jx-home-hero {
+  animation: chat-home-rise .48s cubic-bezier(.2, .7, .3, 1) both;
+}
+
+.chat-page:not(.has-messages).chat-ui--jixing .jx-home-extras {
+  animation: chat-home-rise .48s .13s cubic-bezier(.2, .7, .3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-page:not(.has-messages).chat-ui--jixing .jx-home-hero,
+  .chat-page:not(.has-messages).chat-ui--jixing .jx-home-extras {
+    animation: none;
+  }
+}
+

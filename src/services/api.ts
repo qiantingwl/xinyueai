@@ -3,7 +3,6 @@ export class ApiError extends Error {
 }
 
 const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '') || ''
-const localFrontendPorts = new Set(['4173', '5173', '5174', '5175'])
 
 export type ApiLifecycleDetail = {
   id: string
@@ -49,23 +48,9 @@ function emitLifecycle(detail: ApiLifecycleDetail) {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent<ApiLifecycleDetail>('xinyue:api-lifecycle', { detail }))
 }
 
-function mutationMessage(method: string) {
-  if (method === 'DELETE') return '删除成功'
-  if (method === 'PATCH' || method === 'PUT') return '保存成功'
-  return '操作成功'
-}
-
-function localApiBase() {
-  if (typeof window === 'undefined') return ''
-  const host = window.location.hostname
-  const isLocal = host === 'localhost' || host === '127.0.0.1'
-  return isLocal && localFrontendPorts.has(window.location.port) ? `http://${host}:3100` : ''
-}
-
 export function apiUrl(path: string) {
   const normalizedPath = path.startsWith('/v1') ? path : `/v1${path.startsWith('/') ? path : `/${path}`}`
-  const base = configuredApiBase || localApiBase()
-  return base ? `${base}${normalizedPath}` : normalizedPath
+  return configuredApiBase ? `${configuredApiBase}${normalizedPath}` : normalizedPath
 }
 
 export async function api<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
@@ -90,7 +75,6 @@ export async function api<T>(path: string, init: ApiRequestInit = {}): Promise<T
       emitLifecycle({ id: requestId, path, method, phase: 'error', message: error.message })
       throw error
     }
-    if (path.startsWith('/admin') && method !== 'GET') emitLifecycle({ id: requestId, path, method, phase: 'success', message: mutationMessage(method) })
     if (response.status === 204) return undefined as T
     return response.json() as Promise<T>
   } catch (reason) {
@@ -154,4 +138,36 @@ export async function streamApiEvents<T>(path: string, onEvent?: (value: T) => v
   if (buffer.trim()) consume(buffer)
   if (!latest) throw new ApiError(502, '流式响应中没有任务状态')
   return latest
+}
+
+export type JobWatchOptions<T extends { status: string }> = {
+  isTerminal?: (status: T['status']) => boolean
+  onUpdate?: (value: T) => void
+  intervalMs?: number
+  maxAttempts?: number
+  timeoutMessage?: string
+}
+
+const defaultTerminal = (status: string) => ['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(status)
+
+export async function pollUntilTerminal<T extends { status: string }>(path: string, options: JobWatchOptions<T> = {}) {
+  const isTerminal = options.isTerminal ?? defaultTerminal
+  const intervalMs = options.intervalMs ?? 1000
+  const maxAttempts = options.maxAttempts ?? 180
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const value = await api<T>(path, { cache: 'no-store' })
+    options.onUpdate?.(value)
+    if (isTerminal(value.status)) return value
+    await new Promise((resolve) => window.setTimeout(resolve, intervalMs))
+  }
+  throw new Error(options.timeoutMessage ?? '任务处理超时，请稍后重新打开查看')
+}
+
+/** SSE 优先，失败后回落到轮询。生成任务、Agent 任务、画布节点共用。 */
+export async function watchJobEvents<T extends { status: string }>(eventsPath: string, pollPath: string, options: JobWatchOptions<T> = {}) {
+  try {
+    return await streamApiEvents<T>(eventsPath, options.onUpdate)
+  } catch {
+    return pollUntilTerminal<T>(pollPath, options)
+  }
 }

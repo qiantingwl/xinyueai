@@ -15,8 +15,7 @@
     "lint:prettier": "prettier --write \"**/*.{js,cjs,ts,json,tsx,css,less,scss,vue,html,md}\"",
     "lint:stylelint": "stylelint  \"**/*.{css,scss,vue}\" --fix",
     "lint:lint-staged": "lint-staged",
-    "commit": "git-cz",
-    "clean:dev": "tsx scripts/clean-dev.ts"
+    "commit": "git-cz"
   },
   "config": {
     "commitizen": {
@@ -60,7 +59,7 @@
     "@wangeditor/editor-for-vue": "next",
     "axios": "^1.19.0",
     "echarts": "^6.1.0",
-    "element-plus": "^2.12.0",
+    "element-plus": "^2.14.6",
     "highlight.js": "^11.12.0",
     "mitt": "^3.0.1",
     "nprogress": "^0.2.0",

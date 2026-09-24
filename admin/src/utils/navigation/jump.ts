@@ -7,7 +7,6 @@
  *
  * - 外部链接打开（新窗口）
  * - 菜单项跳转处理（支持内部路由和外部链接）
- * - iframe 页面跳转支持
  * - 递归查找并跳转到第一个可见的子菜单
  * - 智能判断跳转目标类型（外部链接/内部路由）
  *
@@ -38,9 +37,8 @@ export const openExternalLink = (link: string): boolean => {
  * @returns
  */
 export const handleMenuJump = (item: AppRouteRecord, jumpToFirst: boolean = false) => {
-  // 处理外部链接
-  const { link, isIframe } = item.meta
-  if (link && !isIframe) {
+  const { link } = item.meta
+  if (link) {
     return openExternalLink(link)
   }
 

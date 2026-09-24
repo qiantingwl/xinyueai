@@ -13,13 +13,14 @@
       <div v-else-if="!jobs.length" class="workspace-task-empty">暂无生成任务</div>
       <div v-else class="workspace-task-list">
         <article v-for="job in jobs" :key="job.id">
-          <span class="workspace-task-icon"><MessageSquare v-if="job.kind === 'CHAT'" :size="16" /><Video v-else-if="job.kind === 'VIDEO'" :size="16" /><Image v-else :size="16" /></span>
-          <div>
-            <strong>{{ kindLabel[job.kind] }}</strong>
-            <p>{{ job.prompt }}</p>
-            <small>{{ statusLabel[job.status] }} · {{ formatTime(job.createdAt) }}</small>
-          </div>
-          <nav>
+          <button class="workspace-task-open" type="button" @click="openJob(job)">
+            <span class="workspace-task-icon"><MessageSquare v-if="job.kind === 'CHAT'" :size="16" /><Video v-else-if="job.kind === 'VIDEO'" :size="16" /><Image v-else :size="16" /></span>
+            <div>
+              <strong>{{ jobTitle(job) }}</strong>
+              <small>{{ kindLabel[job.kind] }} · {{ statusLabel[job.status] }} · {{ formatTime(job.createdAt) }}</small>
+            </div>
+          </button>
+          <nav @click.stop @pointerdown.stop>
             <button v-if="activeStatuses.has(job.status)" type="button" aria-label="停止任务" title="停止" :disabled="busyId === job.id" @click="cancel(job)"><Square :size="15" /></button>
             <button v-else-if="retryStatuses.has(job.status)" type="button" aria-label="重试任务" title="重试" :disabled="busyId === job.id" @click="retry(job)"><RotateCcw :size="15" /></button>
           </nav>
@@ -32,16 +33,25 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Image, ListChecks, MessageSquare, RefreshCw, RotateCcw, Square, Video } from 'lucide-vue-next'
 import { api } from '../../services/api'
+import { useStudioStore } from '../../stores/studio'
+import { generationStatusText } from '../../utils/status-labels'
+import { formatDayTime } from '../../utils/datetime'
 
 type TaskJob = {
   id: string
   kind: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE'
   status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
   prompt: string
+  conversationId?: string | null
   createdAt: string
 }
+
+const router = useRouter()
+const route = useRoute()
+const studio = useStudioStore()
 
 const open = ref(false)
 const loading = ref(false)
@@ -51,14 +61,17 @@ const jobs = ref<TaskJob[]>([])
 const activeStatuses = new Set<TaskJob['status']>(['QUEUED', 'RUNNING'])
 const retryStatuses = new Set<TaskJob['status']>(['FAILED', 'CANCELLED'])
 const kindLabel: Record<TaskJob['kind'], string> = { CHAT: '对话', IMAGE: '图片生成', VIDEO: '视频生成', COMMERCE: '商品视觉' }
-const statusLabel: Record<TaskJob['status'], string> = { QUEUED: '排队中', RUNNING: '处理中', SUCCEEDED: '已完成', FAILED: '失败', CANCELLED: '已取消' }
+const statusLabel = generationStatusText
 const activeCount = computed(() => jobs.value.filter((job) => activeStatuses.has(job.status)).length)
 let timer: number | undefined
 
 async function load() {
   loading.value = true
   error.value = ''
-  try { jobs.value = (await api<TaskJob[]>('/generations')).slice(0, 30) }
+  try {
+    jobs.value = (await api<TaskJob[]>('/generations')).slice(0, 30)
+    await studio.refreshConversations().catch(() => undefined)
+  }
   catch (reason) { error.value = reason instanceof Error ? reason.message : '任务读取失败' }
   finally { loading.value = false }
 }
@@ -82,11 +95,60 @@ async function retry(job: TaskJob) {
   finally { busyId.value = '' }
 }
 
-function formatTime(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+function jobTitle(job: TaskJob) {
+  if (job.conversationId) {
+    const conversation = [...studio.conversations, ...studio.archivedConversations].find((item) => item.id === job.conversationId)
+    if (conversation?.title.trim()) return conversation.title
+  }
+  return job.prompt.trim() || kindLabel[job.kind]
 }
 
-onMounted(() => { void load(); timer = window.setInterval(() => { if (open.value || activeCount.value) void load() }, 5000) })
-onBeforeUnmount(() => { if (timer) window.clearInterval(timer) })
+async function openJob(job: TaskJob) {
+  open.value = false
+  error.value = ''
+  try {
+    const loaded = await studio.loadGeneration(job.id)
+    const conversationId = loaded?.conversationId || job.conversationId || ''
+    const path = '/chat'
+    const nextQuery = conversationId
+      ? { conversation: conversationId, generation: job.id }
+      : { generation: job.id }
+    const sameRoute = route.path === path && route.query.conversation === (conversationId || undefined) && route.query.generation === job.id
+    if (!sameRoute) await router.push({ path, query: nextQuery })
+    if (conversationId) {
+      await studio.openConversation(conversationId)
+      if (studio.currentConversationId === conversationId) void studio.resumeCurrentChat()
+    }
+    await studio.refreshConversations().catch(() => undefined)
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : '打开任务失败'
+    open.value = true
+  }
+}
+
+const formatTime = (value: string) => formatDayTime(value)
+
+function closeOnOutside(event: PointerEvent) {
+  const target = event.target as HTMLElement | null
+  if (target?.closest('.workspace-task-center')) return
+  open.value = false
+}
+function closeOnEscape(event: KeyboardEvent) {
+  if (event.key === 'Escape') open.value = false
+}
+function close() { open.value = false }
+
+onMounted(() => {
+  void load()
+  timer = window.setInterval(() => { if (open.value || activeCount.value) void load() }, 5000)
+  document.addEventListener('pointerdown', closeOnOutside)
+  document.addEventListener('keydown', closeOnEscape)
+  document.addEventListener('xinyue:close-popovers', close)
+})
+onBeforeUnmount(() => {
+  if (timer) window.clearInterval(timer)
+  document.removeEventListener('pointerdown', closeOnOutside)
+  document.removeEventListener('keydown', closeOnEscape)
+  document.removeEventListener('xinyue:close-popovers', close)
+})
 </script>

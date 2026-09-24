@@ -119,9 +119,13 @@
           >
           <ElTableColumn :label="xt('操作')" :width="isCompact ? 145 : 200" fixed="right"
             ><template #default="{ row }"
-              ><ElButton link type="primary" @click="openUserEditor(row)">{{ xt('编辑') }}</ElButton
-              ><ElButton link type="primary" @click="openCredits(row)">{{ xt('调余额') }}</ElButton
-              ><ElDropdown @command="(command: string) => handleCommand(command, row)"
+              ><ElButton link type="primary" @click="openUserEditor(row as AdminUser)">{{
+                xt('编辑')
+              }}</ElButton
+              ><ElButton link type="primary" @click="openCredits(row as AdminUser)">{{
+                xt('调余额')
+              }}</ElButton
+              ><ElDropdown @command="(command: string) => handleCommand(command, row as AdminUser)"
                 ><ElButton link :aria-label="xt('更多用户操作')"
                   ><ArtSvgIcon icon="ri:more-2-fill" /></ElButton
                 ><template #dropdown
@@ -258,12 +262,13 @@
 <script setup lang="ts">
   import { ElMessage, ElMessageBox } from 'element-plus'
   import { customerApi as xinyueApi, type AdminUser, type UserGroup } from '@/api/xinyue/customers'
-  import { xinyueLocale, xinyueText as xt } from '@/locales/xinyue'
+  import { useCompactLayout, useXinyueAsync } from '@/hooks'
+  import { xinyueText as xt } from '@/locales/xinyue'
+  import { formatDateTime } from '@/utils/xinyue/formatters'
   defineOptions({ name: 'XinyueUsers' })
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
   const users = ref<AdminUser[]>([])
   const groups = ref<UserGroup[]>([])
-  const loading = ref(false)
-  const saving = ref(false)
   const filters = reactive({ q: '', status: '', groupId: '' })
   const creditDialog = ref(false)
   const creditTarget = ref<AdminUser | null>(null)
@@ -281,25 +286,19 @@
     groupIds: [] as string[]
   })
   const defaultGroup = computed(() => groups.value.find((group) => group.isDefault))
-  const isCompact = ref(false)
-  const date = (value?: string | null) =>
-    value
-      ? new Intl.DateTimeFormat(xinyueLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(
-          new Date(value)
-        )
-      : xt('从未登录')
+  const isCompact = useCompactLayout()
+  const date = (value?: string | null) => formatDateTime(value, xt('从未登录'))
   async function loadUsers() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       const params = Object.fromEntries(Object.entries(filters).filter(([, value]) => value))
       users.value = await xinyueApi.users(params)
-    } finally {
-      loading.value = false
-    }
+    })
   }
   async function load() {
-    groups.value = await xinyueApi.groups()
-    await loadUsers()
+    await withLoading(async () => {
+      groups.value = await xinyueApi.groups()
+      await loadUsers()
+    })
   }
   function reset() {
     Object.assign(filters, { q: '', status: '', groupId: '' })
@@ -330,10 +329,10 @@
     }
   }
   async function saveUser() {
-    if (!editTarget.value || !userForm.displayName) return ElMessage.warning(xt('请填写用户名称'))
+    const target = editTarget.value
+    if (!target || !userForm.displayName) return ElMessage.warning(xt('请填写用户名称'))
     if (!userForm.groupIds.length) return ElMessage.warning(xt('请至少选择一个用户分组'))
-    saving.value = true
-    try {
+    await withSaving(async () => {
       const profile = {
         displayName: userForm.displayName,
         ...(userForm.email ? { email: userForm.email } : {}),
@@ -342,14 +341,12 @@
         tags: userForm.tags,
         adminNote: userForm.adminNote
       }
-      await xinyueApi.updateUserProfile(editTarget.value.id, profile)
-      await xinyueApi.updateUserGroups(editTarget.value.id, userForm.groupIds)
+      await xinyueApi.updateUserProfile(target.id, profile)
+      await xinyueApi.updateUserGroups(target.id, userForm.groupIds)
       editDrawer.value = false
       ElMessage.success(xt('用户资料和分组已更新'))
       await loadUsers()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function revokeSessions() {
     if (!editTarget.value) return
@@ -361,16 +358,14 @@
     await xinyueApi.revokeUserSessions(editTarget.value.id)
   }
   async function saveCredits() {
-    if (!creditTarget.value || !creditForm.amount || creditForm.reason.length < 2)
+    const target = creditTarget.value
+    if (!target || !creditForm.amount || creditForm.reason.length < 2)
       return ElMessage.warning(xt('请填写调整点数和原因'))
-    saving.value = true
-    try {
-      await xinyueApi.adjustCredits(creditTarget.value.id, creditForm.amount, creditForm.reason)
+    await withSaving(async () => {
+      await xinyueApi.adjustCredits(target.id, creditForm.amount, creditForm.reason)
       creditDialog.value = false
       await loadUsers()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function handleCommand(status: string, user: AdminUser) {
     if (status === 'sessions') {
@@ -385,15 +380,9 @@
     await xinyueApi.setUserStatus(user.id, status as AdminUser['status'])
     await loadUsers()
   }
-  function updateCompact() {
-    isCompact.value = window.innerWidth <= 1200
-  }
   onMounted(() => {
-    updateCompact()
-    window.addEventListener('resize', updateCompact)
     void load()
   })
-  onBeforeUnmount(() => window.removeEventListener('resize', updateCompact))
 </script>
 
 <style scoped>

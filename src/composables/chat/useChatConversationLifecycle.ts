@@ -26,6 +26,9 @@ interface ChatConversationLifecycleOptions {
   isGenerating: () => boolean
   clearArtifact: () => void
   scrollThreadToBottom: (behavior?: ScrollBehavior) => Promise<void>
+  /** 流式跟随：跟随中瞬时贴底，用户上滚退出后跟随后台继续但不拽动 */
+  stickThreadToBottom: () => void
+  isThreadFollowing: () => boolean
 }
 
 export function useChatConversationLifecycle(options: ChatConversationLifecycleOptions) {
@@ -52,7 +55,7 @@ export function useChatConversationLifecycle(options: ChatConversationLifecycleO
   watch(
     () => options.generations().map((generation) => `${generation.id}:${generation.status}:${generation.assets.length}`).join('|'),
     () => {
-      if (options.activeMode.value === 'chat') void options.scrollThreadToBottom()
+      if (options.activeMode.value === 'chat' && options.isThreadFollowing()) void options.scrollThreadToBottom()
     },
   )
 
@@ -60,7 +63,7 @@ export function useChatConversationLifecycle(options: ChatConversationLifecycleO
     () => options.messages().map((message) => `${message.id}:${message.content.length}`).join('|'),
     () => {
       if (options.activeMode.value === 'chat' && options.isGenerating()) {
-        void options.scrollThreadToBottom('auto')
+        options.stickThreadToBottom()
       }
     },
   )

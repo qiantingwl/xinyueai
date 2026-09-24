@@ -7,6 +7,7 @@ import { AuthGuard } from '../auth/auth.guard'
 import { AuthenticatedUser, CurrentUser } from '../common/request-user'
 import { PrismaService } from '../prisma/prisma.service'
 import { PromptLibraryService } from './prompt-library.service'
+import { Public } from '../auth/public.decorator'
 
 class PromptLibrarySourceUpdateDto {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(100) displayName?: string
@@ -25,6 +26,7 @@ class PromptLibraryItemUpdateDto {
   @IsOptional() @IsBoolean() enabled?: boolean
 }
 
+@Public()
 @Controller('prompt-library')
 export class PromptLibraryController {
   constructor(private readonly library: PromptLibraryService) {}

@@ -28,6 +28,18 @@ test('聊天主页配置拒绝协议相对和反斜线相对地址', () => {
   assert.equal(result.qianwenBanners[1]?.targetUrl, '/office')
 })
 
+test('设计快捷入口把旧的生图地址纠正到画布', () => {
+  const result = normalizeChatHomeContent({
+    quickActions: {
+      kimi: [
+        { id: 'kimi-design', label: '设计', icon: 'design', placement: 'BAR', actionType: 'ROUTE', target: '/image' },
+      ],
+    },
+  })
+  const design = result.quickActions.kimi.find((item) => item.id === 'kimi-design')
+  assert.equal(design?.target, '/canvases')
+})
+
 test('快捷能力 ID 去重且只接受受支持的动作类型', () => {
   const result = normalizeChatHomeContent({
     quickActions: {

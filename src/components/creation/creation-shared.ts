@@ -1,5 +1,6 @@
 import type { StudioAsset } from '../../types'
 import type { ImageToolOptions } from '../../utils/image-tools'
+import { formatFileSize } from '../../utils/format-bytes'
 
 export interface Inspiration {
   id: string
@@ -13,7 +14,7 @@ export interface Inspiration {
 }
 export interface ImageTool extends Inspiration { enabled?: boolean; options?: ImageToolOptions | null }
 
-export type CreationMenu = 'model' | 'type' | 'size' | 'style' | 'resolution' | 'duration' | 'aspect' | 'platform' | 'quality' | 'modules' | 'count' | 'format' | 'background' | null
+export type CreationMenu = 'model' | 'type' | 'size' | 'style' | 'resolution' | 'duration' | 'aspect' | 'platform' | 'quality' | 'modules' | 'count' | 'format' | 'background' | 'videoSettings' | null
 
 export function hasImagePreview(asset: StudioAsset) {
   return Boolean(asset.contentUrl) && (asset.kind === 'image' || asset.mimeType?.startsWith('image/'))
@@ -22,8 +23,5 @@ export function hasImagePreview(asset: StudioAsset) {
 export function attachmentMeta(asset: StudioAsset) {
   const extension = asset.title.includes('.') ? asset.title.split('.').pop()?.toUpperCase() : undefined
   const type = extension || asset.mimeType?.split('/').pop()?.toUpperCase() || '文件'
-  if (!asset.size) return type
-  if (asset.size < 1024) return `${type} · ${asset.size} B`
-  if (asset.size < 1024 * 1024) return `${type} · ${(asset.size / 1024).toFixed(1)} KB`
-  return `${type} · ${(asset.size / (1024 * 1024)).toFixed(1)} MB`
+  return asset.size ? `${type} · ${formatFileSize(asset.size)}` : type
 }

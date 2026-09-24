@@ -39,7 +39,10 @@ export default ({ mode }: { mode: string }) => {
     server: {
       port: Number(VITE_PORT || 5174),
       proxy: apiProxy,
-      host: true
+      host: true,
+      fs: {
+        allow: [path.resolve(__dirname, '..')]
+      }
     },
     preview: {
       proxy: apiProxy,

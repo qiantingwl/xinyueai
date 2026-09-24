@@ -1,12 +1,11 @@
 <template>
   <section class="works-page">
-    <header class="works-page__header">
-      <div>
-        <h1>作品中心</h1>
-        <p>发布创作成果、保留版本，并在审核通过后进入作品广场。</p>
-      </div>
-      <button v-if="auth.isAuthenticated && activeView === 'mine'" class="works-primary" type="button" @click="openCreate"><Plus :size="17" />创建作品</button>
-    </header>
+    <WorkspaceSectionTabs active="works" />
+    <SectionHeader class="works-page__header" heading-tag="h1" title="作品中心" description="发布创作成果、保留版本，并在审核通过后进入作品广场。">
+      <template #actions>
+        <button v-if="auth.isAuthenticated" class="works-primary" type="button" @click="openCreate()"><Plus :size="17" />发布作品</button>
+      </template>
+    </SectionHeader>
 
     <div class="works-view-switch" role="tablist" aria-label="作品视图">
       <button type="button" role="tab" :aria-selected="activeView === 'gallery'" :class="{ 'is-active': activeView === 'gallery' }" @click="switchView('gallery')"><Compass :size="16" />作品广场</button>
@@ -14,7 +13,7 @@
     </div>
 
     <template v-if="activeView === 'gallery'">
-      <div class="works-toolbar">
+      <div v-if="galleryItems.length || galleryQuery || galleryCategory" class="works-toolbar">
         <label><Search :size="16" /><input v-model.trim="galleryQuery" placeholder="搜索标题、描述或标签" @keydown.enter="loadGallery" /></label>
         <select v-model="galleryCategory" aria-label="作品分类" @change="loadGallery"><option value="">全部分类</option><option v-for="category in categories" :key="category" :value="category">{{ category }}</option></select>
         <select v-model="gallerySort" aria-label="作品排序" @change="loadGallery"><option value="featured">精选优先</option><option value="latest">最新发布</option><option value="popular">热门作品</option></select>
@@ -37,12 +36,17 @@
           </div>
         </article>
       </div>
-      <div v-else-if="!galleryError" class="works-empty"><span><Images :size="24" /></span><strong>还没有公开作品</strong><p>审核通过并设为公开的作品会展示在这里。</p></div>
+      <EmptyState v-else-if="!galleryError" :icon="Images" title="还没有公开作品" description="从文件库挑一张图或视频发布后，就会出现在这里。">
+        <button v-if="auth.isAuthenticated" class="works-primary" type="button" @click="openCreate()"><Plus :size="16" />发布作品</button>
+        <RouterLink class="works-secondary" to="/image"><Compass :size="16" />去创作</RouterLink>
+      </EmptyState>
       <button v-if="galleryCursor" class="works-load-more" type="button" :disabled="loadingMore" @click="loadMore">{{ loadingMore ? '加载中' : '加载更多' }}</button>
     </template>
 
     <template v-else>
-      <div v-if="!auth.isAuthenticated" class="works-empty"><span><LockKeyhole :size="24" /></span><strong>登录后管理作品</strong><p>你的草稿、审核记录和已发布版本都会集中保存在这里。</p><RouterLink to="/login?redirect=/works?view=mine">登录</RouterLink></div>
+      <EmptyState v-if="!auth.isAuthenticated" :icon="LockKeyhole" title="登录后管理作品" description="你的草稿、审核记录和已发布版本都会集中保存在这里。">
+        <RouterLink class="works-primary" to="/login?redirect=/works?view=mine">登录</RouterLink>
+      </EmptyState>
       <div v-else-if="loadingMine" class="works-state"><LoaderCircle class="works-spin" :size="22" />正在加载我的作品</div>
       <div v-else-if="mineError" class="works-load-error works-load-error--center" role="alert"><span><CircleAlert :size="18" />{{ mineError }}</span><button type="button" :disabled="loadingMine" @click="loadMine"><RefreshCw :size="15" />重新加载</button></div>
       <div v-else-if="myWorks.length" class="my-works-list">
@@ -52,7 +56,7 @@
             <img v-else-if="cover(work, true)" :src="mediaUrl(cover(work, true)?.contentUrl)" :alt="work.currentVersion.title" />
             <ImageIcon v-else :size="24" />
           </button>
-          <div><span><strong>{{ work.currentVersion.title }}</strong><em :class="`is-${work.currentVersion.moderationStatus.toLowerCase()}`">{{ statusText(work.currentVersion.moderationStatus) }}</em></span><p>{{ work.currentVersion.description || '暂未填写作品简介' }}</p><small>v{{ work.currentVersion.versionNumber }} · {{ visibilityText(work.currentVersion.visibility) }} · {{ formatDate(work.updatedAt) }}</small><small v-if="work.currentVersion.rejectionReason" class="is-error">{{ work.currentVersion.rejectionReason }}</small></div>
+          <div><span><strong>{{ work.currentVersion.title }}</strong><StatusPill :tone="statusTone(work.currentVersion.moderationStatus)" :label="statusText(work.currentVersion.moderationStatus)" /></span><p>{{ work.currentVersion.description || '暂未填写作品简介' }}</p><small>v{{ work.currentVersion.versionNumber }} · {{ visibilityText(work.currentVersion.visibility) }} · {{ formatDate(work.updatedAt) }}</small><small v-if="work.currentVersion.rejectionReason" class="is-error">{{ work.currentVersion.rejectionReason }}</small></div>
           <nav>
             <button type="button" title="编辑作品" aria-label="编辑作品" @click="openEdit(work)"><Pencil :size="16" /></button>
             <button v-if="['DRAFT', 'REJECTED'].includes(work.currentVersion.moderationStatus) && work.currentVersion.visibility !== 'PRIVATE'" type="button" title="提交审核" aria-label="提交审核" @click="submitWork(work)"><Send :size="16" /></button>
@@ -61,7 +65,9 @@
           </nav>
         </article>
       </div>
-      <div v-else class="works-empty"><span><FolderHeart :size="24" /></span><strong>创建你的第一个作品</strong><p>从文件库中选择图片或视频，整理标题、简介和公开信息后提交审核。</p><button type="button" @click="openCreate"><Plus :size="16" />创建作品</button></div>
+      <EmptyState v-else :icon="FolderHeart" title="把生成结果发到作品中心" description="文件库里的图片和视频可以直接发布。公开后会出现在作品广场。">
+        <button class="works-primary" type="button" @click="openCreate()"><Plus :size="16" />发布作品</button>
+      </EmptyState>
     </template>
 
     <div v-if="editorOpen" class="works-modal-layer" @click.self="closeEditor">
@@ -71,27 +77,33 @@
           <section class="works-editor__fields">
             <label><span>作品标题</span><input v-model.trim="draft.title" maxlength="120" placeholder="输入清晰、可识别的标题" /></label>
             <label><span>作品简介</span><textarea v-model.trim="draft.description" maxlength="5000" rows="4" placeholder="说明创作思路、内容和适用场景" /></label>
-            <div class="works-editor__row"><label><span>分类</span><input v-model.trim="draft.category" maxlength="80" placeholder="例如：品牌视觉" /></label><label><span>可见范围</span><select v-model="draft.visibility"><option value="PRIVATE">私密</option><option value="UNLISTED">仅链接可见</option><option value="PUBLIC">公开展示</option></select></label></div>
+            <div class="works-editor__row"><label><span>分类</span><input v-model.trim="draft.category" maxlength="80" placeholder="例如：品牌视觉" /></label><label><span>可见范围</span><select v-model="draft.visibility"><option value="PUBLIC">公开展示</option><option value="UNLISTED">仅链接可见</option><option value="PRIVATE">私密</option></select></label></div>
             <label><span>标签</span><input v-model="draft.tagsText" placeholder="使用逗号分隔，最多 12 个" /></label>
-            <label><span>公开提示词</span><textarea v-model.trim="draft.publicPrompt" maxlength="10000" rows="3" placeholder="可选，公开后方便其他用户继续创作" /></label>
+            <label><span>公开提示词</span><textarea v-model.trim="draft.publicPrompt" maxlength="10000" rows="3" placeholder="选择素材时会带入其生成提示词；留空则不公开提示词" /></label>
             <div class="works-editor__row"><label><span>作者展示</span><select v-model="draft.authorDisplay"><option value="PROFILE">个人资料名称</option><option value="CUSTOM">自定义名称</option><option value="HIDDEN">匿名</option></select></label><label v-if="draft.authorDisplay === 'CUSTOM'"><span>展示名称</span><input v-model.trim="draft.customAuthor" maxlength="80" /></label></div>
           </section>
           <section class="works-asset-picker">
-            <header><div><strong>选择作品素材</strong><small>第一项将作为封面，可选择最多 20 个图片或视频。</small></div><span>{{ draft.assetIds.length }}/20</span></header>
+            <header><div><strong>选择作品素材</strong><small>第一项作为封面，当前列表只显示{{ assetKind === 'VIDEO' ? '视频' : '图片' }}，最多 20 个。</small></div><span>{{ draft.assetIds.length }}/20</span></header>
             <div v-if="assetsLoading" class="works-state"><LoaderCircle class="works-spin" :size="18" />加载文件库</div>
             <div v-else-if="assetsError" class="works-editor__empty works-editor__empty--error" role="alert"><CircleAlert :size="22" /><p>{{ assetsError }}</p><button type="button" :disabled="assetsLoading" @click="loadAssets(true)"><RefreshCw :size="15" />重新加载</button></div>
-            <div v-else-if="availableAssets.length" class="works-asset-grid">
-              <button v-for="asset in availableAssets" :key="asset.id" type="button" :class="{ 'is-selected': draft.assetIds.includes(asset.id) }" @click="toggleAsset(asset.id)">
-                <video v-if="asset.kind === 'VIDEO'" :src="mediaUrl(asset.contentUrl)" muted playsinline preload="metadata" />
-                <img v-else :src="mediaUrl(asset.contentUrl)" :alt="asset.name" loading="lazy" />
-                <span>{{ selectedAssetIndex(asset.id) || '' }}</span>
-              </button>
-            </div>
-            <div v-else class="works-editor__empty"><ImageIcon :size="22" /><p>文件库中还没有图片或视频。</p><RouterLink to="/workspace?tab=files" @click="closeEditor">前往文件库</RouterLink></div>
+            <template v-else>
+              <div class="works-asset-kind" role="tablist" aria-label="素材类型">
+                <button type="button" role="tab" :aria-selected="assetKind === 'IMAGE'" :class="{ 'is-active': assetKind === 'IMAGE' }" @click="assetKind = 'IMAGE'">图片<span>{{ imageAssets.length }}</span></button>
+                <button type="button" role="tab" :aria-selected="assetKind === 'VIDEO'" :class="{ 'is-active': assetKind === 'VIDEO' }" @click="assetKind = 'VIDEO'">视频<span>{{ videoAssets.length }}</span></button>
+              </div>
+              <div v-if="visibleAssets.length" ref="assetGrid" class="works-asset-grid">
+                <button v-for="asset in visibleAssets" :key="asset.id" type="button" :class="{ 'is-selected': draft.assetIds.includes(asset.id) }" @click="toggleAsset(asset.id)">
+                  <video v-if="asset.kind === 'VIDEO'" :src="mediaUrl(asset.contentUrl)" muted playsinline preload="metadata" />
+                  <img v-else :src="mediaUrl(asset.contentUrl)" :alt="asset.name" loading="lazy" />
+                  <span>{{ selectedAssetIndex(asset.id) || '' }}</span>
+                </button>
+              </div>
+              <div v-else class="works-editor__empty"><ImageIcon :size="22" /><p>{{ assetKind === 'VIDEO' ? '文件库里还没有视频。' : '文件库里还没有图片。' }}</p><RouterLink to="/workspace?tab=files" @click="closeEditor">前往文件库</RouterLink></div>
+            </template>
           </section>
         </div>
         <p v-if="editorMessage" class="works-feedback" :class="{ 'is-error': editorError }">{{ editorMessage }}</p>
-        <footer><button type="button" @click="closeEditor">取消</button><button class="works-primary" type="submit" :disabled="saving || !draft.title || !draft.assetIds.length">{{ saving ? '保存中' : '保存作品' }}</button></footer>
+        <footer><button type="button" @click="closeEditor">取消</button><button class="works-primary" type="submit" :disabled="saving || !draft.title || !draft.assetIds.length">{{ saving ? '发布中' : draft.visibility === 'PRIVATE' ? '保存作品' : '发布到广场' }}</button></footer>
       </form>
     </div>
 
@@ -112,13 +124,20 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { CircleAlert, Compass, ExternalLink, Eye, Flag, FolderHeart, Heart, Image as ImageIcon, Images, LoaderCircle, LockKeyhole, Pencil, Plus, RefreshCw, Search, Send, Trash2, X } from 'lucide-vue-next'
 import { api, apiUrl } from '../services/api'
+import { useEscapeClose } from '../composables/useEscapeClose'
+import { formatDayTime as formatDate } from '../utils/datetime'
+import { moderationLabel, moderationTone } from '../utils/status-labels'
+import EmptyState from '../components/common/EmptyState.vue'
+import SectionHeader from '../components/common/SectionHeader.vue'
+import StatusPill from '../components/common/StatusPill.vue'
+import WorkspaceSectionTabs from '../components/WorkspaceSectionTabs.vue'
 import { useAuthStore } from '../stores/auth'
 
 type WorkAsset = { id: string; name: string; kind: 'IMAGE' | 'VIDEO'; mimeType: string; contentUrl: string; caption?: string }
 type WorkVersion = { id: string; versionNumber: number; title: string; description: string; category: string; tags: string[]; visibility: 'PRIVATE' | 'UNLISTED' | 'PUBLIC'; authorDisplay: 'PROFILE' | 'CUSTOM' | 'HIDDEN'; customAuthor: string; publicPrompt: string; moderationStatus: string; rejectionReason: string; assets: WorkAsset[] }
 type PublicWork = { id: string; slug: string; isFeatured: boolean; viewCount: number; likeCount: number; publishedAt: string; author: { id: string; name: string; avatarUrl?: string | null; followerCount?: number }; version: WorkVersion }
 type MyWork = PublicWork & { lifecycleStatus: string; updatedAt: string; currentVersion: WorkVersion; publishedVersion?: WorkVersion | null; _count?: { versions: number; likes: number; reports: number } }
-type LibraryAsset = { id: string; name: string; kind: 'IMAGE' | 'VIDEO'; contentUrl: string }
+type LibraryAsset = { id: string; name: string; kind: 'IMAGE' | 'VIDEO'; contentUrl: string; metadata?: { prompt?: string } | null }
 
 const route = useRoute()
 const router = useRouter()
@@ -141,6 +160,11 @@ const saving = ref(false)
 const assetsLoading = ref(false)
 const assetsError = ref('')
 const availableAssets = ref<LibraryAsset[]>([])
+const assetKind = ref<'IMAGE' | 'VIDEO'>('IMAGE')
+const assetGrid = ref<HTMLElement | null>(null)
+const imageAssets = computed(() => availableAssets.value.filter((item) => item.kind === 'IMAGE'))
+const videoAssets = computed(() => availableAssets.value.filter((item) => item.kind === 'VIDEO'))
+const visibleAssets = computed(() => assetKind.value === 'VIDEO' ? videoAssets.value : imageAssets.value)
 const editorMessage = ref('')
 const editorError = ref(false)
 const detailWork = ref<PublicWork | null>(null)
@@ -150,11 +174,28 @@ const reportOpen = ref(false)
 const reportReason = ref('不当内容')
 const reportDetails = ref('')
 const categories = ['品牌视觉', '商品设计', '人物肖像', '插画艺术', '空间建筑', '影视短片', '创意作品']
-const draft = reactive({ title: '', description: '', category: '创意作品', tagsText: '', visibility: 'PRIVATE' as WorkVersion['visibility'], authorDisplay: 'PROFILE' as WorkVersion['authorDisplay'], customAuthor: '', publicPrompt: '', assetIds: [] as string[] })
+const draft = reactive({ title: '', description: '', category: '创意作品', tagsText: '', visibility: 'PUBLIC' as WorkVersion['visibility'], authorDisplay: 'PROFILE' as WorkVersion['authorDisplay'], customAuthor: '', publicPrompt: '', assetIds: [] as string[] })
 
 const galleryParams = computed(() => new URLSearchParams({ ...(galleryQuery.value ? { q: galleryQuery.value } : {}), ...(galleryCategory.value ? { category: galleryCategory.value } : {}), sort: gallerySort.value, limit: '24' }))
 
-onMounted(async () => { await loadGallery(); if (activeView.value === 'mine' && auth.isAuthenticated) await loadMine() })
+onMounted(async () => {
+  await loadGallery()
+  const publishAsset = typeof route.query.asset === 'string' ? route.query.asset : ''
+  const workSlug = typeof route.query.work === 'string' ? route.query.work : ''
+  const wantMine = route.query.view === 'mine' || Boolean(publishAsset)
+  if (wantMine || (auth.isAuthenticated && !galleryItems.value.length && !galleryError.value)) {
+    activeView.value = 'mine'
+    if (!wantMine) await router.replace({ path: '/works', query: { view: 'mine' } })
+    if (auth.isAuthenticated) await loadMine()
+    if (publishAsset && auth.isAuthenticated) {
+      await openCreate({
+        assetId: publishAsset,
+        title: typeof route.query.title === 'string' ? route.query.title : '',
+      })
+    }
+  }
+  if (workSlug) await openPublicWork({ slug: workSlug })
+})
 watch(() => route.query.view, (value) => {
   const nextView = value === 'mine' ? 'mine' : 'gallery'
   if (activeView.value === nextView) return
@@ -162,11 +203,20 @@ watch(() => route.query.view, (value) => {
   if (nextView === 'mine' && auth.isAuthenticated && !myWorks.value.length) void loadMine()
   if (nextView === 'gallery' && !galleryItems.value.length) void loadGallery()
 })
+watch(() => route.query.asset, async (asset, previous) => {
+  if (!asset || asset === previous || typeof asset !== 'string' || !auth.isAuthenticated) return
+  activeView.value = 'mine'
+  await openCreate({ assetId: asset, title: typeof route.query.title === 'string' ? route.query.title : '' })
+})
+watch(() => route.query.work, (slug, previous) => {
+  if (!slug || slug === previous || typeof slug !== 'string') return
+  void openPublicWork({ slug })
+})
 
 function mediaUrl(value?: string) { return value ? apiUrl(value) : '' }
 function cover(work: PublicWork | MyWork, current = false) { return (current && 'currentVersion' in work ? work.currentVersion : work.version || ('publishedVersion' in work ? work.publishedVersion : null))?.assets?.[0] }
-function formatDate(value: string) { return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
-function statusText(value: string) { return ({ DRAFT: '草稿', PENDING: '审核中', APPROVED: '已发布', REJECTED: '已驳回', TAKEN_DOWN: '已下架' } as Record<string, string>)[value] || value }
+const statusText = (value: string) => moderationLabel(value, value)
+const statusTone = moderationTone
 function visibilityText(value: string) { return ({ PRIVATE: '私密', UNLISTED: '仅链接', PUBLIC: '公开' } as Record<string, string>)[value] || value }
 
 async function switchView(value: 'gallery' | 'mine') {
@@ -195,20 +245,60 @@ async function loadMore() {
 async function loadMine() { loadingMine.value = true; mineError.value = ''; try { myWorks.value = await api<MyWork[]>('/works') } catch (reason) { mineError.value = reason instanceof Error ? reason.message : '我的作品加载失败，请稍后重试' } finally { loadingMine.value = false } }
 async function loadAssets(force = false) { if (!force && availableAssets.value.length) return; assetsLoading.value = true; assetsError.value = ''; try { availableAssets.value = (await api<LibraryAsset[]>('/assets')).filter((item) => ['IMAGE', 'VIDEO'].includes(item.kind)) } catch (reason) { assetsError.value = reason instanceof Error ? reason.message : '文件库加载失败，请稍后重试' } finally { assetsLoading.value = false } }
 
-function resetDraft() { Object.assign(draft, { title: '', description: '', category: '创意作品', tagsText: '', visibility: 'PRIVATE', authorDisplay: 'PROFILE', customAuthor: '', publicPrompt: '', assetIds: [] }) }
-async function openCreate() { resetDraft(); editingId.value = ''; editorMessage.value = ''; editorOpen.value = true; await loadAssets() }
-async function openEdit(work: MyWork) { editingId.value = work.id; const value = work.currentVersion; Object.assign(draft, { title: value.title, description: value.description, category: value.category, tagsText: value.tags.join('，'), visibility: value.visibility, authorDisplay: value.authorDisplay, customAuthor: value.customAuthor, publicPrompt: value.publicPrompt, assetIds: value.assets.map((item) => item.id) }); editorMessage.value = ''; editorOpen.value = true; await loadAssets() }
+function resetDraft() { Object.assign(draft, { title: '', description: '', category: '创意作品', tagsText: '', visibility: 'PUBLIC', authorDisplay: 'PROFILE', customAuthor: '', publicPrompt: '', assetIds: [] }) }
+function focusAssetKind(assetId?: string) {
+  const asset = availableAssets.value.find((item) => item.id === assetId)
+  assetKind.value = asset?.kind || (imageAssets.value.length || !videoAssets.value.length ? 'IMAGE' : 'VIDEO')
+}
+function untitledAssetName(name = '') { return name.replace(/\.[a-z0-9]{2,5}$/i, '').trim().slice(0, 120) }
+function promptFromAsset(id?: string) { return availableAssets.value.find((item) => item.id === id)?.metadata?.prompt?.trim() || '' }
+async function openCreate(prefill?: { assetId?: string; title?: string }) {
+  resetDraft()
+  editingId.value = ''
+  editorMessage.value = ''
+  editorOpen.value = true
+  await loadAssets()
+  const preferred = prefill?.assetId && availableAssets.value.some((item) => item.id === prefill.assetId)
+    ? prefill.assetId
+    : availableAssets.value[0]?.id
+  if (preferred) draft.assetIds = [preferred]
+  const named = availableAssets.value.find((item) => item.id === preferred)
+  focusAssetKind(preferred)
+  draft.title = untitledAssetName(prefill?.title || named?.name || '')
+  draft.publicPrompt = promptFromAsset(preferred)
+}
+async function openEdit(work: MyWork) { editingId.value = work.id; const value = work.currentVersion; Object.assign(draft, { title: value.title, description: value.description, category: value.category, tagsText: value.tags.join('，'), visibility: value.visibility, authorDisplay: value.authorDisplay, customAuthor: value.customAuthor, publicPrompt: value.publicPrompt, assetIds: value.assets.map((item) => item.id) }); editorMessage.value = ''; editorOpen.value = true; await loadAssets(); focusAssetKind(value.assets[0]?.id) }
 function closeEditor() { editorOpen.value = false; editorMessage.value = '' }
-function toggleAsset(id: string) { const index = draft.assetIds.indexOf(id); if (index >= 0) draft.assetIds.splice(index, 1); else if (draft.assetIds.length < 20) draft.assetIds.push(id) }
+
+// 编辑弹层压在详情之上，所以详情的 Esc 只在编辑关闭时生效。
+useEscapeClose(closeEditor, { enabled: () => editorOpen.value })
+useEscapeClose(() => { detailWork.value = null }, { enabled: () => !editorOpen.value && Boolean(detailWork.value) })
+watch(assetKind, () => assetGrid.value?.scrollTo({ top: 0 }))
+function toggleAsset(id: string) {
+  const index = draft.assetIds.indexOf(id)
+  if (index >= 0) draft.assetIds.splice(index, 1)
+  else if (draft.assetIds.length < 20) {
+    draft.assetIds.push(id)
+    if (!draft.publicPrompt) draft.publicPrompt = promptFromAsset(id)
+  }
+}
 function selectedAssetIndex(id: string) { const index = draft.assetIds.indexOf(id); return index >= 0 ? index + 1 : 0 }
 
 async function saveWork() {
   saving.value = true; editorMessage.value = ''; editorError.value = false
   try {
     const payload = { title: draft.title, description: draft.description, category: draft.category, tags: draft.tagsText.split(/[，,]/).map((item) => item.trim()).filter(Boolean), visibility: draft.visibility, authorDisplay: draft.authorDisplay, customAuthor: draft.customAuthor, publicPrompt: draft.publicPrompt, assetIds: draft.assetIds }
-    if (editingId.value) await api(`/works/${editingId.value}`, { method: 'PATCH', body: JSON.stringify(payload) })
-    else await api('/works', { method: 'POST', body: JSON.stringify(payload) })
-    await loadMine(); closeEditor()
+    const saved = editingId.value
+      ? await api<MyWork>(`/works/${editingId.value}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      : await api<MyWork>('/works', { method: 'POST', body: JSON.stringify(payload) })
+    if (draft.visibility !== 'PRIVATE') await api(`/works/${saved.id}/submit`, { method: 'POST' })
+    await loadMine()
+    await loadGallery()
+    closeEditor()
+    if (draft.visibility === 'PUBLIC') {
+      activeView.value = 'gallery'
+      await router.replace({ path: '/works' })
+    }
   } catch (reason) { editorError.value = true; editorMessage.value = reason instanceof Error ? reason.message : '作品保存失败' }
   finally { saving.value = false }
 }
@@ -216,7 +306,7 @@ async function saveWork() {
 async function submitWork(work: MyWork) { try { await api(`/works/${work.id}/submit`, { method: 'POST' }); await loadMine() } catch (reason) { window.alert(reason instanceof Error ? reason.message : '提交审核失败') } }
 async function removeWork(work: MyWork) { if (!window.confirm(`删除作品“${work.currentVersion.title}”？`)) return; await api(`/works/${work.id}`, { method: 'DELETE' }); await loadMine() }
 
-async function openPublicWork(work: PublicWork | MyWork) {
+async function openPublicWork(work: Pick<PublicWork, 'slug'> | PublicWork | MyWork) {
   const slug = work.slug
   try { detailWork.value = await api<PublicWork>(`/gallery/${slug}`); reportOpen.value = false; reportDetails.value = ''; await api(`/gallery/${slug}/view`, { method: 'POST' }).catch(() => undefined); if (detailWork.value) detailWork.value.viewCount += 1 }
   catch (reason) { window.alert(reason instanceof Error ? reason.message : '作品暂时无法查看') }
@@ -229,19 +319,19 @@ async function submitReport() { if (!detailWork.value) return; await api(`/works
 
 <style scoped>
 .works-page { box-sizing: border-box; color: var(--studio-text); margin: 0 auto; max-width: 1240px; min-height: 100%; padding: 34px clamp(18px, 4vw, 54px) 60px; width: 100%; }
-.works-page__header { align-items: flex-end; display: flex; gap: 24px; justify-content: space-between; margin-bottom: 22px; }
+.works-page__header { align-items: flex-end; margin-bottom: 22px; }
 .works-page h1,.works-page h2,.works-page p { margin: 0; }
-.works-page__header h1 { font-size: 26px; font-weight: 680; line-height: 1.3; }
-.works-page__header p { color: var(--studio-muted); font-size: 13px; margin-top: 7px; }
-.works-primary,.works-empty button,.works-empty a { align-items: center; background: var(--studio-inverse-bg, #f4f4f5); border: 0; border-radius: 7px; color: var(--studio-inverse-text, #18181b); display: inline-flex; font-weight: 600; gap: 7px; min-height: 38px; padding: 0 14px; text-decoration: none; }
+.works-page__header :deep(.section-header__title) { font-size: 26px; font-weight: 680; line-height: 1.3; }
+.works-primary { align-items: center; background: var(--studio-inverse-bg, #f4f4f5); border: 0; border-radius: 7px; color: var(--studio-inverse-text, #18181b); display: inline-flex; font-weight: 600; gap: 7px; min-height: 38px; padding: 0 14px; text-decoration: none; }
 .works-view-switch { border-bottom: 1px solid var(--studio-border); display: flex; gap: 22px; margin-bottom: 20px; }
 .works-view-switch button { align-items: center; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--studio-muted); display: inline-flex; font-size: 13px; gap: 7px; min-height: 42px; padding: 0 2px; }
 .works-view-switch button.is-active { border-bottom-color: var(--studio-text); color: var(--studio-text); font-weight: 650; }
 .works-toolbar { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(220px, 1fr) 150px 130px 38px; margin-bottom: 18px; }
 .works-toolbar label { align-items: center; background: var(--studio-input); border: 1px solid var(--studio-border); border-radius: 7px; color: var(--studio-muted); display: flex; gap: 8px; height: 38px; padding: 0 10px; }
 .works-toolbar input,.works-toolbar select,.works-editor input,.works-editor select,.works-editor textarea,.work-report select,.work-report textarea { background: var(--studio-input); border: 1px solid var(--studio-border); border-radius: 7px; color: var(--studio-text); font: inherit; outline: none; }
+.works-editor select,.work-report select { padding: 9px 28px 9px 10px; }
 .works-toolbar input { background: transparent; border: 0; min-width: 0; width: 100%; }
-.works-toolbar select { height: 38px; padding: 0 9px; }
+.works-toolbar select { height: 38px; padding: 0 28px 0 9px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
 .works-toolbar > button { align-items: center; background: var(--studio-control); border: 1px solid var(--studio-border); border-radius: 7px; color: var(--studio-text); display: flex; height: 38px; justify-content: center; }
 .works-grid { display: grid; gap: 18px 14px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .work-card { min-width: 0; }
@@ -257,15 +347,12 @@ async function submitReport() { if (!detailWork.value) return; await api(`/works
 .work-card__copy small,.work-card__copy footer { color: var(--studio-muted); font-size: 10px; }
 .work-card__copy footer { align-items: center; display: flex; justify-content: space-between; margin-top: 7px; }
 .work-card__copy footer span:last-child { align-items: center; display: flex; gap: 4px; }
-.works-state,.works-empty { align-items: center; color: var(--studio-muted); display: flex; gap: 9px; justify-content: center; min-height: 220px; }
+.works-state { align-items: center; color: var(--studio-muted); display: flex; gap: 9px; justify-content: center; min-height: 220px; }
+.works-page :deep(.empty-state) { min-height: 220px; }
 .works-load-error { align-items: center; background: color-mix(in srgb, var(--canvas-danger, #db4b4b) 8%, var(--studio-panel)); border: 1px solid color-mix(in srgb, var(--canvas-danger, #db4b4b) 28%, var(--studio-border)); border-radius: 8px; color: var(--canvas-danger, #db4b4b); display: flex; font-size: 12px; gap: 16px; justify-content: space-between; margin: 0 0 18px; padding: 11px 12px; }
 .works-load-error > span,.works-load-error button { align-items: center; display: inline-flex; gap: 7px; }
 .works-load-error button,.works-editor__empty--error button { background: var(--studio-panel); border: 1px solid var(--studio-border); border-radius: 7px; color: var(--studio-text); min-height: 36px; padding: 0 11px; }
 .works-load-error--center { margin-top: 12px; }
-.works-empty { flex-direction: column; text-align: center; }
-.works-empty > span { align-items: center; background: var(--studio-control); border: 1px solid var(--studio-border); border-radius: 8px; display: flex; height: 48px; justify-content: center; width: 48px; }
-.works-empty strong { color: var(--studio-text); font-size: 15px; }
-.works-empty p { font-size: 12px; }
 .works-load-more { background: transparent; border: 1px solid var(--studio-border); border-radius: 7px; color: var(--studio-text); display: block; margin: 28px auto 0; min-height: 36px; padding: 0 18px; }
 .works-spin { animation: works-spin 900ms linear infinite; }
 @keyframes works-spin { to { transform: rotate(360deg); } }
@@ -276,8 +363,7 @@ async function submitReport() { if (!detailWork.value) return; await api(`/works
 .my-works-list article > div { display: grid; gap: 5px; min-width: 0; }
 .my-works-list article > div > span { align-items: center; display: flex; gap: 8px; }
 .my-works-list article strong { font-size: 14px; }
-.my-works-list article em { background: var(--studio-control); border-radius: 4px; color: var(--studio-muted); font-size: 9px; font-style: normal; padding: 3px 5px; }
-.my-works-list article em.is-approved { color: #3f9362; }.my-works-list article em.is-pending { color: #c88b31; }.my-works-list article em.is-rejected,.my-works-list .is-error { color: #d65b5b; }
+.my-works-list .is-error { color: var(--studio-danger); }
 .my-works-list article p,.my-works-list article small { color: var(--studio-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .my-works-list nav { display: flex; gap: 4px; }
 .my-works-list nav button,.works-editor header > button,.work-detail > header button { align-items: center; background: transparent; border: 0; border-radius: 6px; color: var(--studio-muted); display: flex; height: 32px; justify-content: center; width: 32px; }
@@ -298,9 +384,15 @@ async function submitReport() { if (!detailWork.value) return; await api(`/works
 .works-asset-picker > header { align-items: flex-start; display: flex; justify-content: space-between; }
 .works-asset-picker > header div { display: grid; gap: 3px; }
 .works-asset-picker > header strong { font-size: 12px; }.works-asset-picker > header small,.works-asset-picker > header > span { color: var(--studio-muted); font-size: 10px; }
-.works-asset-grid { display: grid; gap: 7px; grid-template-columns: repeat(3, minmax(0, 1fr)); max-height: 380px; overflow-y: auto; }
-.works-asset-grid button { aspect-ratio: 1; background: var(--studio-control); border: 2px solid transparent; border-radius: 7px; overflow: hidden; padding: 0; position: relative; }
-.works-asset-grid button.is-selected { border-color: #4386e8; }.works-asset-grid img,.works-asset-grid video { height: 100%; object-fit: cover; width: 100%; }
+.works-asset-kind { display: flex; gap: 6px; }
+.works-asset-kind button { align-items: center; background: transparent; border: 1px solid var(--studio-border); border-radius: 999px; color: var(--studio-muted); display: inline-flex; font-size: 12px; gap: 6px; min-height: 32px; padding: 0 12px; }
+.works-asset-kind button span { color: var(--studio-muted); font-size: 10px; }
+.works-asset-kind button.is-active { background: var(--studio-brand-soft, color-mix(in srgb, var(--studio-brand) 12%, transparent)); border-color: transparent; color: var(--studio-brand); }
+.works-asset-kind button.is-active span { color: var(--studio-brand); }
+.works-asset-grid { align-content: start; align-items: start; display: grid; gap: 7px; grid-auto-rows: max-content; grid-template-columns: repeat(3, minmax(0, 1fr)); max-height: 420px; overflow-y: auto; }
+.works-asset-grid button { background: var(--studio-control); border: 2px solid transparent; border-radius: 7px; display: block; overflow: hidden; padding: 0; position: relative; width: 100%; }
+.works-asset-grid button.is-selected { border-color: #4386e8; }
+.works-asset-grid img,.works-asset-grid video { aspect-ratio: 1; display: block; height: auto; object-fit: cover; width: 100%; }
 .works-asset-grid button span { align-items: center; background: #4386e8; border-radius: 50%; color: #fff; display: none; font-size: 10px; height: 20px; justify-content: center; position: absolute; right: 5px; top: 5px; width: 20px; }.works-asset-grid button.is-selected span { display: flex; }
 .works-editor__empty { align-items: center; color: var(--studio-muted); display: flex; flex-direction: column; font-size: 11px; gap: 7px; min-height: 180px; justify-content: center; }.works-editor__empty a { color: var(--studio-link); }
 .works-editor__empty--error { color: var(--canvas-danger, #db4b4b); text-align: center; }
@@ -321,6 +413,10 @@ async function submitReport() { if (!detailWork.value) return; await api(`/works
 /* 主按钮统一品牌蓝 */
 .works-primary, .works-empty button, .works-empty a { background: var(--studio-brand); border-radius: var(--studio-radius-pill); color: #fff; min-height: 40px; padding: 0 18px; transition: background var(--studio-duration-fast) ease, box-shadow var(--studio-duration-fast) ease; }
 .works-primary:hover, .works-empty button:hover, .works-empty a:hover { background: var(--studio-brand-hover); box-shadow: 0 6px 18px color-mix(in srgb, var(--studio-brand) 32%, transparent); }
+
+/* 次级按钮：描边胶囊（空态跳转等） */
+.works-secondary { align-items: center; background: var(--studio-panel); border: 1px solid var(--studio-border); border-radius: var(--studio-radius-pill); color: var(--studio-text); display: inline-flex; gap: 7px; min-height: 40px; padding: 0 18px; text-decoration: none; transition: border-color var(--studio-duration-fast) ease, color var(--studio-duration-fast) ease; }
+.works-secondary:hover { border-color: var(--studio-brand); color: var(--studio-brand); }
 
 /* 视图切换：品牌色指示条 */
 .works-view-switch { gap: 26px; }

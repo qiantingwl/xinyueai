@@ -55,31 +55,185 @@ test('admin provider creation rejects loopback, private, and metadata endpoints 
   assert.equal(createCalls, 0)
 })
 
-test('changing an admin provider endpoint clears its retained credential', async () => {
+test('changing an admin provider endpoint preserves its retained credential', async () => {
   let updateData: Record<string, unknown> | undefined
+  const existing = {
+    id: 'provider-1',
+    name: 'Old Provider',
+    type: ProviderType.OPENAI_COMPATIBLE,
+    baseUrl: 'https://old.example/v1',
+    encryptedApiKey: 'encrypted:old-secret',
+    apiKeyHint: 'old-',
+    metadata: {},
+  }
   const service = createService({
     providerTemplate: { findUnique: async () => null },
     providerChannel: {
-      findUnique: async () => ({
-        id: 'provider-1',
-        name: 'Old Provider',
-        type: ProviderType.OPENAI_COMPATIBLE,
-        baseUrl: 'https://old.example/v1',
-        encryptedApiKey: 'encrypted:old-secret',
-        apiKeyHint: 'old-',
-        metadata: {},
-      }),
+      findUnique: async () => existing,
       update: async ({ data }: { data: Record<string, unknown> }) => {
         updateData = data
-        return { id: 'provider-1', encryptedApiKey: String(data.encryptedApiKey || ''), ...data }
+        return { ...existing, ...data }
       },
     },
   }, { assertPublicHttpUrl: async (value: string) => new URL(value) } as PublicEndpointPolicyService)
 
   await service.updateProvider('provider-1', { baseUrl: 'https://new.example/v1' })
+  assert.equal(updateData?.encryptedApiKey, undefined)
+  assert.equal(updateData?.apiKeyHint, undefined)
+  assert.equal(updateData?.lastHealthStatus, null)
+  assert.equal(updateData?.lastHealthAt, null)
+  assert.match(String(updateData?.lastHealthMessage), /重新检测/)
+
+  await service.updateProvider('provider-1', { apiKey: 'new-secret' })
+  assert.equal(updateData?.encryptedApiKey, 'encrypted:new-secret')
+  assert.equal(updateData?.apiKeyHint, 'new-')
+
+  await service.updateProvider('provider-1', { apiKey: '' })
   assert.equal(updateData?.encryptedApiKey, '')
   assert.equal(updateData?.apiKeyHint, '')
-  assert.match(String(updateData?.lastHealthMessage), /重新配置 API 密钥/)
+})
+
+test('admin provider template and key updates use valid Prisma relation fields', async () => {
+  let createData: Record<string, unknown> | undefined
+  let updateData: Record<string, unknown> | undefined
+  const existing = {
+    id: 'provider-1',
+    name: 'Old Provider',
+    type: ProviderType.OPENAI_COMPATIBLE,
+    baseUrl: 'https://old.example/v1',
+    encryptedApiKey: 'encrypted:old-secret',
+    apiKeyHint: 'old-',
+    metadata: {},
+  }
+  const template = {
+    id: 'template-1',
+    type: ProviderType.OPENAI_COMPATIBLE,
+    baseUrl: 'https://template.example/v1',
+    authType: ProviderAuthType.BEARER,
+    apiProtocol: 'openai',
+    nativeSearchProvider: 'disabled',
+    customHeaders: null,
+  }
+  const service = createService({
+    providerTemplate: { findUnique: async () => template },
+    providerChannel: {
+      findUnique: async () => existing,
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        createData = data
+        return { ...existing, ...data }
+      },
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        updateData = data
+        return { ...existing, ...data }
+      },
+    },
+  }, { assertPublicHttpUrl: async (value: string) => new URL(value) } as PublicEndpointPolicyService)
+
+  await service.createProvider({ ...providerInput('https://new.example/v1'), templateId: 'template-1' })
+  assert.equal(createData?.templateId, undefined)
+  assert.deepEqual(createData?.template, { connect: { id: 'template-1' } })
+
+  await service.updateProvider('provider-1', { templateId: 'template-1', apiKey: 'new-secret' })
+  assert.equal(updateData?.templateId, undefined)
+  assert.deepEqual(updateData?.template, { connect: { id: 'template-1' } })
+  assert.equal(updateData?.encryptedApiKey, 'encrypted:new-secret')
+  assert.equal(updateData?.lastRotatedAt, undefined)
+
+  await service.updateProvider('provider-1', { templateId: null })
+  assert.deepEqual(updateData?.template, { disconnect: true })
+})
+
+test('changing a user credential resets its credential and route health state', async () => {
+  let credentialData: Record<string, unknown> | undefined
+  let routeData: Record<string, unknown> | undefined
+  const existing = {
+    id: 'credential-1',
+    userId: 'user-1',
+    providerType: ProviderType.OPENAI_COMPATIBLE,
+    baseUrl: 'https://old.example/v1',
+    encryptedApiKey: 'encrypted:old-secret',
+    apiKeyHint: 'old-',
+  }
+  const prisma: Record<string, any> = {
+    providerTemplate: { findUnique: async () => null },
+    userGroupMember: { findMany: async () => [] },
+    userSubscription: { findFirst: async () => null },
+    userApiCredential: {
+      findFirst: async () => existing,
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        credentialData = data
+        return { ...existing, ...data }
+      },
+    },
+    userModelRoute: {
+      updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+        routeData = data
+        return { count: 1 }
+      },
+    },
+  }
+  prisma.$transaction = async (callback: (transaction: Record<string, any>) => Promise<unknown>) => callback(prisma)
+  const service = createService(prisma, { assertPublicHttpUrl: async (value: string) => new URL(value) } as PublicEndpointPolicyService)
+
+  await service.updateCredential('user-1', 'credential-1', { baseUrl: 'https://new.example/v1', apiKey: 'new-secret' })
+  assert.equal(credentialData?.baseUrl, 'https://new.example/v1')
+  assert.equal(credentialData?.encryptedApiKey, 'encrypted:new-secret')
+  assert.equal(credentialData?.apiKeyHint, 'new-')
+  assert.equal(credentialData?.lastHealthStatus, null)
+  assert.equal(credentialData?.cooldownUntil, null)
+  assert.equal(routeData?.lastHealthStatus, null)
+  assert.equal(routeData?.consecutiveFailures, 0)
+  assert.equal(routeData?.cooldownUntil, null)
+})
+
+test('enabled models remain visible with an explicit unconfigured status', async () => {
+  const service = createService({
+    modelPreset: {
+      findMany: async () => [{
+        id: 'model-1',
+        key: 'chat-model',
+        displayName: 'Chat Model',
+        capability: 'CHAT',
+        enabled: true,
+        isDefault: true,
+        provider: null,
+        providerRoutes: [],
+      }],
+    },
+  })
+
+  const [model] = await service.listModels()
+  assert.equal(model?.key, 'chat-model')
+  assert.equal(model?.availability, 'UNCONFIGURED')
+  assert.equal(model?.routeCount, 0)
+})
+
+test('bound models report a missing provider key instead of a missing channel', async () => {
+  const missingKeyProvider = {
+    type: ProviderType.OPENAI_COMPATIBLE,
+    enabled: true,
+    encryptedApiKey: '',
+    lastHealthStatus: null,
+    cooldownUntil: null,
+  }
+  const service = createService({
+    modelPreset: {
+      findMany: async () => [{
+        id: 'model-2',
+        key: 'image-model',
+        displayName: 'Image Model',
+        capability: 'IMAGE',
+        enabled: true,
+        isDefault: true,
+        provider: missingKeyProvider,
+        providerRoutes: [{ enabled: true, provider: missingKeyProvider }],
+      }],
+    },
+  })
+
+  const [model] = await service.listModels()
+  assert.equal(model?.availability, 'UNCONFIGURED')
+  assert.equal(model?.availabilityReason, 'API_KEY_MISSING')
 })
 
 test('local worker endpoints require an exact allowed host or host and port', () => {
@@ -95,7 +249,12 @@ test('public Provider result downloads keep socket-level public DNS validation',
     'server/src/generations/runners/video-generation.runner.ts',
   ]) {
     const source = readFileSync(file, 'utf8')
-    assert.match(source, /resolved\.type === ProviderType\.LOCAL_WORKER \? fetchNoRedirect : fetchPublicNoRedirect/)
-    assert.doesNotMatch(source, /resolved\.source !== 'user' \? fetchNoRedirect : fetchPublicNoRedirect/)
+    assert.match(source, /sameOrigin && resolved\.type === ProviderType\.LOCAL_WORKER\)/)
+    assert.match(source, /if \(sameOrigin\)[\s\S]{0,80}this\.providerFetch\(resolved, url/)
+    assert.match(source, /fetchPublicMedia\(url, [^\n]*\{ allowProxy: resolved\.source !== 'user' \}\)/)
+    assert.equal(source.match(/fetchNoRedirect\(url/g)?.length, 1)
+    assert.doesNotMatch(source, /resolved\.source !== 'user' \? fetchNoRedirect/)
   }
+  const client = readFileSync('server/src/generations/provider-request.client.ts', 'utf8')
+  assert.match(client, /LOCAL_WORKER'\s*\?\s*fetchNoRedirect\(input, init\)\s*:\s*fetchPublicNoRedirect\(input, init\)/)
 })

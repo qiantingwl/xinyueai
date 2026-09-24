@@ -2,7 +2,7 @@
   <div class="dashboard-page">
     <header class="dashboard-heading"
       ><div
-        ><h1>{{ xt('电子商务') }}</h1
+        ><h1>{{ xt('商业化看板') }}</h1
         ><p>{{ xt('订阅、充值、支付与订单经营看板') }}</p></div
       ><div class="heading-actions"
         ><ElButton :loading="loading" @click="load"
@@ -27,12 +27,17 @@
         ><section class="art-card chart-card"
           ><div class="card-heading"
             ><div
-              ><h2>{{ xt('近 14 天收入趋势') }}</h2
-              ><p>{{ xt('订阅和充值完成金额') }}</p></div
-            ><ElTag type="success">{{ xt('实时汇总') }}</ElTag></div
+              ><h2>{{ trendTitle }}</h2
+              ><p>{{ trendSubtitle }}</p></div
+            ><div class="trend-switch"
+              ><ElSegmented v-model="trendMetric" :options="trendMetricOptions" /><ElTag
+                type="success"
+                >{{ xt('实时汇总') }}</ElTag
+              ></div
+            ></div
           ><ArtLineChart
             height="280px"
-            :data="revenueTrend"
+            :data="trendSeries"
             :x-axis-data="revenueLabels"
             :show-area-color="true"
             :show-axis-line="false" /></section
@@ -164,8 +169,24 @@
   const revenueLabels = computed(
     () => overview.value?.trend.map((item) => item.date.slice(5)) || []
   )
+  // 收入流水暂缺时切到消耗视图仍有内容可看
+  const trendMetric = ref<'usage' | 'revenue'>('usage')
+  const trendMetricOptions = [
+    { label: xt('消耗'), value: 'usage' },
+    { label: xt('收入'), value: 'revenue' }
+  ]
   const revenueTrend = computed(
     () => overview.value?.trend.map((item) => Number((item.revenueCents / 100).toFixed(2))) || []
+  )
+  const usageTrend = computed(() => overview.value?.trend.map((item) => item.tokens) || [])
+  const trendSeries = computed(() =>
+    trendMetric.value === 'revenue' ? revenueTrend.value : usageTrend.value
+  )
+  const trendTitle = computed(() =>
+    trendMetric.value === 'revenue' ? xt('近 14 天收入趋势') : xt('近 14 天消耗趋势')
+  )
+  const trendSubtitle = computed(() =>
+    trendMetric.value === 'revenue' ? xt('订阅和充值完成金额') : xt('模型调用的 Token 用量')
   )
   const money = (cents: number) => `¥${(cents / 100).toFixed(2)}`
   const date = (value: string) =>
@@ -318,6 +339,13 @@
     align-items: flex-start;
     justify-content: space-between;
     min-width: 0;
+  }
+
+  .trend-switch {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
   }
 
   .dashboard-heading {

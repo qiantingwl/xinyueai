@@ -33,6 +33,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Banknote, CheckCircle2, CircleGauge, CreditCard, LoaderCircle, QrCode, X } from 'lucide-vue-next'
+import { useEscapeClose } from '../../../composables/useEscapeClose'
 import { paymentMethodText, paymentProviderText, type PaymentMethodKey } from '../../../constants/payment'
 import { safeHttpNavigationUrl } from '../../../utils/safe-url'
 import type { CommerceQuote, PaymentChannel, PaymentIntent, PaymentTransaction, UserCoupon } from '../types'
@@ -58,6 +59,8 @@ const props = defineProps<{
 }>()
 
 const safeCheckoutUrl = computed(() => safeHttpNavigationUrl(props.paymentTransaction?.checkoutUrl, window.location.origin))
+
+useEscapeClose(() => props.closePayment())
 
 const selectedCouponId = defineModel<string>('selectedCouponId', { required: true })
 const selectedPaymentMethod = defineModel<PaymentMethodKey | ''>('selectedPaymentMethod', { required: true })

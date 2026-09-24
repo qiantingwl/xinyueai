@@ -28,6 +28,7 @@
       flex: 1;
 
       :deep(.layout-content) {
+        position: relative;
         box-sizing: border-box;
         width: calc(100% - 40px);
         margin: auto;

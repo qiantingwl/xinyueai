@@ -14,8 +14,14 @@ export type Overview = {
   activeSubscriptions: number
   revenueCents: number
   pendingOrders: number
-  trend: Array<{ date: string; newUsers: number; jobs: number; revenueCents: number }>
-  today: { newUsers: number; jobs: number; revenueCents: number }
+  trend: Array<{
+    date: string
+    newUsers: number
+    jobs: number
+    revenueCents: number
+    tokens: number
+  }>
+  today: { newUsers: number; jobs: number; revenueCents: number; tokens: number }
   alerts: {
     paymentFailures: number
     paidPending: number
@@ -208,7 +214,11 @@ export type ModelProviderRoute = {
   options?: {
     videoCapabilities?: { resolutions?: string[]; durations?: number[]; aspectRatios?: string[] }
   } | null
-  provider?: Pick<Provider, 'id' | 'name' | 'type' | 'enabled' | 'priority' | 'weight'>
+  provider?: Pick<Provider, 'id' | 'name' | 'type' | 'enabled' | 'priority' | 'weight'> & {
+    hasApiKey?: boolean
+    lastHealthStatus?: string | null
+    cooldownUntil?: string | null
+  }
 }
 
 export type UserGroup = {
@@ -265,6 +275,7 @@ export type Provider = {
   type: ProviderType
   baseUrl: string
   apiKeyHint: string
+  hasApiKey?: boolean
   authType: 'BEARER' | 'X_API_KEY' | 'BOTH'
   enabled: boolean
   priority: number
@@ -312,6 +323,11 @@ export type ModelPreset = {
   upstreamModel: string
   capability: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE'
   enabled: boolean
+  availability?: 'AVAILABLE' | 'DEGRADED' | 'UNCONFIGURED'
+  availabilityReason?:
+    'NO_CHANNEL' | 'API_KEY_MISSING' | 'CHANNEL_COOLDOWN' | 'HEALTH_CHECK_REQUIRED'
+  healthyRouteCount?: number
+  routeCount?: number
   isDefault: boolean
   allowUserKey: boolean
   sortOrder: number
@@ -372,7 +388,15 @@ export type ModelPreset = {
       maxPollSeconds?: number
     }
   } | null
-  provider?: { id: string; name: string } | null
+  provider?: {
+    id: string
+    name: string
+    type?: ProviderType
+    enabled?: boolean
+    hasApiKey?: boolean
+    lastHealthStatus?: string | null
+    cooldownUntil?: string | null
+  } | null
   vendor?: ModelVendor | null
   providerRoutes?: ModelProviderRoute[]
 }
@@ -702,6 +726,38 @@ export type SystemSettings = {
   sidebarPluginsEnabled: boolean
   sidebarProjectsEnabled: boolean
   sidebarAssetsEnabled: boolean
+  sidebarNav: {
+    order: string[]
+    hidden: string[]
+    labels: Record<string, string>
+    promoted: string[]
+  }
+  workspaceNav: {
+    order: string[]
+    hidden: string[]
+    labels: Record<string, string>
+    promoted: string[]
+  }
+  sectionNav: {
+    creation: {
+      order: string[]
+      hidden: string[]
+      labels: Record<string, string>
+      promoted: string[]
+    }
+    plugins: {
+      order: string[]
+      hidden: string[]
+      labels: Record<string, string>
+      promoted: string[]
+    }
+    prompts: {
+      order: string[]
+      hidden: string[]
+      labels: Record<string, string>
+      promoted: string[]
+    }
+  }
   registrationEnabled: boolean
   emailLoginEnabled: boolean
   emailVerifyEnabled: boolean
@@ -722,7 +778,12 @@ export type SystemSettings = {
   defaultUserCredits: number
   defaultTheme: string
   defaultLanguage: string
-  chatUiPreset: 'gpt' | 'doubao' | 'qianwen' | 'kimi'
+  chatUiPreset: 'gpt' | 'doubao' | 'qianwen' | 'kimi' | 'jixing'
+  chatAvatarMotion: 'ambient' | 'active' | 'off'
+  chatAvatarEnabled: boolean
+  chatAvatarStyle:
+    'classic' | 'lively' | 'calm' | 'geometric' | 'faces' | 'orbit' | 'comet' | 'thinker' | 'sleepy'
+  chatAvatarColor: string
   chatHomeContent: ChatHomeContent
   quickActionRegistry: CapabilityRegistrySnapshot
   siteContent: SiteContent
@@ -806,7 +867,7 @@ export type AdminAccountIdentity = {
   role: 'ADMIN' | 'SUPER_ADMIN'
   avatarUrl?: string | null
 }
-export type ChatUiPreset = 'gpt' | 'doubao' | 'qianwen' | 'kimi'
+export type ChatUiPreset = 'gpt' | 'doubao' | 'qianwen' | 'kimi' | 'jixing'
 export type ChatQuickAction = {
   id: string
   label: string
@@ -816,6 +877,7 @@ export type ChatQuickAction = {
   prompt: string
   target: string
   modelKey: string
+  imageUrl: string
   webSearch: boolean
   enabled: boolean
   sortOrder: number

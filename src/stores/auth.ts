@@ -10,7 +10,7 @@ export interface AuthSession {
   signedInAt: number
 }
 
-const STORAGE_KEY = 'flux:auth-session'
+const STORAGE_KEY = 'xinyue:auth-session'
 
 function readSession(): AuthSession | null {
   try {
@@ -45,7 +45,7 @@ export const useAuthStore = defineStore('auth', {
       return '社区用户'
     },
     initials(): string {
-      return this.displayName.slice(0, 1).toUpperCase() || 'F'
+      return this.displayName.slice(0, 1).toUpperCase() || 'X'
     },
   },
   actions: {

@@ -56,7 +56,8 @@ export const modelApi = {
   discoverProvider: (id: string) =>
     request.post<{ models: string[]; candidates: DiscoveredModel[]; latencyMs: number }>({
       url: `/v1/admin/providers/${id}/discover-models`,
-      params: {}
+      params: {},
+      timeout: 90_000
     }),
   importProviderModels: (
     id: string,
@@ -70,6 +71,7 @@ export const modelApi = {
     request.post<{ discovered: number; selected: number; imported: number }>({
       url: `/v1/admin/providers/${id}/import-models`,
       data,
+      timeout: 90_000,
       showSuccessMessage: true
     }),
   checkProviders: () =>

@@ -1,7 +1,10 @@
 /* Login */
 .login-page {
+  --login-ink: #101115;
+  --login-muted: #7e838c;
+  --login-line: #d7d8dc;
   background: #fff;
-  color: #101115;
+  color: var(--login-ink);
   display: grid;
   grid-template-columns: 1fr 1fr;
   min-height: 100dvh;
@@ -29,15 +32,15 @@
 
 .login-brand__mark {
   align-items: center;
-  background: #0d0e12;
-  border-radius: 2px;
+  background: var(--studio-brand);
+  border-radius: 6px;
   color: #fff;
   display: flex;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 900;
-  height: 20px;
+  height: 28px;
   justify-content: center;
-  width: 20px;
+  width: 28px;
 }
 
 .login-brand strong,
@@ -66,7 +69,7 @@
   padding: 7px 13px;
 }
 .login-header__tools { align-items: center; display: flex; gap: 9px; }
-.login-locale-select { background: #fff; border: 1px solid #d9dadd; border-radius: 5px; color: #555b65; font-size: 10px; height: 30px; outline: none; padding: 0 7px; }
+.login-locale-select { background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 7px center; border: 1px solid #d9dadd; border-radius: 5px; color: #555b65; font-size: 10px; height: 30px; outline: none; padding: 0 22px 0 8px; }
 .login-locale-select option { background: #fff; color: #202124; }
 
 .login-form {
@@ -101,8 +104,8 @@
 }
 
 .login-form .field input {
-  border: 1px solid #d7d8dc;
-  border-radius: 0;
+  border: 1px solid var(--login-line);
+  border-radius: var(--studio-radius-sm);
   color: #141518;
   font-size: 14px;
   height: 48px;
@@ -111,15 +114,22 @@
 }
 
 .login-form .field input:focus {
-  border-color: #737780;
+  border-color: var(--studio-brand);
+  box-shadow: 0 0 0 3px var(--studio-brand-soft);
+  outline: none;
 }
 
 .login-submit {
+  background: var(--studio-brand);
   border-radius: 999px;
+  color: #fff;
   font-size: 14px;
   height: 49px;
   margin-top: 25px;
   width: 100%;
+}
+.login-submit:hover:not(:disabled) {
+  background: var(--studio-brand-hover);
 }
 
 .login-form .divider {
@@ -149,7 +159,9 @@
 
 .login-visual {
   align-items: center;
-  background: #33363b;
+  background:
+    radial-gradient(120% 80% at 80% 20%, rgba(77, 107, 254, .38), transparent 58%),
+    linear-gradient(165deg, #1a2148 0%, #0f1428 52%, #1c274f 100%);
   display: flex;
   justify-content: center;
   overflow: hidden;
@@ -157,19 +169,19 @@
 }
 
 .login-visual::before {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(109, 117, 135, 0.23));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(77, 107, 254, 0.18));
   content: "";
   inset: 0;
   position: absolute;
 }
 
 .login-visual__mark {
-  color: rgba(151, 161, 181, 0.46);
+  color: rgba(173, 186, 255, 0.42);
   font-size: min(64vw, 700px);
   font-weight: 900;
   line-height: 0.78;
   position: relative;
-  text-shadow: 28px 32px 0 rgba(12, 14, 17, 0.2);
+  text-shadow: 28px 32px 0 rgba(12, 18, 48, 0.28);
   transform: scaleX(1.08) skewX(-8deg);
 }
 
@@ -183,7 +195,8 @@
 
   .workspace-sidebar {
     bottom: 0;
-    box-shadow: 18px 0 50px rgba(0, 0, 0, 0.45);
+    /* 阴影只挂在打开态：关闭态在 -105% 位移下阴影仍会外溢进视口，形成左侧灰色残影 */
+    box-shadow: none;
     left: 0;
     position: fixed;
     top: 0;
@@ -193,6 +206,7 @@
   }
 
   .workspace-sidebar.is-mobile-open {
+    box-shadow: 18px 0 50px rgba(0, 0, 0, 0.45);
     transform: translateX(0);
   }
 
@@ -310,45 +324,52 @@
     width: calc(100% - 20px);
   }
   .chat-page:not(.has-messages).chat-ui--doubao .chat-center { height: 100%; top: 0; width: calc(100% - 32px); }
-  .chat-page:not(.has-messages).chat-ui--qianwen .chat-center { top: 34.6%; }
+  /* 千问移动端首页与卡片统一 16px 屏边距（原为 10px，光晕贴屏） */
+  .chat-page:not(.has-messages).chat-ui--qianwen .chat-center { top: 34.6%; width: calc(100% - 32px); }
   .chat-page:not(.has-messages).chat-ui--kimi .chat-center { top: 32.7%; }
-  .chat-ui--doubao .chat-home-identity { top: 40%; }
+  .chat-ui--doubao .chat-home-identity { top: 37.5%; }
   .chat-ui--doubao .chat-home-identity h2 { font-size: 28px; line-height: 45px; margin: 0; }
-  .chat-ui--doubao .chat-home-mode-menu { left: 0; max-width: calc(100vw - 32px); }
+  /* 菜单 Teleport 到 body 后 preset 类挂在菜单自身：改用复合选择器；left 由 JS 内联计算，这里只保留宽度钳制 */
+  .chat-ui--doubao.chat-home-mode-menu { max-width: calc(100vw - 32px); }
   .chat-ui--qianwen .chat-home-identity h2 { font-size: 28px; margin-bottom: 44px; }
   .chat-ui--kimi .chat-home-wordmark { font-size: 52px; margin-bottom: 18px; }
   .chat-ui--doubao .chat-home-suggestions { margin-bottom: 12px; width: 100%; }
-  .chat-home-suggestions, .chat-home-promo { display: none; }
+  .chat-home-suggestions { display: none; }
   .chat-ui--doubao .chat-composer { bottom: 16px; border-radius: 24px; height: 100px; min-height: 100px; padding: 10px; }
   .chat-ui--qianwen .chat-composer { border-radius: 22px; height: 112px; min-height: 112px; padding: 10px 10px 8px; }
-  .chat-ui--kimi .chat-composer { border-radius: 22px; height: 130px; min-height: 130px; padding: 10px 12px; }
+  .chat-ui--kimi .chat-composer { border-radius: 22px; padding: 10px 12px; }
   .chat-ui--qianwen .chat-composer textarea { max-width: none; position: static; }
   .chat-ui--doubao .chat-home-shortcuts,
   .chat-ui--kimi .chat-home-shortcuts,
   .chat-ui--qianwen .chat-home-shortcuts { background: transparent; border: 0; border-radius: 0; flex-wrap: nowrap; justify-content: flex-start; margin-top: 10px; min-height: 0; overflow-x: auto; padding: 0 2px 6px; }
+  /* Kimi 移动端推荐 chips 可横向滚动：右缘 48px 渐隐，避免 chip 被视口生硬裁切（同 prompt-library 做法） */
+  .chat-ui--kimi .chat-home-shortcuts { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); }
   .chat-ui--doubao .chat-composer > .chat-home-shortcuts--in-composer { left: 62px; right: 60px; }
-  .chat-ui--doubao .chat-composer > .composer-voice { right: 52px; }
+  /* 模型 chip 与右侧功能图标间距补足到 12px（轨内 gap 仅 4px） */
+  .chat-ui--doubao .chat-composer .chat-home-inline-model { margin-right: 8px; }
+  /* 移动端同样把对话能力钉出滚动轨，避免渐隐/裁切；移动端 composer 统一只留图标（.chat-composer span 隐藏），故收起文字与箭头 */
+  .chat-ui--doubao .chat-composer > .plugin-selector { bottom: 7px; position: absolute; right: 60px; z-index: 2; }
+  .chat-ui--doubao .chat-composer > .plugin-selector > button { min-width: 0; padding: 0 8px; width: 32px; }
+  .chat-ui--doubao .chat-composer > .plugin-selector > button .plugin-selector__chevron { display: none; }
+  .chat-ui--doubao .chat-composer:has(> .plugin-selector) > .chat-home-shortcuts--in-composer { right: 106px; }
   .chat-ui--doubao .chat-composer > .chat-composer-submit { right: 10px; }
-  .chat-ui--doubao .chat-home-suggestions { bottom: 128px; max-height: min(250px, calc(100% - 520px)); width: 100%; }
+  /* 「当前热点」标签归属卡片组：容器 gap 收小到 8px（与桌面一致），
+     底锚布局下整块内容略下移，标签距问候语拉到 ~24px、距首张卡片 ~10px */
+  .chat-ui--doubao .chat-home-suggestions { bottom: 128px; gap: 8px; max-height: min(250px, calc(100% - 520px)); width: 100%; }
   .chat-ui--doubao .chat-home-suggestions > span { font-size: 14px; }
   .chat-ui--doubao .chat-home-suggestions button { font-size: 14px; min-height: 46px; padding: 11px 14px; }
   .chat-home-qianwen-carousel { margin-top: 38px; width: 100%; }
   .chat-home-qianwen-carousel > nav { left: 2px; }
-  .chat-ui--qianwen .chat-home-qianwen-banner { grid-template-columns: 82px minmax(0, 1fr); margin-left: 24px; padding-right: 8px; width: calc(100% - 24px); }
+  /* 移动端横幅与输入框同宽对齐（16px 屏边距），不再左偏 24px */
+  .chat-ui--qianwen .chat-home-qianwen-banner { grid-template-columns: 82px minmax(0, 1fr); margin-left: 0; padding-right: 8px; width: 100%; }
   .chat-home-qianwen-banner__visual { width: 82px; }
   .chat-ui--qianwen .chat-home-qianwen-banner em { display: none; }
-  .chat-ui--kimi .chat-kimi-project { height: 78px; padding: 0 20px; }
   .chat-home-explore { display: none; }
   .chat-ui--kimi .chat-home-explore { display: flex; margin: 0; }
   .chat-ui--kimi .chat-legal { bottom: 58px; }
 
   .chat-composer {
     padding-left: 8px;
-  }
-
-  .chat-composer input {
-    font-size: 15px;
-    padding-left: 5px;
   }
 
   .composer-model > button {
@@ -617,7 +638,7 @@
 .auth-step--multi { justify-content: flex-start; padding: 14px 0 8px; }
 .auth-step--multi .login-heading { margin-bottom: 30px; }
 .auth-method-tabs { background: #f1f1f2; border-radius: 7px; display: grid; gap: 3px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 22px; padding: 3px; }
-.auth-method-tabs button { background: transparent; border: 0; border-radius: 5px; color: #71717a; font-size: 12px; height: 34px; padding: 0 10px; }
+.auth-method-tabs button { background: transparent; border: 0; border-radius: 5px; color: #71717a; font-size: 12px; height: 40px; padding: 0 10px; }
 .auth-method-tabs button.active { background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .09); color: #18181b; font-weight: 650; }
 .auth-method-form { display: grid; gap: 14px; }
 .auth-method-form .login-submit { margin-top: 4px; }

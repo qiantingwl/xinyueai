@@ -6,7 +6,9 @@ import { AuthGuard } from './auth/auth.guard'
 import { PrismaService } from './prisma/prisma.service'
 import { RuntimeMetricsService } from './common/runtime-metrics.service'
 import { ReadinessService } from './common/readiness.service'
+import { Public } from './auth/public.decorator'
 
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly prisma: PrismaService, private readonly metrics: RuntimeMetricsService, private readonly readiness: ReadinessService) {}

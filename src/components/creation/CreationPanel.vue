@@ -8,7 +8,25 @@
         <div v-if="store.lastError" class="studio-feedback studio-feedback--inline" role="alert"><span>{{ store.lastError }}</span><button type="button" aria-label="关闭提示" @click="store.clearError"><X :size="15" /></button></div>
         <div v-if="modelCatalogError && !activeCreationModels.length" class="studio-feedback studio-feedback--inline" role="alert"><span>{{ modelCatalogError }}</span><button type="button" aria-label="重新加载模型目录" title="重新加载模型目录" @click="refreshModelCatalog"><RefreshCw :size="15" /></button></div>
         <form ref="creationComposer" class="creation-composer" :class="{ 'is-commerce': activeMode === 'commerce', 'is-video': activeMode === 'videos' }" @submit.prevent="submitGeneration">
-          <div class="creation-prompt-row">
+          <div class="creation-prompt-row" :class="{ 'is-video': activeMode === 'videos' }">
+            <div v-if="activeMode === 'videos'" class="video-frame-inline" aria-label="首帧与尾帧">
+              <div class="video-frame-tile" :class="{ 'is-filled': firstFrameAttachment }">
+                <button type="button" class="video-frame-tile__slot" :aria-label="firstFrameAttachment ? '预览首帧' : '上传首帧图片'" :title="firstFrameAttachment ? '点击预览首帧' : '上传首帧图片（可选）'" @click="firstFrameAttachment ? previewFrameAsset(firstFrameAttachment) : openFilePicker('first-frame')">
+                  <span v-if="!firstFrameAttachment" class="video-frame-tile__plus"><Plus :size="16" /></span>
+                  <img v-else :src="firstFrameAttachment.contentUrl" :alt="`首帧：${firstFrameAttachment.title}`" />
+                </button>
+                <span class="video-frame-tile__badge">首</span>
+                <button v-if="firstFrameAttachment" type="button" class="video-frame-tile__remove" aria-label="移除首帧图片" title="移除首帧图片" @click="firstFrameAttachment = null"><X :size="11" /></button>
+              </div>
+              <div class="video-frame-tile" :class="{ 'is-filled': lastFrameAttachment }">
+                <button type="button" class="video-frame-tile__slot" :aria-label="lastFrameAttachment ? '预览尾帧' : '上传尾帧图片'" :title="lastFrameAttachment ? '点击预览尾帧' : '上传尾帧图片（可选）'" @click="lastFrameAttachment ? previewFrameAsset(lastFrameAttachment) : openFilePicker('last-frame')">
+                  <span v-if="!lastFrameAttachment" class="video-frame-tile__plus"><Plus :size="16" /></span>
+                  <img v-else :src="lastFrameAttachment.contentUrl" :alt="`尾帧：${lastFrameAttachment.title}`" />
+                </button>
+                <span class="video-frame-tile__badge">尾</span>
+                <button v-if="lastFrameAttachment" type="button" class="video-frame-tile__remove" aria-label="移除尾帧图片" title="移除尾帧图片" @click="lastFrameAttachment = null"><X :size="11" /></button>
+              </div>
+            </div>
             <textarea ref="generationInput" v-model="generationPrompt" rows="2" aria-label="创作描述" :placeholder="creationPromptPlaceholder" @focus="collapseWorkspacePopovers" @input="resizeGenerationInput" />
           </div>
           <div v-if="creationAttachments.length || maskAttachment" class="creation-attachments" aria-label="参考素材">
@@ -30,18 +48,18 @@
             <div class="creation-control-track">
               <button class="creation-add" type="button" aria-label="添加参考素材" title="添加参考素材" :disabled="uploading" @click="openFilePicker('creation')"><Plus :size="20" /></button>
               <i class="creation-control-divider" aria-hidden="true" />
-              <div v-if="activeMode !== 'commerce'" class="creation-mode-switch" role="group" aria-label="创作类型">
-                <button type="button" :class="{ 'is-active': activeMode === 'images' }" :aria-pressed="activeMode === 'images'" @click="switchCreationMode('images')">图片</button>
-                <button type="button" :class="{ 'is-active': activeMode === 'videos' }" :aria-pressed="activeMode === 'videos'" @click="switchCreationMode('videos')">视频</button>
+              <div v-if="showCreationModeSwitch" class="creation-mode-switch" role="group" aria-label="创作类型">
+                <button v-for="item in creationModeTabs" :key="item.key" type="button" :class="{ 'is-active': props.activeMode === item.mode }" :aria-pressed="props.activeMode === item.mode" @click="switchCreationMode(item.mode === 'videos' ? 'videos' : 'images')">{{ item.label }}</button>
               </div>
               <div class="creation-option-buttons">
-                <button type="button" :class="{ 'is-open': creationMenu === 'model' }" :disabled="!activeCreationModels.length" :aria-label="`模型 ${activeCreationModelLabel}`" :title="activeCreationModels.length ? '选择模型' : '暂无可用模型'" @click.stop="toggleCreationMenu('model', $event)"><ModelBadge v-if="activeCreationModelOption" :model="activeCreationModelOption" size="sm" /><Sparkles v-else :size="16" />{{ activeCreationModelLabel }}<ChevronDown class="creation-control-chevron" :size="14" /></button>
+                <button type="button" :class="{ 'is-open': creationMenu === 'model' }" :aria-label="`模型 ${activeCreationModelLabel}`" :title="activeCreationModels.length ? '选择模型' : '暂无可用模型'" @click.stop="toggleCreationMenu('model', $event)"><ModelBadge v-if="activeCreationModelOption" :model="activeCreationModelOption" size="sm" /><Sparkles v-else :size="16" />{{ activeCreationModelLabel }}<ChevronDown class="creation-control-chevron" :size="14" /></button>
                 <button v-if="activeMode === 'commerce'" type="button" :class="{ 'is-open': creationMenu === 'type' }" @click.stop="toggleCreationMenu('type', $event)"><Images :size="16" /><span class="creation-control-label">类型</span>{{ creationType }}<ChevronDown class="creation-control-chevron" :size="14" /></button>
-                <button type="button" :class="{ 'is-open': creationMenu === (activeMode === 'images' ? 'size' : activeMode === 'videos' ? 'aspect' : 'platform') }" @click.stop="toggleCreationMenu(activeMode === 'images' ? 'size' : activeMode === 'videos' ? 'aspect' : 'platform', $event)"><SlidersHorizontal :size="16" /><span class="creation-control-label">{{ activeMode === 'commerce' ? '平台' : '比例' }}</span>{{ activeMode === 'videos' ? videoAspectRatio : activeMode === 'commerce' ? commercePlatform : autoMode }}<ChevronDown class="creation-control-chevron" :size="14" /></button>
-                <button type="button" :class="{ 'is-open': creationMenu === (activeMode === 'images' ? 'style' : activeMode === 'videos' ? 'resolution' : 'modules') }" @click.stop="toggleCreationMenu(activeMode === 'images' ? 'style' : activeMode === 'videos' ? 'resolution' : 'modules', $event)"><Blend :size="16" /><span class="creation-control-label">{{ activeMode === 'videos' ? '画质' : '风格' }}</span><template v-if="activeMode === 'images'">{{ imageStyle }}</template><template v-else-if="activeMode === 'videos'">{{ videoResolution }}</template><template v-else>{{ commerceModules }} 模块</template><ChevronDown class="creation-control-chevron" :size="14" /></button>
+                <button v-if="activeMode !== 'videos'" type="button" :class="{ 'is-open': creationMenu === (activeMode === 'images' ? 'size' : 'platform') }" @click.stop="toggleCreationMenu(activeMode === 'images' ? 'size' : 'platform', $event)"><SlidersHorizontal :size="16" /><span class="creation-control-label">{{ activeMode === 'commerce' ? '平台' : '比例' }}</span>{{ activeMode === 'commerce' ? commercePlatform : autoMode }}<ChevronDown class="creation-control-chevron" :size="14" /></button>
+                <button v-if="activeMode !== 'videos'" type="button" :class="{ 'is-open': creationMenu === (activeMode === 'images' ? 'style' : 'modules') }" @click.stop="toggleCreationMenu(activeMode === 'images' ? 'style' : 'modules', $event)"><Blend :size="16" /><span class="creation-control-label">风格</span><template v-if="activeMode === 'images'">{{ imageStyle }}</template><template v-else>{{ commerceModules }} 模块</template><ChevronDown class="creation-control-chevron" :size="14" /></button>
+                <button v-if="activeMode === 'videos'" type="button" :class="{ 'is-open': creationMenu === 'videoSettings' }" :aria-label="`视频设置：${videoResolution}，${videoAspectRatio}，${videoDuration} 秒`" @click.stop="toggleCreationMenu('videoSettings', $event)"><SlidersHorizontal :size="16" />{{ videoResolution }} · {{ videoAspectRatio }}<ChevronDown class="creation-control-chevron" :size="14" /></button>
               </div>
               <PluginSelector v-model="creationPluginId" v-model:open="creationPluginOpen" :capability="creationPluginCapability" compact />
-              <div class="creation-more-wrap">
+              <div v-if="activeMode !== 'videos'" class="creation-more-wrap">
                 <button ref="creationMoreTrigger" class="creation-more-button" :class="{ 'is-active': creationOptionsOpen }" type="button" aria-label="更多生成设置" title="更多设置" :aria-expanded="creationOptionsOpen" @click.stop="toggleMoreOptions"><Settings2 :size="17" /><span>更多</span><ChevronDown class="creation-control-chevron" :size="13" /></button>
                 <Teleport to="body">
                 <div v-if="creationOptionsOpen" ref="creationMorePanel" class="creation-more-panel creation-more-panel--floating" :style="creationMorePanelStyle" aria-label="更多生成设置">
@@ -50,7 +68,6 @@
                   <button v-if="activeMode === 'images'" type="button" @click.stop="toggleCreationMenu('count', $event)"><Layers3 :size="16" />{{ imageCount }} 张<ChevronDown :size="13" /></button>
                   <button v-if="activeMode === 'images'" type="button" @click.stop="toggleCreationMenu('format', $event)"><FileType2 :size="16" />{{ outputFormat }}<ChevronDown :size="13" /></button>
                   <button v-if="activeMode === 'images'" type="button" @click.stop="toggleCreationMenu('background', $event)"><ImageIcon :size="16" />{{ imageBackground }}<ChevronDown :size="13" /></button>
-                  <button v-if="activeMode === 'videos'" type="button" @click.stop="toggleCreationMenu('duration', $event)"><Clock3 :size="16" />{{ videoDuration }} 秒<ChevronDown :size="13" /></button>
                   <button v-if="activeMode === 'commerce'" type="button" @click.stop="toggleCreationMenu('format', $event)"><FileType2 :size="16" />{{ outputFormat }}<ChevronDown :size="13" /></button>
                   <button v-if="activeMode === 'commerce'" type="button" @click.stop="toggleCreationMenu('background', $event)"><ImageIcon :size="16" />{{ imageBackground }}<ChevronDown :size="13" /></button>
                 </div>
@@ -58,16 +75,37 @@
               </div>
               <span class="creation-cost" :title="`本次预计扣除 ${currentGenerationCost} 创作点`"><Sparkles :size="13" />{{ currentGenerationCost }} 点</span>
             </div>
-            <button class="creation-submit composer-send" :class="{ 'is-listening': voiceListening && voiceTarget === 'creation' }" :type="canSubmitCreation ? 'submit' : 'button'" :disabled="hasCreationInput && !activeCreationModelAvailable" :aria-label="canSubmitCreation ? '开始生成' : hasCreationInput ? '暂无可用模型' : voiceListening && voiceTarget === 'creation' ? '停止语音输入' : '语音输入'" :title="hasCreationInput && !activeCreationModelAvailable ? '暂无可用模型，请联系管理员或添加个人 API 密钥' : undefined" @click="!hasCreationInput && toggleVoice('creation')"><ArrowUp v-if="hasCreationInput" :size="20" /><AudioLines v-else :size="18" /></button>
+            <button class="creation-submit composer-send" :class="{ 'is-listening': voiceListening && voiceTarget === 'creation' }" :type="canSubmitCreation ? 'submit' : 'button'" :disabled="hasCreationInput && !activeCreationModelAvailable" :aria-label="canSubmitCreation ? '开始生成' : hasCreationInput ? activeCreationModelUnavailableMessage : voiceListening && voiceTarget === 'creation' ? '停止语音输入' : '语音输入'" :title="hasCreationInput && !activeCreationModelAvailable ? activeCreationModelUnavailableMessage : undefined" @click="!hasCreationInput && toggleVoice('creation')"><ArrowUp v-if="hasCreationInput" :size="20" /><AudioLines v-else :size="18" /></button>
           </div>
           <Teleport to="body">
             <div v-if="creationMenu" ref="creationOptionsMenu" class="creation-options-menu creation-options-menu--floating" :class="`creation-options-menu--${creationMenu}`" :style="creationMenuStyle">
-              <ModelCatalogPicker v-if="creationMenu === 'model'" :models="activeCreationModels" :model-value="activeCreationModel" :title="creationMenuTitle" @select="selectCreationOption" />
+              <ModelCatalogPicker v-if="creationMenu === 'model'" :models="activeCreationModels" :model-value="activeCreationModel" :title="creationMenuTitle" @select="selectCreationOption" @close="collapseWorkspacePopovers" />
+              <div v-else-if="creationMenu === 'videoSettings'" class="creation-video-settings">
+                <section>
+                  <strong>比例</strong>
+                  <div class="creation-ratio-grid">
+                    <button v-for="ratio in activeVideoCapabilities.aspectRatios" :key="ratio" type="button" :class="{ 'is-active': videoAspectRatio === ratio }" @click.stop="selectVideoSetting('aspect', ratio)"><span class="creation-ratio-shape" :class="ratioShapeClass(ratio)"><i /><i v-if="ratio === '自动'" /></span><span>{{ ratio }}</span></button>
+                  </div>
+                </section>
+                <section>
+                  <strong>画质</strong>
+                  <div class="creation-segment">
+                    <button v-for="item in activeVideoCapabilities.resolutions" :key="item" type="button" :class="{ 'is-active': videoResolution === item }" @click.stop="selectVideoSetting('resolution', item)">{{ item }}</button>
+                  </div>
+                </section>
+                <section>
+                  <strong>时长</strong>
+                  <div class="creation-segment">
+                    <button v-for="item in activeVideoCapabilities.durations" :key="item" type="button" :class="{ 'is-active': videoDuration === item }" @click.stop="selectVideoSetting('duration', String(item))">{{ item }} 秒</button>
+                  </div>
+                </section>
+                <footer><Sparkles :size="13" />按模型计费，本次约 {{ currentGenerationCost }} 点</footer>
+              </div>
               <strong v-else>{{ creationMenuTitle }}</strong>
               <div v-if="creationMenu === 'size'" class="creation-ratio-grid">
                 <button v-for="option in creationMenuOptions" :key="option" type="button" :class="{ 'is-active': isCreationOptionActive(option) }" @click="selectCreationOption(option)"><span class="creation-ratio-shape" :class="ratioShapeClass(option)"><i /><i v-if="option === '自动'" /></span><span>{{ option }}</span></button>
               </div>
-              <button v-else-if="creationMenu !== 'model'" v-for="option in creationMenuOptions" :key="option" type="button" :class="{ 'is-active': isCreationOptionActive(option) }" @click="selectCreationOption(option)"><img v-if="creationMenu === 'style'" class="creation-style-thumb" :src="styleThumbnail(option)" alt="" /><span>{{ creationOptionLabel(option) }}<small v-if="creationOptionPrice(option)">{{ creationOptionPrice(option) }} 点</small></span><Check v-if="isCreationOptionActive(option)" :size="15" /></button>
+              <button v-else-if="creationMenu !== 'model' && creationMenu !== 'videoSettings'" v-for="option in creationMenuOptions" :key="option" type="button" :class="{ 'is-active': isCreationOptionActive(option) }" @click="selectCreationOption(option)"><img v-if="creationMenu === 'style'" class="creation-style-thumb" :src="styleThumbnail(option)" alt="" /><span>{{ creationOptionLabel(option) }}<small v-if="creationOptionPrice(option)">{{ creationOptionPrice(option) }} 点</small></span><Check v-if="isCreationOptionActive(option)" :size="15" /></button>
             </div>
           </Teleport>
         </form>
@@ -82,18 +120,18 @@
           <header>
             <h2>{{ activeMode === 'images' || activeMode === 'videos' ? '灵感中心' : t('studio.inspiration') }}</h2>
             <div class="inspiration-header-actions">
-              <button v-if="activeMode === 'images' || activeMode === 'videos'" class="inspiration-more" type="button" @click="openPromptLibrary(activeMode === 'videos' ? 'VIDEO' : 'IMAGE')">更多灵感<ArrowRight :size="16" /></button>
               <nav class="inspiration-navigation" aria-label="浏览生成灵感">
                 <button class="inspiration-arrow inspiration-arrow--previous" type="button" aria-label="上一组" title="上一组" :disabled="!canScrollInspirationPrevious" @click="scrollInspiration(-1)"><ChevronLeft :size="20" /></button>
                 <button class="inspiration-arrow inspiration-arrow--next" type="button" aria-label="下一组" title="下一组" :disabled="!canScrollInspirationNext" @click="scrollInspiration(1)"><ChevronRight :size="20" /></button>
               </nav>
+              <button v-if="activeMode === 'images' || activeMode === 'videos'" class="inspiration-more" type="button" @click="openPromptLibrary(activeMode === 'videos' ? 'VIDEO' : 'IMAGE')">更多灵感<ArrowRight :size="16" /></button>
             </div>
           </header>
           <div v-if="inspirationError" class="inspiration-error" role="alert"><span><RefreshCw :size="16" />{{ inspirationError }}</span><button type="button" @click="retryInspirations"><RefreshCw :size="15" />重新加载</button></div>
           <div class="inspiration-browser">
-            <div ref="inspirationRail" class="inspiration-rail" @scroll="syncInspirationNavigation">
+            <div ref="inspirationRail" class="inspiration-rail" :class="{ 'can-scroll-start': canScrollInspirationPrevious, 'can-scroll-end': canScrollInspirationNext }" @scroll="syncInspirationNavigation">
               <div v-if="inspirationLoading" class="inspiration-loading" aria-label="正在加载灵感"><i v-for="index in 5" :key="index" /></div>
-              <p v-else-if="!activeInspirations.length && !inspirationError" class="inspiration-empty">暂无可用灵感</p>
+              <p v-else-if="!activeInspirations.length && !inspirationError" class="inspiration-empty"><AssistantAvatar state="idle" motion="off" :size="30" /><span>暂无可用灵感</span></p>
               <button v-for="item in activeInspirations" :key="item.id" type="button" class="inspiration-card" :class="{ 'is-selected': selectedInspirationId === item.id, 'is-video': activeMode === 'videos' }" :aria-label="`查看灵感：${item.title}`" @click="openInspiration(item)">
                 <video v-if="activeMode === 'videos' && item.videoUrl" :src="item.videoUrl" :poster="item.imageUrl" muted loop playsinline preload="metadata" :aria-label="`${item.title} 视频预览`" @mouseenter="playInspirationVideo" @mouseleave="pauseInspirationVideo" />
                 <img v-else :src="item.imageUrl" :alt="item.title" />
@@ -110,7 +148,7 @@
           <template v-if="activeMode === 'videos'">
             <div v-if="pendingVideoRuns.length" class="video-runs video-runs--pending">
               <article v-for="run in pendingVideoRuns" :key="run.id" class="video-run-card" :class="`is-${run.status.toLowerCase()}`">
-                <div class="video-run-card__stage"><LoaderCircle :size="26" /><strong>正在生成视频</strong><small>{{ run.request.resolution || '720p' }} · {{ run.request.duration || 5 }} 秒 · {{ run.request.aspectRatio || '16:9' }}</small></div>
+                <div class="video-run-card__stage"><LoaderCircle :size="26" /><strong>正在生成视频</strong><small>{{ run.request.resolution || '720p' }} · {{ run.request.duration || 5 }} 秒 · {{ run.request.aspectRatio || '16:9' }}<em v-if="run.request.firstFrameAssetId && run.request.lastFrameAssetId" class="video-run-card__frames">首帧 → 尾帧</em><em v-else-if="run.request.firstFrameAssetId" class="video-run-card__frames">首帧开场</em><em v-else-if="run.request.lastFrameAssetId" class="video-run-card__frames">尾帧收尾</em></small></div>
                 <footer><span><strong>{{ run.model }}</strong><small>{{ run.request.creditCost ?? currentVideoCredit }} 点</small></span><nav><button type="button" title="停止生成" :disabled="store.cancelingJobId === run.id" @click="stopGeneration(run)"><Square :size="14" fill="currentColor" /></button></nav></footer>
                 <p>{{ run.prompt }}</p>
               </article>
@@ -120,7 +158,11 @@
               <button v-if="visibleModeAssets.length < modeAssets.length" class="creation-output__more" type="button" @click="modeAssetLimit += 12">加载更多视频</button>
             </template>
             <div v-else-if="auth.isAuthenticated && !store.workspaceHydrated" class="creation-gallery-skeleton" aria-label="正在加载视频"><i v-for="index in 6" :key="index" /></div>
-            <p v-else-if="!pendingVideoRuns.length">你创建的视频会显示在这里</p>
+            <div v-else-if="!pendingVideoRuns.length" class="creation-empty">
+              <span class="creation-empty__icon"><AssistantAvatar state="idle" motion="off" :size="44" /></span>
+              <strong>还没有视频作品</strong>
+              <p>你创建的视频会显示在这里，输入一段描述开始生成。</p>
+            </div>
           </template>
           <div v-else-if="activeMode === 'commerce' && commerceRuns.length" class="commerce-runs">
             <div v-for="run in commerceRuns" :key="run.id" class="commerce-run-card" :class="{ 'is-running': generationState(run).isActive, 'is-clickable': Boolean(run.assets.length) }" :role="run.assets.length ? 'button' : undefined" :tabindex="run.assets.length ? 0 : undefined" @click="run.assets.length && (selectedCommerceRun = run)" @keydown.enter="run.assets.length && (selectedCommerceRun = run)">
@@ -136,7 +178,11 @@
             <AssetGrid :assets="visibleModeAssets" variant="gallery" :deletable="auth.isAuthenticated" :reusable="activeMode === 'images'" :regeneratable="activeMode === 'images'" @delete="deleteAsset" @reuse="useGeneratedAssetAsReference" @quote="useAssetPrompt" @regenerate="retryAssetGeneration" />
             <button v-if="visibleModeAssets.length < modeAssets.length" class="creation-output__more" type="button" @click="modeAssetLimit += 12">加载更多图片</button>
           </template>
-          <p v-else>{{ activeMode === 'images' ? '你创建的图片会显示在这里' : '你制作的商品素材包和详情页会显示在这里' }}</p>
+          <div v-else class="creation-empty">
+            <span class="creation-empty__icon"><AssistantAvatar state="idle" motion="off" :size="44" /></span>
+            <strong>{{ activeMode === 'images' ? '还没有图片作品' : '还没有商品素材' }}</strong>
+            <p>{{ activeMode === 'images' ? '你创建的图片会显示在这里，输入一段描述开始生成。' : '你制作的商品素材包和详情页会显示在这里。' }}</p>
+          </div>
         </section>
       </div>
     </section>
@@ -146,17 +192,20 @@
 import { computed, ref, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  ArrowRight, ArrowUp, AudioLines, BadgeCheck, Blend, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, FileText, FileType2, Image as ImageIcon, Images, Layers3, LoaderCircle, Play, Plus, RefreshCw, Settings2, SlidersHorizontal, Sparkles, Square, X,
+  ArrowRight, ArrowUp, AudioLines, BadgeCheck, Blend, Check, ChevronDown, ChevronLeft, ChevronRight, FileText, FileType2, Image as ImageIcon, Images, Layers3, LoaderCircle, Play, Plus, RefreshCw, Settings2, SlidersHorizontal, Sparkles, Square, X,
 } from 'lucide-vue-next'
 import AssetGrid from '../AssetGrid.vue'
+import AssistantAvatar from '../chat/AssistantAvatar.vue'
 import ModelCatalogPicker from '../ModelCatalogPicker.vue'
 import PluginSelector from '../PluginSelector.vue'
 import { useAuthStore } from '../../stores/auth'
+import { useCatalogStore } from '../../stores/catalog'
 import { useStudioStore } from '../../stores/studio'
 import type { GenerationRun, PluginCapability, StudioAsset, StudioMode } from '../../types'
 import { findCatalogModel, type CatalogModel } from '../../utils/model-catalog'
 import { resolveGenerationRunState } from '../../utils/generation-run-state'
 import ModelBadge from '../common/ModelBadge.vue'
+import { visibleGroupTabs } from '../../utils/sidebar-nav'
 import { attachmentMeta, hasImagePreview, type CreationMenu, type ImageTool, type Inspiration } from './creation-shared'
 
 const props = defineProps<{
@@ -166,7 +215,9 @@ const props = defineProps<{
   activeCreationModel: string
   activeCreationModelLabel: string
   activeCreationModelAvailable: boolean
+  activeCreationModelUnavailableMessage: string
   activeImageCapabilities: { supportsMask: boolean }
+  activeVideoCapabilities: { resolutions: string[]; durations: number[]; aspectRatios: string[] }
   creationPluginCapability: PluginCapability
   currentGenerationCost: number
   canSubmitCreation: boolean
@@ -208,7 +259,7 @@ const props = defineProps<{
   submitGeneration: () => void
   resizeGenerationInput: () => void
   collapseWorkspacePopovers: () => void
-  openFilePicker: (purpose: 'chat-file' | 'creation' | 'mask' | 'library') => void
+  openFilePicker: (purpose: 'chat-file' | 'creation' | 'mask' | 'first-frame' | 'last-frame' | 'library') => void
   switchCreationMode: (mode: 'images' | 'videos') => void
   toggleCreationMenu: (menu: NonNullable<CreationMenu>, event: MouseEvent) => void
   toggleMoreOptions: () => void
@@ -225,6 +276,7 @@ const props = defineProps<{
   retryAssetGeneration: (asset: StudioAsset) => void
   useGeneratedAssetAsReference: (asset: StudioAsset, generation?: GenerationRun) => void
   selectCreationOption: (option: string) => void
+  selectVideoSetting: (section: 'aspect' | 'resolution' | 'duration', value: string) => void
   isCreationOptionActive: (option: string) => boolean
   ratioShapeClass: (option: string) => string
   styleThumbnail: (option: string) => string
@@ -232,9 +284,12 @@ const props = defineProps<{
   creationOptionPrice: (option: string) => number
   imageToolIcon: (tool: ImageTool) => Component
   refreshModelCatalog: () => void
+  previewFrameAsset: (asset: StudioAsset) => void
 }>()
 const generationPrompt = defineModel<string>('generationPrompt', { required: true })
 const maskAttachment = defineModel<StudioAsset | null>('maskAttachment', { required: true })
+const firstFrameAttachment = defineModel<StudioAsset | null>('firstFrameAttachment', { required: true })
+const lastFrameAttachment = defineModel<StudioAsset | null>('lastFrameAttachment', { required: true })
 const creationPluginId = defineModel<string>('creationPluginId', { required: true })
 const creationPluginOpen = defineModel<boolean>('creationPluginOpen', { required: true })
 const modeAssetLimit = defineModel<number>('modeAssetLimit', { required: true })
@@ -243,6 +298,9 @@ function generationState(generation: GenerationRun) { return resolveGenerationRu
 
 const store = useStudioStore()
 const auth = useAuthStore()
+const catalog = useCatalogStore()
+const creationModeTabs = computed(() => visibleGroupTabs('creation', catalog.settings))
+const showCreationModeSwitch = computed(() => props.activeMode !== 'commerce' && creationModeTabs.value.length > 1)
 const { t } = useI18n()
 const creationComposer = ref<HTMLFormElement | null>(null)
 const generationInput = ref<HTMLTextAreaElement | null>(null)

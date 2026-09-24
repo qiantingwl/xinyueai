@@ -46,7 +46,7 @@
           <p>{{ item.summary || xt('暂无摘要') }}</p>
           <div class="meta">
             <span><ArtSvgIcon icon="ri:eye-line" />{{ item.views }}</span>
-            <span>{{ formatDate(item.updatedAt) }}</span>
+            <span>{{ formatDateTime(item.updatedAt) }}</span>
           </div>
           <div class="actions" @click.stop>
             <ElButton text type="primary" @click="toEdit(item)">{{ xt('编辑') }}</ElButton>
@@ -76,27 +76,25 @@
 <script setup lang="ts">
   import { Search } from '@element-plus/icons-vue'
   import { ElMessageBox } from 'element-plus'
-  import { useDateFormat } from '@vueuse/core'
   import { router } from '@/router'
   import { contentApi as xinyueApi, type ContentPage } from '@/api/xinyue/content'
   import { xinyueText as xt } from '@/locales/xinyue'
+  import { useXinyueAsync } from '@/hooks'
+  import { formatDateTime } from '@/utils/xinyue/formatters'
 
   defineOptions({ name: 'ArticleList' })
 
   const query = ref('')
   const status = ref('')
   const rows = ref<ContentPage[]>([])
-  const loading = ref(false)
+  const { loading, withLoading, withSaving } = useXinyueAsync()
   const page = ref(1)
   const pageSize = 20
   const total = ref(0)
 
-  const formatDate = (value: string) => useDateFormat(value, 'YYYY-MM-DD HH:mm').value
-
   async function load(reset = false) {
     if (reset) page.value = 1
-    loading.value = true
-    try {
+    await withLoading(async () => {
       const result = await xinyueApi.contentPages({
         page: page.value,
         pageSize,
@@ -105,9 +103,7 @@
       })
       rows.value = result.items
       total.value = result.total
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   const toCreate = () => router.push({ name: 'ArticlePublish' })
@@ -117,8 +113,10 @@
     router.push({ name: 'ArticleDetail', params: { id: item.id } })
 
   async function togglePublish(item: ContentPage) {
-    await xinyueApi.saveContentPage({ published: !item.published }, item.id)
-    await load()
+    await withSaving(async () => {
+      await xinyueApi.saveContentPage({ published: !item.published }, item.id)
+      await load()
+    })
   }
 
   async function remove(item: ContentPage) {
@@ -127,8 +125,10 @@
       xt('删除内容'),
       { type: 'warning' }
     )
-    await xinyueApi.deleteContentPage(item.id)
-    await load()
+    await withSaving(async () => {
+      await xinyueApi.deleteContentPage(item.id)
+      await load()
+    })
   }
 
   onMounted(() => load())
@@ -162,7 +162,7 @@
 
   .filter-bar {
     display: grid;
-    grid-template-columns: minmax(260px, 420px) 150px auto;
+    grid-template-columns: minmax(260px, 420px) 150px max-content;
     gap: 12px;
     margin-bottom: 20px;
   }
@@ -208,7 +208,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--art-gray-400);
+    color: var(--art-gray-600);
   }
 
   .cover.empty :deep(svg) {
@@ -230,6 +230,10 @@
     margin-bottom: 7px;
     font-size: 12px;
     color: var(--el-color-primary);
+  }
+
+  html.dark .category {
+    color: color-mix(in srgb, var(--el-color-primary) 65%, #ffffff);
   }
 
   .card-body h2 {

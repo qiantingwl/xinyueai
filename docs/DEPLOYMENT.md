@@ -59,14 +59,14 @@ docker compose --env-file .env.production -f docker-compose.prod.yml logs -f bac
 
 数据库密码包含 `@`、`:`、`/`、`#` 等字符时，需要先在 `DATABASE_URL` 中进行 URL 编码。安装页面不会返回或修改服务器配置；缺少正确安装令牌时，创建管理员请求会被拒绝。
 
-外部 Prompt 同步和外部 Skill 市场默认关闭，启动时不会访问第三方站点，也不会读取其本地缓存。部署所有者逐项核验来源许可证及商业使用条件后，才可在 `.env.production` 中明确设置：
+两个外部内容开关在代码中默认关闭，示例配置中的取值如下：
 
 ```dotenv
-PROMPT_LIBRARY_EXTERNAL_SYNC_ENABLED=true
-EXTERNAL_SKILL_MARKET_ENABLED=true
+PROMPT_LIBRARY_EXTERNAL_SYNC_ENABLED=false   # 外部提示词同步，启动时不访问第三方站点
+EXTERNAL_SKILL_MARKET_ENABLED=true           # 能力中心「外部市场」只读发现第三方 Skill
 ```
 
-外部 Skill 的安全扫描只检查格式、脚本和危险命令，不构成许可证授权或商业使用确认。Prompt 渠道也可由管理员在后台逐个审核并启用；明确关闭的渠道不会被环境变量强制打开。
+外部 Skill 市场只负责搜索和展示条目，用户安装时服务端才下载内容，并以未审核风险入库。安全扫描只检查格式、脚本和危险命令，不构成许可证授权或商业使用确认；不希望用户接触第三方 Skill 的部署应改为 `false`。开启外部提示词同步前，部署所有者需逐项核验来源许可证与商业使用条件。Prompt 渠道也可由管理员在后台逐个审核并启用；明确关闭的渠道不会被环境变量强制打开。
 
 从旧版本升级时，历史上已标记为启用、但没有审核时间戳的外部 Prompt 渠道会保持停用。管理员完成核验后，可在来源管理中逐个重新启用；内部公开作品来源不受影响。
 
@@ -91,6 +91,11 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d --bui
 ```
 
 `WEB_ORIGIN` 必须与浏览器实际访问的 Origin 完全一致，否则登录 Cookie 和跨域请求会失败。`PUBLIC_BASE_URL` 是支付 Webhook 对外地址；前后端同域时与首个 `WEB_ORIGIN` 保持一致。内置 Docker 拓扑只有一层 Nginx，因此 `TRUST_PROXY=1`；手工部署时必须按真实代理跳数或代理 IP/CIDR 配置，不能使用 `true` 信任任意转发头。外层 TLS 代理必须覆盖 `X-Forwarded-Proto`。
+
+安全防护约定：
+- 带 Cookie 的写请求强制校验请求 Origin 必须在 `WEB_ORIGIN` 白名单内；单纯伪造 `X-Xinyue-Request` 请求头无法绕过外站防护。
+- 团队导出仅限团队所有者或管理员执行；导出的内容严格限定为团队项目和团队共享资源，成员个人未绑项目的私有对话和非团队生成任务不随团队导出。
+- 公开灵感媒体由只读公开接口分发，严格校验灵感公开状态和资源归属；禁止未授权直接访问后台私有存储。
 
 ### 2.6 出口网络与 SSRF 边界
 
@@ -296,10 +301,34 @@ npm --prefix server run prisma:deploy
 
 后端至少需要配置：`NODE_ENV=production`、`DATABASE_URL`、`REDIS_URL`、`WEB_ORIGIN`、`COOKIE_SECURE`、`SESSION_SECRET`、`CREDENTIAL_ENCRYPTION_KEY`、`INSTALL_TOKEN` 和存储配置。管理员通过 `/install` 创建；也可以同时提供 `ADMIN_EMAIL`、`ADMIN_PASSWORD` 让启动脚本执行幂等初始化。手工部署升级时，应在启动新进程前先执行 `npm --prefix server run prisma:deploy`。
 
-## 7. 发布前验证
+## 7. 运维脚本
+
+| 命令 | 作用 |
+| --- | --- |
+| `npm run backup:production` | 备份 PostgreSQL、Redis、上传文件、生产配置和 Compose 文件，生成带 SHA-256 的 `manifest.json`，见第 3 节 |
+| `npm run restore:production -- --source=<目录> --confirm` | 校验并恢复备份，默认不覆盖 `.env.production`，见第 3 节 |
+| `node scripts/ensure-production-secrets.cjs --local` | 仅用于本机或测试机：为 `.env.production` 中缺失或仍是占位值的 `POSTGRES_PASSWORD`、`SESSION_SECRET`、`CREDENTIAL_ENCRYPTION_KEY`、`INSTALL_TOKEN`、`LOCAL_WORKER_TOKEN` 生成 32 字节随机值。数据库主机不是本地地址时会拒绝执行，也不打印密钥值。真实生产环境请使用 secret manager |
+| `NEW_API_KEY=… [NEW_BASE_URL=…] node scripts/rotate-sub2api-key.cjs` | 轮换 SUB2API 类型渠道的 API Key 并清空健康与冷却状态；不传 `NEW_BASE_URL` 时保留原地址。日志只显示 Key 前后 6 位。管理端编辑渠道也能完成同样操作 |
+| `npm --prefix server run admin:reset-password` | 使用环境中的 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 重置管理员密码 |
+
+脚本读取 `server/.env`（或容器内环境变量）连接数据库，需在能访问数据库的机器上执行。
+
+## 8. 日常更新
+
+```bash
+git pull --ff-only
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+```
+
+更新前先执行 `npm run backup:production`。只改了前端时也需要重建 `frontend` 镜像；后端镜像启动时会自动执行新迁移。
+
+## 9. 发布前验证
+
+完整清单见 [DEVELOPMENT.md](DEVELOPMENT.md#7-提交前验证)。最少执行：
 
 ```powershell
 npm run audit:ui-actions
+npm run test:unit
 npm run verify
 npm run test:e2e
 git diff --check

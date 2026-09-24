@@ -12,9 +12,12 @@ import {
   isEnvironmentOptInEnabled,
   isSourceEffectivelyEnabled,
 } from "../common/external-content-policy";
-import { fetchPublicManualRedirect } from "../common/outbound-http";
+import { fetchWithAllowedRedirects } from "../common/allowed-redirect-fetch";
 import { PrismaService } from "../prisma/prisma.service";
-import { localPromptLibraryEntries } from "./prompt-library.defaults";
+import {
+  localPromptLibraryEntries,
+  type LocalPromptLibraryEntry,
+} from "./prompt-library.defaults";
 import {
   syncGeneratePromptVideos,
   syncHiggsfieldVideos,
@@ -113,6 +116,16 @@ const PROMPT_MAX_REDIRECTS = 3;
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const AUTO_REFRESH_MS = 6 * 60 * 60 * 1000;
 const CACHE_DIRECTORY = join(process.cwd(), "storage", "prompt-library-cache");
+// Source-controlled snapshots keep the prompt library complete on a fresh
+// deployment. Runtime cache files are intentionally ignored and are only an
+// optimisation after the first start.
+const BUNDLED_DATA_DIRECTORIES = [
+  join(process.cwd(), "prompt-library-data"),
+  join(process.cwd(), "server", "prompt-library-data"),
+  // Compiled server images run from /app with assets copied next to dist.
+  join(__dirname, "..", "..", "prompt-library-data"),
+  join(__dirname, "..", "prompt-library-data"),
+];
 const SOURCES: PromptLibrarySource[] = [
   {
     id: "upma-gpt-image-2",
@@ -262,6 +275,32 @@ const SOURCES: PromptLibrarySource[] = [
     reviewNote: "Xinyue AI 内部公开作品",
   },
   {
+    id: "xinyue-bundled-image",
+    promptType: "IMAGE",
+    upstreamName: "Xinyue AI 内置提示词",
+    defaultDisplayName: "Xinyue AI 内置图片提示词",
+    homepage: "/prompts",
+    format: "local",
+    defaultSortOrder: 5,
+    external: false,
+    defaultEnabled: true,
+    reviewStatus: "internal",
+    reviewNote: "Xinyue AI 随程序发布的内置提示词",
+  },
+  {
+    id: "xinyue-bundled-video",
+    promptType: "VIDEO",
+    upstreamName: "Xinyue AI 内置提示词",
+    defaultDisplayName: "Xinyue AI 内置视频提示词",
+    homepage: "/prompts",
+    format: "local",
+    defaultSortOrder: 105,
+    external: false,
+    defaultEnabled: true,
+    reviewStatus: "internal",
+    reviewNote: "Xinyue AI 随程序发布的内置提示词",
+  },
+  {
     id: "published-works-video",
     promptType: "VIDEO",
     upstreamName: "Xinyue AI 公开作品",
@@ -329,6 +368,7 @@ const TAG_TRANSLATIONS: Record<string, string> = {
 export class PromptLibraryService implements OnModuleInit {
   private readonly cache = new Map<string, SourceCache>();
   private readonly loading = new Map<string, Promise<SourceCache>>();
+  private bundledEntriesPromise: Promise<LocalPromptLibraryEntry[]> | null = null;
   constructor(private readonly prisma: PrismaService, @InjectQueue("prompt-library") private readonly queue: Queue) {}
 
   async onModuleInit() {
@@ -799,6 +839,7 @@ export class PromptLibraryService implements OnModuleInit {
       imageModel: item.imageModel,
       coverUrl: item.coverUrl,
       previewVideoUrl: item.previewVideoUrl,
+      sourceUrl: item.sourceUrl || "",
     };
   }
 
@@ -818,6 +859,15 @@ export class PromptLibraryService implements OnModuleInit {
         lastError: "提示词渠道未启用",
         complete: false,
       };
+    }
+    if (source.format === "works") {
+      const pending = this.loading.get(source.id);
+      if (!force && pending) return pending;
+      const loading = this.fetchSource(source).finally(() =>
+        this.loading.delete(source.id),
+      );
+      this.loading.set(source.id, loading);
+      return loading;
     }
     const cached = this.cache.get(source.id);
     const crawler = this.isCrawlerSource(source);
@@ -842,7 +892,7 @@ export class PromptLibraryService implements OnModuleInit {
 
     if (!force && crawler) {
       const available = persisted || {
-        items: this.localItems(source),
+        items: await this.localItems(source),
         fetchedAt: 0,
         lastSuccessAt: "",
         lastError: "正在同步完整来源",
@@ -870,26 +920,28 @@ export class PromptLibraryService implements OnModuleInit {
   ): Promise<SourceCache> {
     try {
       if (source.format === "works") {
+        const kind = source.promptType === "VIDEO" ? "VIDEO" : "IMAGE";
         const rows = await this.prisma.publishedWork.findMany({
           where: {
             lifecycleStatus: "ACTIVE",
             publishedVersion: {
               moderationStatus: "APPROVED",
               visibility: "PUBLIC",
-              publicPrompt: { not: "" },
-              assets: { some: { asset: { kind: source.promptType === "VIDEO" ? "VIDEO" : "IMAGE" } } },
+              assets: { some: { asset: { kind } } },
             },
           },
           orderBy: [{ isFeatured: "desc" }, { updatedAt: "desc" }],
           take: 5000,
-          include: { user: { select: { displayName: true } }, publishedVersion: { include: { assets: { orderBy: { sortOrder: "asc" }, include: { asset: { select: { id: true, kind: true } } } } } } },
+          include: { user: { select: { displayName: true } }, publishedVersion: { include: { assets: { orderBy: { sortOrder: "asc" }, include: { asset: { select: { id: true, kind: true, metadata: true } } } } } } },
         });
         const items = rows.flatMap((work) => {
           const version = work.publishedVersion;
-          if (!version?.publicPrompt?.trim()) return [];
-          const media = version.assets.filter((item) => item.asset.kind === (source.promptType === "VIDEO" ? "VIDEO" : "IMAGE"));
+          if (!version) return [];
+          const media = version.assets.filter((item) => item.asset.kind === kind);
           if (!media.length) return [];
           const first = media[0].asset;
+          const prompt = (version.publicPrompt?.trim() || this.assetPrompt(first.metadata)).slice(0, 10000);
+          if (!prompt) return [];
           const mediaUrl = `/v1/gallery/${work.slug}/assets/${first.id}`;
           const author = version.authorDisplay === "HIDDEN" ? "匿名创作者" : version.authorDisplay === "CUSTOM" ? version.customAuthor : work.user.displayName;
           return [{
@@ -898,7 +950,7 @@ export class PromptLibraryService implements OnModuleInit {
             sourceName: source.displayName,
             promptType: source.promptType,
             title: version.title,
-            prompt: version.publicPrompt,
+            prompt,
             description: version.description,
             tags: version.tags,
             author,
@@ -906,19 +958,25 @@ export class PromptLibraryService implements OnModuleInit {
             coverUrl: mediaUrl,
             previewVideoUrl: source.promptType === "VIDEO" ? mediaUrl : "",
             referenceImageUrls: source.promptType === "IMAGE" ? [mediaUrl] : [],
-            sourceUrl: `/gallery/${work.slug}`,
+            sourceUrl: `/works?work=${encodeURIComponent(work.slug)}`,
             syncedAt: version.reviewedAt?.toISOString() || version.updatedAt.toISOString(),
             enabled: true,
             overridden: false,
           } satisfies PromptLibraryItem];
         });
-        const next = this.cacheResult(items);
+        const next = {
+          items,
+          fetchedAt: Date.now(),
+          lastSuccessAt: new Date().toISOString(),
+          lastError: "",
+          complete: true,
+        };
         this.cache.set(source.id, next);
         return next;
       }
       if (source.format === "local") {
         const next = {
-          items: this.localItems(source),
+          items: await this.localItems(source),
           fetchedAt: Date.now(),
           lastSuccessAt: new Date().toISOString(),
           lastError: "",
@@ -997,6 +1055,9 @@ export class PromptLibraryService implements OnModuleInit {
     } catch (reason) {
       const fallbackItems = stale?.items.length
         ? stale.items
+        : source.id === "xinyue-bundled-image" ||
+          source.id === "xinyue-bundled-video"
+          ? await this.localItems(source)
         : localPromptLibraryEntries
             .filter((item) => item.sourceId === source.id)
             .map((item, index): PromptLibraryItem => ({
@@ -1064,44 +1125,17 @@ export class PromptLibraryService implements OnModuleInit {
    * escape the public source allowlist. A single timeout signal is shared by
    * the complete redirect chain.
    */
-  private async fetchPromptRemote(value: string, init: RequestInit) {
-    let current = this.allowedPromptUrl(value);
-    for (let redirects = 0; ; redirects += 1) {
-      const response = await fetchPublicManualRedirect(current, init);
-      if (response.status < 300 || response.status >= 400) return response;
-      await response.body?.cancel().catch(() => undefined);
-      if (redirects >= PROMPT_MAX_REDIRECTS) {
-        throw new Error("提示词源重定向次数超过限制");
-      }
-      const location = response.headers.get("location");
-      if (!location) throw new Error("提示词源重定向地址无效");
-      let next: URL;
-      try {
-        next = new URL(location, current);
-      } catch {
-        throw new Error("提示词源重定向地址无效");
-      }
-      current = this.allowedPromptUrl(next.toString());
-    }
-  }
-
-  private allowedPromptUrl(value: string) {
-    let url: URL;
-    try {
-      url = new URL(value);
-    } catch {
-      throw new Error("提示词源地址无效");
-    }
-    if (
-      url.protocol !== "https:" ||
-      url.username ||
-      url.password ||
-      (url.port && url.port !== "443") ||
-      !PROMPT_REMOTE_HOSTS.has(url.hostname.toLowerCase())
-    ) {
-      throw new Error("提示词源重定向目标不在允许列表");
-    }
-    return url;
+  private fetchPromptRemote(value: string, init: RequestInit) {
+    return fetchWithAllowedRedirects(value, init, {
+      allowedHosts: PROMPT_REMOTE_HOSTS,
+      maxRedirects: PROMPT_MAX_REDIRECTS,
+      messages: {
+        invalidUrl: "提示词源地址无效",
+        disallowedHost: "提示词源重定向目标不在允许列表",
+        invalidLocation: "提示词源重定向地址无效",
+        tooManyRedirects: "提示词源重定向次数超过限制",
+      },
+    }).then((result) => result.response);
   }
 
   private normalizeItem(
@@ -1205,9 +1239,18 @@ export class PromptLibraryService implements OnModuleInit {
       .map(([name, count]) => ({ name, count }));
   }
 
-  private localItems(source: SourceRuntime): PromptLibraryItem[] {
-    return localPromptLibraryEntries
-      .filter((item) => item.sourceId === source.id)
+  private async localItems(source: SourceRuntime): Promise<PromptLibraryItem[]> {
+    const entries = await this.bundledEntries();
+    return entries
+      .filter((item) => {
+        if (source.id === "xinyue-bundled-image") {
+          return !item.sourceId.startsWith("video-");
+        }
+        if (source.id === "xinyue-bundled-video") {
+          return item.sourceId.startsWith("video-");
+        }
+        return item.sourceId === source.id;
+      })
       .map((item, index) => ({
         id: `${source.id}:local:${index + 1}`,
         sourceId: source.id,
@@ -1217,7 +1260,7 @@ export class PromptLibraryService implements OnModuleInit {
         prompt: item.prompt,
         description: item.description,
         tags: item.tags,
-        author: item.author || "Xinyue AI",
+        author: "Xinyue AI",
         imageModel: item.modelName || (source.promptType === "VIDEO" ? "通用视频模型" : "通用图片模型"),
         coverUrl: item.coverUrl,
         previewVideoUrl: item.previewVideoUrl || "",
@@ -1225,6 +1268,67 @@ export class PromptLibraryService implements OnModuleInit {
         enabled: true,
         overridden: false,
       }));
+  }
+
+  private bundledEntries(): Promise<LocalPromptLibraryEntry[]> {
+    if (!this.bundledEntriesPromise) {
+      this.bundledEntriesPromise = (async () => {
+        const entries: LocalPromptLibraryEntry[] = [...localPromptLibraryEntries];
+        const readBundled = async (name: "image" | "video") => {
+          try {
+            let raw: string | undefined;
+            for (const directory of BUNDLED_DATA_DIRECTORIES) {
+              try {
+                raw = await readFile(join(directory, `${name}.json`), "utf8");
+                break;
+              } catch {
+                // Try the next known layout (source tree, compiled image, or
+                // a monorepo root working directory).
+              }
+            }
+            if (raw === undefined) return;
+            const parsed: unknown = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return;
+            for (const value of parsed) {
+              if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+              const row = value as Record<string, unknown>;
+              if (
+                typeof row.sourceId !== "string" ||
+                typeof row.title !== "string" ||
+                typeof row.prompt !== "string"
+              ) continue;
+              entries.push({
+                sourceId: row.sourceId,
+                title: row.title,
+                prompt: row.prompt,
+                description:
+                  typeof row.description === "string" ? row.description : "",
+                tags: Array.isArray(row.tags)
+                  ? row.tags.filter(
+                      (tag): tag is string => typeof tag === "string",
+                    )
+                  : [],
+                coverUrl: typeof row.coverUrl === "string" ? row.coverUrl : "",
+                previewVideoUrl:
+                  typeof row.previewVideoUrl === "string"
+                    ? row.previewVideoUrl
+                    : "",
+                author:
+                  typeof row.author === "string" ? row.author : "Xinyue AI 精选",
+                modelName:
+                  typeof row.imageModel === "string" ? row.imageModel : undefined,
+              });
+            }
+          } catch {
+            // Source-controlled defaults remain usable if an optional snapshot
+            // is absent in a hand-built development tree.
+          }
+        };
+        await Promise.all([readBundled("image"), readBundled("video")]);
+        return entries;
+      })();
+    }
+    return this.bundledEntriesPromise;
   }
 
   private isCrawlerSource(source: PromptLibrarySource) {
@@ -1270,6 +1374,12 @@ export class PromptLibraryService implements OnModuleInit {
       enabled: true,
       overridden: false,
     }));
+  }
+
+  private assetPrompt(metadata: unknown) {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return "";
+    const prompt = (metadata as Record<string, unknown>).prompt;
+    return typeof prompt === "string" ? prompt.trim() : "";
   }
 
   private cacheResult(

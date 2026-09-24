@@ -13,7 +13,7 @@ import { TeamService } from './team.service'
 import { ResourceAccessService } from '../common/resource-access.service'
 import { CreditsService } from '../credits/credits.service'
 import { PublicEndpointPolicyService } from '../common/public-endpoint-policy.service'
-import { assistantCreateData, defaultAssistantPresets, defaultToolPresets, toolCreateData } from './default-capability-presets'
+import { defaultAssistantPresets, defaultToolPresets, ensureDefaultCapabilityPresets, toolCreateData } from './default-capability-presets'
 import { AgentToolsService } from '../agent-tasks/agent-tools.service'
 
 class AssistantDto {
@@ -81,7 +81,13 @@ export class WorkspaceController {
   exportOffice(@CurrentUser() user: AuthenticatedUser, @Body() body: OfficeExportDto) { return this.officeExports.create(user.id, body) }
 
   @Get('assistants')
-  assistants() { return this.prisma.assistant.findMany({ where: { enabled: true, visibility: 'PUBLIC' }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }], select: { id: true, name: true, description: true, defaultModel: true, templateIds: true, tools: { select: { toolId: true } } } }) }
+  assistants() {
+    return this.prisma.assistant.findMany({
+      where: { enabled: true, visibility: 'PUBLIC' },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      select: { id: true, name: true, description: true, defaultModel: true, templateIds: true, tools: { select: { toolId: true, tool: { select: { name: true } } } } },
+    }).then((rows) => rows.map((row) => ({ ...row, tools: row.tools.map((item) => ({ toolId: item.toolId, name: item.tool.name })) })))
+  }
 
   @Get('assistants/tools')
   tools() {
@@ -96,8 +102,8 @@ export class WorkspaceController {
   async toolIcon(@Param('toolId') toolId: string) {
     const tool = await this.prisma.toolDefinition.findFirst({ where: { id: toolId, enabled: true, kind: 'BUILT_IN' }, select: { iconAssetId: true } })
     if (!tool?.iconAssetId) throw new NotFoundException('工具图标不存在')
-    const result = await this.assets.readForAdmin(tool.iconAssetId)
-    return new StreamableFile(result.file, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name) })
+    const result = await this.assets.streamForAdmin(tool.iconAssetId)
+    return new StreamableFile(result.stream, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name), length: result.size || undefined })
   }
 
 
@@ -144,8 +150,8 @@ export class WorkspaceController {
     if (existing) return { attached: true, alreadyAttached: true }
     let extractedText = ''
     if (asset) {
-      const content = await this.assets.readForUser(user.id, asset.id)
-      if (content.mimeType.startsWith('text/') || content.mimeType === 'application/json') extractedText = content.file.toString('utf8').slice(0, 2_000_000)
+      const excerpt = await this.assets.readTextExcerptForUser(user.id, asset.id, 2_000_000)
+      extractedText = excerpt.text
     }
     const chunkCount = extractedText ? Math.max(1, Math.ceil(extractedText.length / 1200)) : 0
     await this.prisma.$transaction([
@@ -159,11 +165,12 @@ export class WorkspaceController {
   async detachAsset(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Param('assetId') assetId: string) {
     await this.access.assertKnowledgeBaseManager(user.id, id)
     const asset = await this.prisma.knowledgeBaseAsset.findUnique({ where: { knowledgeBaseId_assetId: { knowledgeBaseId: id, assetId } }, select: { chunkCount: true } })
-    const result = await this.prisma.knowledgeBaseAsset.deleteMany({ where: { knowledgeBaseId: id, assetId } })
-    if (result.count) {
-      await this.prisma.knowledgeBase.update({ where: { id }, data: { documentCount: { decrement: 1 }, chunkCount: { decrement: asset?.chunkCount || 0 } } })
-    }
-    return { detached: result.count > 0 }
+    // 删除关联记录和递减计数必须原子，否则计数会永久漂移
+    const result = await this.prisma.$transaction([
+      this.prisma.knowledgeBaseAsset.deleteMany({ where: { knowledgeBaseId: id, assetId } }),
+      this.prisma.knowledgeBase.update({ where: { id }, data: { documentCount: { decrement: 1 }, chunkCount: { decrement: asset?.chunkCount || 0 } } }),
+    ])
+    return { detached: result[0].count > 0 }
   }
 
   @Get('teams')
@@ -342,7 +349,7 @@ export class AdminWorkspaceController {
   @Post('assistants/restore-defaults')
   async restoreAssistants(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest) {
     const before = await this.prisma.assistant.count({ where: { id: { in: defaultAssistantPresets.map((item) => item.id) } } })
-    await this.prisma.$transaction(defaultAssistantPresets.map((preset) => this.prisma.assistant.upsert({ where: { id: preset.id }, update: {}, create: assistantCreateData(preset) })))
+    await ensureDefaultCapabilityPresets(this.prisma)
     const added = defaultAssistantPresets.length - before
     await this.audit(admin.id, request, 'assistant.restore_defaults', 'assistant-presets', { added, total: defaultAssistantPresets.length })
     return { added, total: defaultAssistantPresets.length }
@@ -375,7 +382,7 @@ export class AdminWorkspaceController {
   @Post('tools/restore-defaults')
   async restoreTools(@CurrentUser() admin: AuthenticatedUser, @Req() request: FastifyRequest) {
     const before = await this.prisma.toolDefinition.count({ where: { key: { in: defaultToolPresets.map((item) => item.key) } } })
-    await this.prisma.$transaction(defaultToolPresets.map((preset) => this.prisma.toolDefinition.upsert({ where: { key: preset.key }, update: {}, create: toolCreateData(preset) })))
+    await ensureDefaultCapabilityPresets(this.prisma)
     const added = defaultToolPresets.length - before
     await this.audit(admin.id, request, 'tool.restore_defaults', 'tool-presets', { added, total: defaultToolPresets.length })
     return { added, total: defaultToolPresets.length }

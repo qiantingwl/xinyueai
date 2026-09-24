@@ -147,6 +147,30 @@ export const enterpriseRoutes: AppRouteRecord[] = [
         meta: resource('公开页面', 'ri:article-line', 'contentPages')
       },
       {
+        path: 'article/detail/:id',
+        name: 'ArticleDetail',
+        component: '/article/detail',
+        meta: {
+          title: 'xinyue.nav.contentPageDetail',
+          isHide: true,
+          keepAlive: true,
+          activePath: '/enterprise/content/pages',
+          roles: ['R_SUPER', 'R_ADMIN']
+        }
+      },
+      {
+        path: 'article/publish',
+        name: 'ArticlePublish',
+        component: '/article/publish',
+        meta: {
+          title: 'xinyue.nav.contentPageEdit',
+          isHide: true,
+          keepAlive: true,
+          activePath: '/enterprise/content/pages',
+          roles: ['R_SUPER', 'R_ADMIN']
+        }
+      },
+      {
         path: 'inspirations',
         name: 'InspirationManagement',
         component: '/xinyue/operations',

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { buildJobLedgers, reconcileJobLedger } from './billing-reconciliation'
+import { asJsonRecord } from '../common/json-record'
 
 @Injectable()
 export class BillingReconciliationService {
@@ -38,7 +39,7 @@ export class BillingReconciliationService {
       if (job.kind === 'CHAT' && job.status === 'SUCCEEDED' && totalTokens === 0 && !job.provider.startsWith('demo:')) {
         issues.push({ code: 'MISSING_PROVIDER_USAGE', severity: 'WARNING', message: '供应商未返回 Token 用量，无法核验上游成本' })
       }
-      const pricing = this.object(job.pricingSnapshot)
+      const pricing = asJsonRecord(job.pricingSnapshot)
       const expectedUpstreamCost = job.kind === 'CHAT'
         ? Math.min(2_000_000_000, Math.ceil(job.inputTokens * this.number(pricing.inputCostMicrosPerMillion) / 1_000_000) + Math.ceil(job.outputTokens * this.number(pricing.outputCostMicrosPerMillion) / 1_000_000))
         : null
@@ -87,10 +88,6 @@ export class BillingReconciliationService {
       },
       items,
     }
-  }
-
-  private object(value: unknown): Record<string, unknown> {
-    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
   }
 
   private number(value: unknown) {

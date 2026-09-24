@@ -73,7 +73,7 @@ const fastEnterConfig: FastEnterConfig = {
       iconColor: '#475569',
       enabled: true,
       order: 8,
-      routeName: 'ArticleList'
+      routeName: 'PublicContentPages'
     }
   ],
   quickLinks: [

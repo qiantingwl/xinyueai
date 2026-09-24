@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { ModelCapability, ProviderType } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
+import { asJsonRecord } from '../common/json-record'
 
 type QuickAction = {
   id: string
@@ -29,9 +30,11 @@ const INTERNAL_ROUTES = new Map<string, ModelCapability | null>([
   ['/commerce', ModelCapability.COMMERCE],
   ['/office', ModelCapability.CHAT],
   ['/workspace', null],
+  ['/canvases', null],
   ['/prompts', null],
   ['/capabilities', null],
-  ['/api', null],
+  ['/works', null],
+  ['/image-prompt', null],
   ['/about', null],
   ['/copyright', null],
   ['/privacy', null],
@@ -86,7 +89,7 @@ export class CapabilityRegistryService {
     const externalSearchAvailable = searchChannels.some((channel) => this.healthAvailable(channel, now))
     const nativeSearchAvailable = nativeChannels.some((channel) => {
       if (!this.providerAvailable(channel, now)) return false
-      const metadata = this.record(channel.metadata)
+      const metadata = asJsonRecord(channel.metadata)
       const provider = String(metadata.nativeSearchProvider || channel.template?.nativeSearchProvider || 'disabled')
       return provider !== 'disabled'
     })
@@ -167,7 +170,4 @@ export class CapabilityRegistryService {
     return value.enabled !== false && value.lastHealthStatus === 'healthy' && (!value.cooldownUntil || value.cooldownUntil <= now)
   }
 
-  private record(value: unknown): Record<string, unknown> {
-    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
-  }
 }

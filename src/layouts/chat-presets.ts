@@ -54,6 +54,14 @@ export const CHAT_LAYOUTS: Record<ChatUiPreset, ChatLayoutConfig> = {
     homeLayout: 'banner',
     messageStyle: 'plain',
   },
+  jixing: {
+    key: 'jixing',
+    contentWidth: 'standard',
+    composer: 'floating-card',
+    header: 'productized',
+    homeLayout: 'banner',
+    messageStyle: 'plain',
+  },
 }
 
 export function getChatLayout(preset: ChatUiPreset): ChatLayoutConfig {

@@ -660,6 +660,7 @@ model UserSettings {
   temporaryChatDefault Boolean @default(false)
   dataRetentionDays    Int     @default(0)
   shareUsageAnalytics  Boolean @default(false)
+  onboarded            Boolean @default(true)
   user                 User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -1361,6 +1362,7 @@ model ProviderChannel {
   lastFailureAt       DateTime?
   lastSuccessAt       DateTime?
   cooldownUntil       DateTime?
+  lastRotatedAt       DateTime?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   modelPresets        ModelPreset[]
@@ -1605,6 +1607,8 @@ model SystemSetting {
   sidebarPluginsEnabled         Boolean  @default(true)
   sidebarProjectsEnabled        Boolean  @default(true)
   sidebarAssetsEnabled          Boolean  @default(true)
+  sidebarNav                    Json?
+  workspaceNav                  Json?
   registrationEnabled           Boolean  @default(true)
   emailLoginEnabled             Boolean  @default(true)
   emailVerifyEnabled            Boolean  @default(true)
@@ -1619,16 +1623,6 @@ model SystemSetting {
   linuxDoAuthorizeUrl           String   @default("https://connect.linux.do/oauth2/authorize")
   linuxDoTokenUrl               String   @default("https://connect.linux.do/oauth2/token")
   linuxDoUserInfoUrl            String   @default("https://connect.linux.do/api/user")
-  sub2apiLoginEnabled           Boolean  @default(false)
-  sub2apiBaseUrl                String   @default("")
-  sub2apiClientId               String   @default("")
-  encryptedSub2apiClientSecret  String   @default("") @db.Text
-  sub2apiClientSecretHint       String   @default("")
-  sub2apiRedirectUrl            String   @default("")
-  sub2apiScopes                 String   @default("openid profile email")
-  sub2apiAuthorizeUrl           String   @default("")
-  sub2apiTokenUrl               String   @default("")
-  sub2apiUserInfoUrl            String   @default("")
   allowedEmailDomains           String[] @default([])
   otpTtlMinutes                 Int      @default(10)
   otpResendSeconds              Int      @default(60)
@@ -1636,6 +1630,10 @@ model SystemSetting {
   defaultTheme                  String   @default("dark")
   defaultLanguage               String   @default("zh-CN")
   chatUiPreset                  String   @default("gpt")
+  chatAvatarMotion              String   @default("ambient")
+  chatAvatarEnabled             Boolean  @default(true)
+  chatAvatarStyle               String   @default("classic")
+  chatAvatarColor               String   @default("auto")
   chatHomeContent               Json     @default("{}")
   siteContent                   Json     @default("{}")
   defaultChatModelKey           String   @default("")

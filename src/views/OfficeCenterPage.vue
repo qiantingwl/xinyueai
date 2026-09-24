@@ -12,7 +12,14 @@
     <aside v-if="historyOpen" class="office-history" aria-label="任务记录">
       <header><div><strong>{{ archivedTasksVisible ? '已归档任务' : '任务记录' }}</strong><small>{{ archivedTasksVisible ? '可恢复到当前任务列表' : '关闭页面后，任务仍会继续执行' }}</small></div><span><button type="button" :title="archivedTasksVisible ? '查看当前任务' : '查看归档'" @click="toggleArchivedTasks"><ArchiveRestore v-if="archivedTasksVisible" :size="16" /><Archive v-else :size="16" /></button><button type="button" aria-label="关闭任务记录" @click="historyOpen = false"><X :size="17" /></button></span></header>
       <div v-if="historyLoading" class="office-history__empty"><LoaderCircle class="office-spin" :size="18" />正在加载</div>
-      <div v-else-if="!agentTasks.length" class="office-history__empty">暂无任务记录</div>
+      <EmptyState
+        v-else-if="!agentTasks.length"
+        class="office-history__empty-state"
+        compact
+        :icon="History"
+        :title="archivedTasksVisible ? '暂无归档任务' : '暂无任务记录'"
+        description="提交办公任务后，执行进度和结果都会保存在这里。"
+      />
       <div v-else class="office-history__list">
         <article v-for="task in agentTasks" :key="task.id" :class="{ active: activeAgentTaskId === task.id }">
           <button type="button" @click="openAgentTask(task.id)"><span><strong>{{ task.title }}</strong><small>{{ formatTaskTime(task.updatedAt) }}</small></span><em :data-status="task.status">{{ agentStatusLabel(task.status) }}</em></button>
@@ -38,7 +45,14 @@
           <button type="submit" :disabled="scheduleSaving || !model"><LoaderCircle v-if="scheduleSaving" class="office-spin" :size="15" /><CalendarPlus v-else :size="15" />创建计划</button>
         </form>
         <div v-if="scheduleLoading" class="office-history__empty"><LoaderCircle class="office-spin" :size="17" />正在加载</div>
-        <div v-else-if="!agentSchedules.length" class="office-history__empty">暂无定时任务</div>
+        <EmptyState
+          v-else-if="!agentSchedules.length"
+          class="office-history__empty-state"
+          compact
+          :icon="CalendarClock"
+          title="暂无定时任务"
+          description="创建计划后由服务端按时执行，关闭页面也不会中断。"
+        />
         <div v-else class="office-schedule-list"><article v-for="schedule in agentSchedules" :key="schedule.id"><div><strong>{{ schedule.title }}</strong><small>{{ schedule.cronExpression }} · {{ schedule.timezone }}</small><small>下次 {{ schedule.nextRunAt ? formatTaskTime(schedule.nextRunAt) : '未安排' }}</small></div><span><button type="button" title="立即执行" @click="runSchedule(schedule)"><Play :size="14" /></button><button type="button" title="启用或停用" @click="toggleSchedule(schedule)"><Pause v-if="schedule.enabled" :size="14" /><Play v-else :size="14" /></button><button type="button" title="删除" @click="deleteSchedule(schedule)"><Trash2 :size="14" /></button></span></article></div>
       </div>
     </aside>
@@ -145,7 +159,7 @@
             <span class="office-control-anchor">
               <button class="office-model-button" type="button" :aria-expanded="modelMenuOpen" :disabled="!selectableModels.length" @click="toggleModelMenu"><ModelBadge v-if="selectedModelOption" :model="selectedModelOption" size="sm" /><Sparkles v-else :size="15" />{{ selectedModelLabel || '暂无可用模型' }}<ChevronDown :size="13" /></button>
               <div v-if="modelMenuOpen" class="office-model-menu office-model-menu--catalog">
-                <ModelCatalogPicker :models="selectableModels" :model-value="model" :title="taskMode === 'agent' ? '选择 Agent 模型' : '选择办公模型'" :description-mode="taskMode === 'agent' ? 'agent' : 'default'" @select="selectOfficeModel" />
+                <ModelCatalogPicker :models="selectableModels" :model-value="model" :title="taskMode === 'agent' ? '选择 Agent 模型' : '选择办公模型'" :description-mode="taskMode === 'agent' ? 'agent' : 'default'" @select="selectOfficeModel" @close="modelMenuOpen = false" />
               </div>
             </span>
             <button v-for="item in officeQuickSkills" :key="item.skill.id" class="office-quick-skill" :class="{ active: selectedSkill.id === item.skill.id }" type="button" @click="selectSkill(item.skill)"><component :is="item.icon" :size="15" />{{ item.label }}</button>
@@ -180,12 +194,18 @@ import {
   type LucideIcon,
 } from 'lucide-vue-next'
 import ChatMessageContent from '../components/ChatMessageContent.vue'
+import EmptyState from '../components/common/EmptyState.vue'
 import ModelCatalogPicker from '../components/ModelCatalogPicker.vue'
-import { api, apiUrl, streamApiEvents } from '../services/api'
+import { api, apiUrl, watchJobEvents } from '../services/api'
+import { composerMaxHeight, resizeTextarea } from '../composables/useAutoResizeTextarea'
+import { useSpeechInput } from '../composables/useSpeechInput'
 import { useAuthStore } from '../stores/auth'
 import { useStudioStore } from '../stores/studio'
 import type { Plugin, StudioAsset } from '../types'
 import { createClientId } from '../utils/client-id'
+import { useCopyFeedback } from '../composables/useCopyFeedback'
+import { agentTaskLabel } from '../utils/status-labels'
+import { formatShortDayTime } from '../utils/datetime'
 import { catalogModelKey, catalogModelLabel, findCatalogModel, isAgentModelEligible, type CatalogModel } from '../utils/model-catalog'
 import ModelBadge from '../components/common/ModelBadge.vue'
 
@@ -247,7 +267,7 @@ const canceling = ref(false)
 const exporting = ref(false)
 const downloading = ref(false)
 const error = ref('')
-const copied = ref(false)
+const { copied, copy } = useCopyFeedback(1500)
 const uploading = ref(false)
 const attachments = ref<StudioAsset[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -255,7 +275,7 @@ const taskInput = ref<HTMLTextAreaElement | null>(null)
 const resultThread = ref<HTMLElement | null>(null)
 const taskMode = ref<TaskMode>('fast')
 const exportFormat = ref<OfficeExportFormat>('auto')
-const webSearchEnabled = ref(true)
+const webSearchEnabled = ref(false)
 const selectedSkill = ref<OfficeSkill>(builtInSkills[0])
 const skillPanelOpen = ref(false)
 const modeMenuOpen = ref(false)
@@ -265,10 +285,12 @@ const skillQuery = ref('')
 const selectedCategory = ref('全部')
 const model = ref('')
 const pluginId = ref('')
-type SpeechRecognizer = { lang: string; interimResults: boolean; continuous: boolean; onresult: ((event: { results: { [key: number]: { [key: number]: { transcript: string } } } }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null; start: () => void; stop: () => void }
-type SpeechRecognizerConstructor = new () => SpeechRecognizer
-const voiceListening = ref(false)
-const voiceRecognizer = ref<SpeechRecognizer | null>(null)
+const speech = useSpeechInput({
+  onTranscript: (text) => { prompt.value = `${prompt.value}${prompt.value ? ' ' : ''}${text}` },
+  onUnsupported: (message) => { error.value = message },
+  onError: (message) => { error.value = message },
+})
+const voiceListening = speech.listening
 const chatModels = ref<CatalogModel[]>([])
 const selectableModels = computed(() => taskMode.value === 'agent' ? chatModels.value.filter(isAgentModelEligible) : chatModels.value)
 const selectedModelLabel = computed(() => catalogModelLabel(chatModels.value, model.value, 'CHAT'))
@@ -384,6 +406,14 @@ function closeOfficePopovers() {
 function collapseOfficePopovers() {
   document.dispatchEvent(new Event('xinyue:close-popovers'))
 }
+function closeOfficePopoversOnOutside(event: PointerEvent) {
+  const target = event.target as HTMLElement | null
+  if (target?.closest('.office-composer-wrap')) return
+  closeOfficePopovers()
+}
+function closeOfficePopoversOnEscape(event: KeyboardEvent) {
+  if (event.key === 'Escape') closeOfficePopovers()
+}
 function startNewTask() {
   conversationId.value = ''
   activeJobId.value = ''
@@ -399,16 +429,11 @@ function startNewTask() {
   void nextTick(() => taskInput.value?.focus())
 }
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void submitTask() }
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); void submitTask() }
 }
 // 输入框随内容自适应增高（与聊天/创作页一致），上限桌面 240px / 移动端 180px
 function resizeTaskInput() {
-  const input = taskInput.value
-  if (!input) return
-  input.style.height = 'auto'
-  const maxHeight = window.innerWidth <= 640 ? 180 : 240
-  input.style.height = `${Math.min(input.scrollHeight, maxHeight)}px`
-  input.style.overflowY = input.scrollHeight > maxHeight ? 'auto' : 'hidden'
+  resizeTextarea(taskInput.value, window.innerWidth <= 640 ? 180 : composerMaxHeight())
 }
 watch(prompt, () => { void nextTick(resizeTaskInput) })
 // 与聊天/创作页一致：空输入时提交按钮变形为语音入口
@@ -418,24 +443,8 @@ function handleSubmitAction() {
   if (showVoiceEntry.value) toggleVoice()
 }
 function toggleVoice() {
-  if (voiceListening.value) { voiceRecognizer.value?.stop(); return }
-  const speechWindow = window as Window & { SpeechRecognition?: SpeechRecognizerConstructor; webkitSpeechRecognition?: SpeechRecognizerConstructor }
-  const Constructor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition
-  if (!Constructor) { error.value = '当前浏览器不支持语音输入，请使用 Chrome 或 Edge'; return }
-  const recognizer = new Constructor()
-  recognizer.lang = document.documentElement.lang.startsWith('en') ? 'en-US' : 'zh-CN'
-  recognizer.interimResults = false
-  recognizer.continuous = false
-  recognizer.onresult = (event) => {
-    const transcript = event.results[0]?.[0]?.transcript?.trim() || ''
-    if (transcript) prompt.value = `${prompt.value}${prompt.value ? ' ' : ''}${transcript}`
-  }
-  recognizer.onend = () => { voiceListening.value = false; voiceRecognizer.value = null }
-  recognizer.onerror = () => { voiceListening.value = false; voiceRecognizer.value = null; error.value = '语音输入没有获得麦克风权限' }
-  voiceRecognizer.value = recognizer
-  voiceListening.value = true
   error.value = ''
-  try { recognizer.start() } catch { voiceListening.value = false; voiceRecognizer.value = null; error.value = '语音输入启动失败' }
+  speech.toggle()
 }
 function openFilePicker() {
   if (!auth.isAuthenticated) { void router.push('/login?redirect=/office'); return }
@@ -516,25 +525,14 @@ async function submitTask() {
 
 const terminalJobStatuses = new Set<ServerJob['status']>(['SUCCEEDED', 'FAILED', 'CANCELLED'])
 const terminalAgentStatuses = new Set<AgentTaskStatus>(['SUCCEEDED', 'PARTIAL', 'FAILED', 'CANCELLED', 'WAITING_APPROVAL'])
-const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
-
-async function pollTask<T extends { status: string }>(path: string, terminalStatuses: Set<string>, onUpdate: (task: T) => void) {
-  for (let attempt = 0; attempt < 300; attempt += 1) {
-    const task = await api<T>(path, { cache: 'no-store' })
-    onUpdate(task)
-    if (terminalStatuses.has(task.status)) return task
-    await wait(1000)
-  }
-  throw new Error('任务执行超时，请稍后在历史任务中查看结果')
-}
 
 async function watchGenerationJob(id: string) {
-  const update = (current: ServerJob) => { if (current.stream) answer.value = current.stream.content }
-  try {
-    return await streamApiEvents<ServerJob>(`/generations/${id}/events`, update)
-  } catch {
-    return pollTask<ServerJob>(`/generations/${id}`, terminalJobStatuses, update)
-  }
+  return watchJobEvents<ServerJob>(`/generations/${id}/events`, `/generations/${id}`, {
+    isTerminal: (status) => terminalJobStatuses.has(status),
+    onUpdate: (current) => { if (current.stream) answer.value = current.stream.content },
+    maxAttempts: 300,
+    timeoutMessage: '任务执行超时，请稍后在历史任务中查看结果',
+  })
 }
 async function cancelTask() {
   if (canceling.value || (!activeJobId.value && !activeAgentTaskId.value)) return
@@ -636,12 +634,12 @@ async function watchAgentTask(id: string) {
     const content = current.agentRun?.finalAnswer || current.run?.stream?.content
     if (content) answer.value = content
   }
-  let completed: AgentTask
-  try {
-    completed = await streamApiEvents<AgentTask>(`/agent-tasks/${id}/events`, update)
-  } catch {
-    completed = await pollTask<AgentTask>(`/agent-tasks/${id}`, terminalAgentStatuses, update)
-  }
+  const completed = await watchJobEvents<AgentTask>(`/agent-tasks/${id}/events`, `/agent-tasks/${id}`, {
+    isTerminal: (status) => terminalAgentStatuses.has(status),
+    onUpdate: update,
+    maxAttempts: 300,
+    timeoutMessage: '任务执行超时，请稍后在历史任务中查看结果',
+  })
   activeAgentTask.value = completed
   if (completed.conversationId) conversationId.value = completed.conversationId
   const content = completed.agentRun?.finalAnswer || completed.run?.stream?.content
@@ -682,16 +680,10 @@ async function resumeAgentTask(id: string) {
   }
 }
 function agentStatusLabel(status: AgentTaskStatus) {
-  return ({ DRAFT: '草稿', QUEUED: '排队中', RUNNING: '执行中', WAITING_APPROVAL: '待审批', SUCCEEDED: '已完成', PARTIAL: '部分完成', FAILED: '失败', CANCELLED: '已停止' } as Record<AgentTaskStatus, string>)[status]
+  return agentTaskLabel(status)
 }
-function formatTaskTime(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
-}
-async function copyAnswer() {
-  await navigator.clipboard.writeText(answer.value)
-  copied.value = true
-  window.setTimeout(() => { copied.value = false }, 1500)
-}
+const formatTaskTime = (value: string) => formatShortDayTime(value)
+const copyAnswer = () => copy(answer.value)
 async function createDeliverable() {
   if ((!conversationId.value && !activeAgentTaskId.value) || exporting.value || deliverable.value) return
   exporting.value = true
@@ -770,6 +762,8 @@ function applyRouteIntent() {
 onMounted(async () => {
   studio.setMode('office')
   document.addEventListener('xinyue:close-popovers', closeOfficePopovers)
+  document.addEventListener('pointerdown', closeOfficePopoversOnOutside)
+  document.addEventListener('keydown', closeOfficePopoversOnEscape)
   void nextTick(resizeTaskInput)
   const [models, assistants, plugins] = await Promise.all([
     api<CatalogModel[]>(auth.isAuthenticated ? '/users/me/models' : '/catalog/models', { cache: 'no-store' }).catch(() => []),
@@ -789,7 +783,9 @@ onMounted(async () => {
   if (auth.isAuthenticated) void loadAgentTasks()
 })
 onUnmounted(() => {
-  voiceRecognizer.value?.stop()
+  speech.stop()
   document.removeEventListener('xinyue:close-popovers', closeOfficePopovers)
+  document.removeEventListener('pointerdown', closeOfficePopoversOnOutside)
+  document.removeEventListener('keydown', closeOfficePopoversOnEscape)
 })
 </script>

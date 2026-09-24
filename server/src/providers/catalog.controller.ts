@@ -4,7 +4,9 @@ import type { FastifyReply } from 'fastify'
 import { assetDisposition, AssetsService } from '../assets/assets.service'
 import { ProvidersService } from './providers.service'
 import { CapabilityRegistryService } from './capability-registry.service'
+import { Public } from '../auth/public.decorator'
 
+@Public()
 @Controller('catalog')
 export class CatalogController {
   constructor(private readonly providers: ProvidersService, private readonly assets: AssetsService, private readonly capabilities: CapabilityRegistryService) {}
@@ -36,8 +38,8 @@ export class CatalogController {
 
   @Get('chat-home-images/:id')
   async chatHomeImage(@Param('id') id: string, @Res({ passthrough: true }) response: FastifyReply) {
-    const result = await this.assets.readPublicChatHomeImage(id)
+    const result = await this.assets.streamPublicChatHomeImage(id)
     response.header('Cache-Control', 'public, max-age=3600')
-    return new StreamableFile(result.file, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name) })
+    return new StreamableFile(result.stream, { type: result.mimeType, disposition: assetDisposition(result.mimeType, result.name), length: result.size || undefined })
   }
 }

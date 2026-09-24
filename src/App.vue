@@ -13,7 +13,6 @@ import { readStoredSettings } from './utils/settings-storage'
 
 const systemThemeQuery = window.matchMedia('(prefers-color-scheme: light)')
 
-// 未设置或「跟随系统」时跟随系统主题；手动选择深/浅色时以用户选择为准。
 function resolveStudioTheme(): 'light' | 'dark' {
   const appearance = readStoredSettings().appearance
   if (appearance === '浅色' || appearance === 'light') return 'light'
@@ -30,7 +29,6 @@ function applyStudioTheme() {
 
 applyStudioTheme()
 
-// 跟随 data-studio-theme 联动 naive-ui 明暗主题（WorkspaceShell/画布会改写该属性）。
 const themeName = ref(document.documentElement.dataset.studioTheme)
 let themeObserver: MutationObserver | undefined
 onMounted(() => {
@@ -38,7 +36,6 @@ onMounted(() => {
     themeName.value = document.documentElement.dataset.studioTheme ?? 'dark'
   })
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-studio-theme'] })
-  // 系统主题变化时重新解析（仅「跟随系统」/未设置时会产生实际变化）。
   systemThemeQuery.addEventListener('change', applyStudioTheme)
 })
 onBeforeUnmount(() => {
@@ -47,7 +44,7 @@ onBeforeUnmount(() => {
 })
 const naiveTheme = computed(() => (themeName.value === 'light' ? null : darkTheme))
 
-const themeOverrides: GlobalThemeOverrides = {
+const themeOverrides = computed<GlobalThemeOverrides>(() => ({
   common: {
     primaryColor: '#4d6bfe',
     primaryColorHover: '#3d5bee',
@@ -56,5 +53,5 @@ const themeOverrides: GlobalThemeOverrides = {
     fontFamily:
       'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
-}
+}))
 </script>

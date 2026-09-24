@@ -69,10 +69,29 @@
                 :value="option.value"
               />
             </ElSelect>
-            <p v-if="field.help || field.helpUrl || (field.key === 'documentationUrl' && /^https?:\/\//.test(String(form[field.key] || '')))" class="field-help">
+            <p
+              v-if="
+                field.help ||
+                field.helpUrl ||
+                (field.key === 'documentationUrl' &&
+                  /^https?:\/\//.test(String(form[field.key] || '')))
+              "
+              class="field-help"
+            >
               <span v-if="field.help">{{ xt(field.help) }}</span>
-              <a v-if="field.helpUrl" :href="field.helpUrl.url" target="_blank" rel="noreferrer">{{ xt(field.helpUrl.label) }}<ArtSvgIcon icon="ri:external-link-line" /></a>
-              <a v-if="field.key === 'documentationUrl' && /^https?:\/\//.test(String(form[field.key] || ''))" :href="String(form[field.key])" target="_blank" rel="noreferrer">{{ xt('打开当前说明地址') }}<ArtSvgIcon icon="ri:external-link-line" /></a>
+              <a v-if="field.helpUrl" :href="field.helpUrl.url" target="_blank" rel="noreferrer"
+                >{{ xt(field.helpUrl.label) }}<ArtSvgIcon icon="ri:external-link-line"
+              /></a>
+              <a
+                v-if="
+                  field.key === 'documentationUrl' &&
+                  /^https?:\/\//.test(String(form[field.key] || ''))
+                "
+                :href="String(form[field.key])"
+                target="_blank"
+                rel="noreferrer"
+                >{{ xt('打开当前说明地址') }}<ArtSvgIcon icon="ri:external-link-line"
+              /></a>
             </p>
           </ElFormItem>
         </ElCol>

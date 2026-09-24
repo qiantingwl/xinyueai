@@ -18,6 +18,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { CheckCircle2, Users, WalletCards, X } from 'lucide-vue-next'
+import { useEscapeClose } from '../../../composables/useEscapeClose'
 import type { PublicSettings, Subscription, SubscriptionPlan, Team } from '../types'
 
 const props = defineProps<{
@@ -36,6 +37,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
 }>()
+
+useEscapeClose(() => emit('close'))
 
 const pricingMode = defineModel<'personal' | 'team'>('pricingMode', { required: true })
 

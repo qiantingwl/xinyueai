@@ -46,9 +46,10 @@
 
 <script setup lang="ts">
 import { ChevronRight, FileText, History, Image as ImageIcon, Layers3, LoaderCircle, MessageSquare, Plus, RotateCcw, Save, Trash2, Video, X } from 'lucide-vue-next'
+import { useEscapeClose } from '../../composables/useEscapeClose'
 import type { Project, ProjectSkillCandidate, ProjectSkillStatus, ProjectStepStatus, ProjectVersion, ProjectWorkflowStatus, StudioAsset } from '../../types'
 
-defineProps<{
+const props = defineProps<{
   projectDetail: Project | null
   projectVersions: ProjectVersion[]
   projectDetailLoading: boolean
@@ -83,6 +84,7 @@ defineProps<{
   restoreProject: (version: ProjectVersion) => void
   formatProjectSnapshot: (snapshot: ProjectVersion['snapshot']) => string
 }>()
+useEscapeClose(() => props.closeProjectDetails())
 const projectTeamId = defineModel<string>('projectTeamId', { required: true })
 const projectVersionPreview = defineModel<ProjectVersion | null>('projectVersionPreview', { required: true })
 const projectSkillName = defineModel<string>('projectSkillName', { required: true })

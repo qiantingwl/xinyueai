@@ -5,7 +5,7 @@
         <span class="text-g-700 text-sm">{{ item.des }}</span>
         <ArtCountTo class="text-[26px] font-medium mt-2" :target="item.num" :duration="1300" />
         <div class="flex-c mt-1">
-          <span class="text-xs text-g-600">{{ xt('较上周') }}</span>
+          <span class="text-xs text-g-600">{{ item.changeLabel }}</span>
           <span
             class="ml-1 text-xs font-semibold"
             :class="[item.change.indexOf('+') === -1 ? 'text-danger' : 'text-success']"
@@ -31,6 +31,7 @@
     duration: number
     num: number
     change: string
+    changeLabel: string
   }
 
   /**
@@ -49,7 +50,8 @@
       startVal: 0,
       duration: 1000,
       num: props.overview?.users || 0,
-      change: `+${props.overview?.newUsers || 0}`
+      change: `+${props.overview?.newUsers || 0}`,
+      changeLabel: xt('近 30 天新增')
     },
     {
       des: xt('活跃用户'),
@@ -57,7 +59,8 @@
       startVal: 0,
       duration: 1000,
       num: props.overview?.activeUsers || 0,
-      change: `+${props.overview?.today.newUsers || 0}`
+      change: `+${props.overview?.today.newUsers || 0}`,
+      changeLabel: xt('今日新增')
     },
     {
       des: xt('生成任务'),
@@ -65,7 +68,8 @@
       startVal: 0,
       duration: 1000,
       num: props.overview?.jobs || 0,
-      change: `+${props.overview?.today.jobs || 0}`
+      change: `+${props.overview?.today.jobs || 0}`,
+      changeLabel: xt('今日新增')
     },
     {
       des: xt('有效订阅'),
@@ -73,7 +77,8 @@
       startVal: 0,
       duration: 1000,
       num: props.overview?.activeSubscriptions || 0,
-      change: `+${props.overview?.pendingOrders || 0}`
+      change: `+${props.overview?.pendingOrders || 0}`,
+      changeLabel: xt('待处理订单')
     }
   ])
 </script>

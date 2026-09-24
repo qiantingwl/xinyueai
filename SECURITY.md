@@ -22,6 +22,10 @@
 支付凭据或可访问生产环境的账号信息。发现泄露时，应立即撤销并轮换凭据，
 然后再联系维护者。
 
+## Security design
+
+系统的安全边界说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：全局默认拒绝的鉴权（第 2.2 节）、出站 SSRF 防护（第 4.4 节）、公开 DTO 脱敏（第 6 节）与账务幂等（第 7 节）。生产 egress 策略与 HTTPS 配置见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+
 ## Supported versions
 
 默认只对最新 `main` 和最近一次发布版本处理安全修复。旧版本请先升级到

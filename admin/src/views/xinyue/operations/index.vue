@@ -25,8 +25,8 @@
             <ElButton v-if="resourceKey === 'promptTemplates'" @click="restorePromptTemplates">{{
               xt('恢复默认模板')
             }}</ElButton>
-            <ElButton v-if="resourceKey === 'assistants' || resourceKey === 'tools'" @click="restoreCapabilityPresets">{{
-              xt(resourceKey === 'assistants' ? '恢复预设助手' : '恢复工具模板')
+            <ElButton v-if="capabilityPresetResource" @click="restoreCapabilityPresets">{{
+              xt(capabilityPresetLabels[capabilityPresetResource])
             }}</ElButton>
             <ElButton v-if="resourceKey === 'promptLibrary'" @click="openPromptSources">{{
               xt('来源配置')
@@ -332,6 +332,7 @@
   import { ElMessage, ElMessageBox } from 'element-plus'
   import { useRoute } from 'vue-router'
   import { operationsApi } from '@/api/xinyue/operations'
+  import { useCompactLayout, useXinyueAsync } from '@/hooks'
   import { xinyueLocale, xinyueText as xt } from '@/locales/xinyue'
   import { createResourceFormatters } from './resource-formatters'
   import { buildResourceEditorPayload, resourceEditorValue } from './resource-editor'
@@ -366,8 +367,8 @@
   ]
 
   const route = useRoute()
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
   const rows = ref<Row[]>([])
-  const loading = ref(false)
   const pendingLoads = new Map<string, Promise<Row[]>>()
   const filters = reactive({ keyword: '' })
   const appliedKeyword = ref('')
@@ -379,7 +380,6 @@
   const editorVisible = ref(false)
   const editorForm = reactive<Row>({})
   const editingRow = ref<Row | null>(null)
-  const saving = ref(false)
   const toolIconFile = ref<File | null>(null)
   const toolIconPreviewUrl = ref('')
   const coverFile = ref<File | null>(null)
@@ -424,11 +424,21 @@
     outputRequirements: '',
     steps: []
   })
-  const isCompact = ref(false)
+  const isCompact = useCompactLayout()
 
   const resourceKey = computed(() => String(route.meta.resource || 'jobs'))
   const config = computed(() => operationResources[resourceKey.value] || operationResources.jobs)
   const editorConfig = computed(() => operationEditorConfigs[resourceKey.value])
+  const capabilityPresetLabels = {
+    assistants: '恢复预设助手',
+    tools: '恢复工具模板',
+    plugins: '恢复预设技能'
+  } as const
+  const capabilityPresetResource = computed(() =>
+    resourceKey.value in capabilityPresetLabels
+      ? (resourceKey.value as keyof typeof capabilityPresetLabels)
+      : null
+  )
   const visibleEditorFields = computed(() =>
     (editorConfig.value?.fields || []).filter(
       (item) =>
@@ -485,8 +495,6 @@
       'groups'
     ])
       if (Array.isArray(payload?.[key])) return payload[key]
-    if (payload && typeof payload === 'object' && resourceKey.value === 'systemHealth')
-      return [{ id: 'system', ...payload }]
     return []
   }
   async function load() {
@@ -499,27 +507,26 @@
         }).toString()
       : ''
     const endpoint = query ? `${baseEndpoint}?${query}` : baseEndpoint
-    let pending = pendingLoads.get(endpoint)
-    loading.value = true
-    try {
-      if (!pending) {
-        pending = operationsApi.list(endpoint).then((payload) => {
-          if (config.value.serverPagination && payload && typeof payload === 'object') {
-            serverTotal.value = Number((payload as Row).total || 0)
-          }
-          return unwrap(payload)
-        })
-        pendingLoads.set(endpoint, pending)
+    await withLoading(async () => {
+      let pending = pendingLoads.get(endpoint)
+      try {
+        if (!pending) {
+          pending = operationsApi.list(endpoint).then((payload) => {
+            if (config.value.serverPagination && payload && typeof payload === 'object') {
+              serverTotal.value = Number((payload as Row).total || 0)
+            }
+            return unwrap(payload)
+          })
+          pendingLoads.set(endpoint, pending)
+        }
+        const nextRows = await pending
+        if (config.value.endpoint === baseEndpoint) rows.value = nextRows
+      } catch {
+        if (config.value.endpoint === baseEndpoint) rows.value = []
+      } finally {
+        if (pendingLoads.get(endpoint) === pending) pendingLoads.delete(endpoint)
       }
-      const nextRows = await pending
-      if (config.value.endpoint === baseEndpoint) rows.value = nextRows
-    } catch {
-      // 请求层已经负责展示错误提示；这里收口异步异常，避免路由切换产生未处理 Promise。
-      if (config.value.endpoint === baseEndpoint) rows.value = []
-    } finally {
-      if (pendingLoads.get(endpoint) === pending) pendingLoads.delete(endpoint)
-      if (config.value.endpoint === baseEndpoint) loading.value = false
-    }
+    })
   }
   function applySearch() {
     appliedKeyword.value = filters.keyword
@@ -610,8 +617,7 @@
     if (!editor) return
     const url = editingRow.value ? editor.updateUrl?.(editingRow.value) : editor.createUrl
     if (!url) return
-    saving.value = true
-    try {
+    await withSaving(async () => {
       const saved = await operationsApi.saveResource<Row>(
         url,
         Boolean(editingRow.value),
@@ -622,9 +628,7 @@
       if (resourceKey.value === 'tools') await uploadToolIcon(saved.id || editingRow.value?.id)
       editorVisible.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function removeResource(row: Row) {
     const editor = editorConfig.value
@@ -639,9 +643,11 @@
     await load()
   }
   async function restoreCapabilityPresets() {
-    if (resourceKey.value !== 'assistants' && resourceKey.value !== 'tools') return
-    const result = await operationsApi.restoreCapabilityPresets(resourceKey.value)
-    ElMessage.success(result.added ? `已补充 ${result.added} 条缺失预设` : '默认预设已完整，现有配置未被覆盖')
+    if (!capabilityPresetResource.value) return
+    const result = await operationsApi.restoreCapabilityPresets(capabilityPresetResource.value)
+    ElMessage.success(
+      result.added ? `已补充 ${result.added} 条缺失预设` : '默认预设已完整，现有配置未被覆盖'
+    )
     await load()
   }
   async function reviewToolApproval(row: Row, status: 'APPROVED' | 'REJECTED') {
@@ -808,7 +814,9 @@
     if (requiresReview) {
       try {
         await ElMessageBox.confirm(
-          xt('外部提示词内容可能有单独的版权或商业使用限制。请确认你已核验该来源的授权范围，并愿意承担启用后的使用责任。'),
+          xt(
+            '外部提示词内容可能有单独的版权或商业使用限制。请确认你已核验该来源的授权范围，并愿意承担启用后的使用责任。'
+          ),
           xt('确认启用外部来源'),
           {
             confirmButtonText: xt('已核验并启用'),
@@ -840,9 +848,9 @@
     moderationPolicy.value = await operationsApi.moderationPolicy()
   }
   async function saveModerationPolicy() {
-    if (!moderationPolicy.value) return
-    saving.value = true
-    try {
+    const policy = moderationPolicy.value
+    if (!policy) return
+    await withSaving(async () => {
       const {
         enabled,
         scanChat,
@@ -852,7 +860,7 @@
         retainContent,
         blockMessage,
         excerptLength
-      } = moderationPolicy.value
+      } = policy
       moderationPolicy.value = await operationsApi.saveModerationPolicy({
         enabled,
         scanChat,
@@ -864,9 +872,7 @@
         excerptLength
       })
       policyVisible.value = false
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function muteAlertRule(row: Row) {
     const { value } = await ElMessageBox.prompt(
@@ -989,30 +995,26 @@
     }
   }
   async function updateTicket() {
-    if (!ticketDetail.value) return
-    saving.value = true
-    try {
-      await operationsApi.updateSupportTicket(ticketDetail.value.id, {
+    const ticket = ticketDetail.value
+    if (!ticket) return
+    await withSaving(async () => {
+      await operationsApi.updateSupportTicket(ticket.id, {
         status: ticketForm.status,
         priority: ticketForm.priority,
         assignedToId: ticketForm.assignedToId || null
       })
-      await openTicket(ticketDetail.value)
+      await openTicket(ticket)
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function replyTicket() {
-    if (!ticketDetail.value || !ticketForm.reply.trim()) return ElMessage.warning('请输入回复内容')
-    saving.value = true
-    try {
-      await operationsApi.replySupportTicket(ticketDetail.value.id, ticketForm.reply)
-      await openTicket(ticketDetail.value)
+    const ticket = ticketDetail.value
+    if (!ticket || !ticketForm.reply.trim()) return ElMessage.warning('请输入回复内容')
+    await withSaving(async () => {
+      await operationsApi.replySupportTicket(ticket.id, ticketForm.reply)
+      await openTicket(ticket)
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
 
   watch(
@@ -1032,16 +1034,6 @@
   watch([page, pageSize], () => {
     if (config.value.serverPagination) load()
   })
-
-  function updateCompact() {
-    isCompact.value = window.innerWidth <= 1200
-  }
-
-  onMounted(() => {
-    updateCompact()
-    window.addEventListener('resize', updateCompact)
-  })
-  onBeforeUnmount(() => window.removeEventListener('resize', updateCompact))
 </script>
 
 <style scoped>

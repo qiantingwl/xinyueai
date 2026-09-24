@@ -3,8 +3,8 @@ import AdmZip = require('adm-zip')
 import { load as loadYaml } from 'js-yaml'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { fetchWithAllowedRedirects } from '../common/allowed-redirect-fetch'
 import { isEnvironmentOptInEnabled } from '../common/external-content-policy'
-import { fetchPublicManualRedirect } from '../common/outbound-http'
 import { PluginsService } from './plugins.service'
 
 export type ExternalMarketSource = 'skillsmp' | 'lobehub' | 'cocoloop' | 'skillhub'
@@ -62,7 +62,7 @@ const SOURCE_HOSTS: Record<ExternalMarketSource, ReadonlySet<string>> = {
   skillhub: new Set(['skillhub.cn', 'www.skillhub.cn', 'api.skillhub.cn']),
 }
 
-const EXTERNAL_MARKET_DISABLED_NOTICE = '外部技能市场默认关闭。部署管理员核验来源许可证后，可通过 EXTERNAL_SKILL_MARKET_ENABLED=true 明确启用。'
+const EXTERNAL_MARKET_DISABLED_NOTICE = '外部技能市场已关闭。部署管理员可通过 EXTERNAL_SKILL_MARKET_ENABLED=true 重新启用。'
 
 const REMOTE_HOSTS = new Set(['skillsmp.com', 'www.skillsmp.com', 'lobehub.com', 'www.lobehub.com', 'hub.cocoloop.cn', 'dl.cocoloop.cn', 'skillhub.cn', 'www.skillhub.cn', 'api.skillhub.cn', 'github.com', 'raw.githubusercontent.com'])
 const RISK_PATTERN = /(?:<script|javascript:|data:text\/html|child_process|eval\s*\()/i
@@ -473,13 +473,6 @@ export class ExternalMarketService implements OnModuleInit, OnModuleDestroy {
     return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`
   }
 
-  private allowedUrl(value: string) {
-    let url: URL
-    try { url = new URL(value) } catch { throw new BadRequestException('外部技能地址无效') }
-    if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443') || !REMOTE_HOSTS.has(url.hostname.toLowerCase())) throw new BadRequestException('外部技能来源不在允许列表')
-    return url
-  }
-
   private canonicalSourceUrl(value: string, sourceId: ExternalMarketSource) {
     const source = SOURCES.find((item) => item.id === sourceId)
     if (!source) return value
@@ -493,25 +486,22 @@ export class ExternalMarketService implements OnModuleInit, OnModuleDestroy {
     return source.homepage
   }
 
-  private async fetchAllowed(value: string, init: RequestInit, unavailableMessage: string) {
-    let current = this.allowedUrl(value)
-    for (let redirects = 0; ; redirects += 1) {
-      let response: Response
-      try {
-        response = await fetchPublicManualRedirect(current, init)
-      } catch (error) {
+  private fetchAllowed(value: string, init: RequestInit, unavailableMessage: string) {
+    return fetchWithAllowedRedirects(value, init, {
+      allowedHosts: REMOTE_HOSTS,
+      maxRedirects: 3,
+      messages: {
+        invalidUrl: '外部技能地址无效',
+        disallowedHost: '外部技能来源不在允许列表',
+        invalidLocation: '外部市场重定向地址无效',
+        tooManyRedirects: '外部市场重定向次数超过限制',
+      },
+      createError: (message) => new BadRequestException(message),
+      wrapFetchError: (error) => {
         if (error instanceof BadRequestException) throw error
         throw new BadRequestException(unavailableMessage)
-      }
-      if (response.status < 300 || response.status >= 400) return { response, url: current }
-      await response.body?.cancel().catch(() => undefined)
-      if (redirects >= 3) throw new BadRequestException('外部市场重定向次数超过限制')
-      const location = response.headers.get('location')
-      if (!location) throw new BadRequestException('外部市场重定向地址无效')
-      let next: URL
-      try { next = new URL(location, current) } catch { throw new BadRequestException('外部市场重定向地址无效') }
-      current = this.allowedUrl(next.toString())
-    }
+      },
+    })
   }
 
   private async textResponse(value: string) {

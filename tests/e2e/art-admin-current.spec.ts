@@ -108,7 +108,7 @@ test('当前 Art 企业后台页面、抽屉与响应式布局可用', async ({ 
     await assertNoPageOverflow(page)
   }
 
-  await page.goto(`${adminUrl}#/article/article-list`)
+  await page.goto(`${adminUrl}#/enterprise/content/pages`)
   await expect(page.locator('h1').getByText('关于我们', { exact: true })).toBeVisible()
   await expect(page.locator('.content-card').first()).toBeVisible()
   await assertNoPageOverflow(page)
@@ -118,8 +118,8 @@ test('当前 Art 企业后台页面、抽屉与响应式布局可用', async ({ 
   await assertNoPageOverflow(page)
 
   for (const [path, heading] of [
-    ['dashboard/analysis', '分析页'],
-    ['dashboard/ecommerce', '电子商务'],
+    ['dashboard/analysis', '经营分析'],
+    ['dashboard/ecommerce', '商业化看板'],
   ] as const) {
     await page.goto(`${adminUrl}#/${path}`)
     await expect(page.locator('main').getByText(heading, { exact: true }).last()).toBeVisible()

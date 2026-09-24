@@ -13,6 +13,8 @@ COPY prisma ./prisma
 RUN npm run prisma:generate
 COPY nest-cli.json tsconfig.json ./
 COPY src ./src
+# Bundled prompt snapshots are release assets (runtime cache remains optional).
+COPY prompt-library-data ./prompt-library-data
 COPY scripts ./scripts
 RUN npm run build
 # npm can recreate debug logs while Prisma or the build runs; clean them after

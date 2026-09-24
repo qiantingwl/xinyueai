@@ -42,12 +42,9 @@
         </div>
       </article>
     </div>
-      <div v-else class="canvas-library-empty">
-      <MousePointer2 :size="30" />
-      <h2>{{ query ? '没有匹配的画布' : showArchived ? '没有已归档画布' : '创建第一张画布' }}</h2>
-      <p>把想法、参考素材和生成结果放在同一个可持续编辑的空间。</p>
-      <button v-if="!query && !showArchived" class="canvas-primary-button" type="button" :disabled="!canCreateCanvas" :title="createLimitMessage" @click="createOpen = true"><Plus :size="17" />新建画布</button>
-      </div>
+      <EmptyState v-else class="canvas-library-empty" :icon="MousePointer2" :title="query ? '没有匹配的画布' : showArchived ? '没有已归档画布' : '创建第一张画布'" description="把想法、参考素材和生成结果放在同一个可持续编辑的空间。">
+        <button v-if="!query && !showArchived" class="canvas-primary-button" type="button" :disabled="!canCreateCanvas" :title="createLimitMessage" @click="createOpen = true"><Plus :size="17" />新建画布</button>
+      </EmptyState>
     </div>
 
     <div v-if="createOpen" class="canvas-modal-backdrop" @click.self="createOpen = false">
@@ -80,6 +77,9 @@ import { useRouter } from 'vue-router'
 import { Archive, ArchiveRestore, Clapperboard, Copy, LoaderCircle, MoreHorizontal, MousePointer2, Plus, Search, Trash2, Upload, X } from 'lucide-vue-next'
 import WorkspaceSectionTabs from '../components/WorkspaceSectionTabs.vue'
 import { api } from '../services/api'
+import { useEscapeClose } from '../composables/useEscapeClose'
+import { formatShortDayTime as formatDate } from '../utils/datetime'
+import EmptyState from '../components/common/EmptyState.vue'
 import type { CanvasCapabilities, CanvasDocumentPayload, CanvasKind, CanvasProjectSummary, CanvasRecord, CanvasSummary } from '../types/canvas'
 
 const router = useRouter()
@@ -98,6 +98,10 @@ const createProjectId = ref('')
 const capabilities = ref<CanvasCapabilities>({ canvasAccess: true, shortDramaAccess: true, maxCanvases: 100, maxCanvasNodes: 500, usedCanvases: 0 })
 const importInput = ref<HTMLInputElement | null>(null)
 let searchTimer = 0
+
+// 卡片操作菜单先于新建弹层响应 Esc。
+useEscapeClose(() => { menuId.value = '' }, { enabled: () => Boolean(menuId.value) })
+useEscapeClose(() => { createOpen.value = false }, { enabled: () => !menuId.value && createOpen.value })
 
 const filteredCanvases = computed(() => {
   const needle = query.value.trim().toLowerCase()
@@ -181,5 +185,4 @@ async function importCanvas(event: Event) {
 }
 
 function openCanvas(id: string) { void router.push(`/canvas/${id}`) }
-function formatDate(value: string) { return new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 </script>

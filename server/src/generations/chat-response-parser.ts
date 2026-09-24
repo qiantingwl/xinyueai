@@ -41,6 +41,17 @@ export function reasoningText(value: unknown): string {
   return [...new Set(parts)].join('\n')
 }
 
+/** 模型把「快速」模式系统提示抄进正文时，去掉这些泄漏片段。 */
+export function stripLeakedModeInstruction(text: string) {
+  if (!text) return text
+  const next = text
+    .replace(/##\s*最终结果/g, '')
+    .replace(/直接输出答案[，,]?\s*不添加冗余说明。?/g, '')
+    .replace(/直接给出简洁、可用的最终结果，避免不必要的展开。?/g, '')
+  if (next === text) return text
+  return next.replace(/(?:\\n)+/g, '\n').replace(/\n{3,}/g, '\n\n').trimEnd()
+}
+
 export function consumeTaggedReasoning(value: string, open: boolean, carry: string) {
   let input = `${carry}${value}`
   let content = ''
@@ -212,10 +223,10 @@ export function chatStreamChunk(protocol: ChatProtocol, payload: Record<string, 
     part.type === 'reasoning' || part.type === 'thinking' ? part.text : undefined
   ])).filter(Boolean).join('\n')
   const reasoning = reasoningText([
-    delta?.reasoning_content, delta?.reasoningContent, delta?.reasoning,
+    delta?.reasoning_content, delta?.reasoningContent, delta?.reasoning, delta?.reasoning_text,
     delta?.reasoning_details, delta?.thinking, delta?.thought, delta?.summary,
-    partReasoning, choiceMessage?.reasoning_content, choiceMessage?.reasoning,
-    choiceMessage?.reasoning_details, payload.reasoning_content, payload.reasoning,
+    partReasoning, choiceMessage?.reasoning_content, choiceMessage?.reasoning, choiceMessage?.reasoning_text,
+    choiceMessage?.reasoning_details, payload.reasoning_content, payload.reasoning, payload.reasoning_text,
     payload.reasoning_details, payload.thinking, payload.thought, payload.summary
   ])
   return {

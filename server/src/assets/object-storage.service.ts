@@ -1,10 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException, PayloadTooLargeException, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { DeleteObjectCommand, GetBucketLifecycleConfigurationCommand, GetObjectCommand, HeadBucketCommand, PutBucketLifecycleConfigurationCommand, S3Client, type LifecycleRule } from '@aws-sdk/client-s3'
 import { Upload } from '@aws-sdk/lib-storage'
 import { createHash } from 'node:crypto'
-import { createWriteStream } from 'node:fs'
-import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
+import { createReadStream, createWriteStream } from 'node:fs'
+import { mkdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { Readable, Transform, type TransformCallback } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -25,6 +25,18 @@ class SizeLimitTransform extends Transform {
   checksum() { return this.hash.digest('hex') }
 }
 
+/** Guards read paths where the declared object size is missing or lies, so a single oversized
+ *  object can never be pulled entirely into the process. */
+class ReadLimitTransform extends Transform {
+  private size = 0
+  constructor(private readonly limit: number) { super() }
+  _transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback) {
+    this.size += chunk.length
+    if (this.size > this.limit) return callback(new PayloadTooLargeException('文件超出可读取的大小上限'))
+    callback(null, chunk)
+  }
+}
+
 @Injectable()
 export class ObjectStorageService {
   private readonly localRoot: string
@@ -32,11 +44,15 @@ export class ObjectStorageService {
   private readonly s3Bucket: string
   private readonly s3?: S3Client
   private readonly maxBytes = 50 * 1024 * 1024
+  private readonly maxReadBytes: number
 
   constructor(private readonly config: ConfigService) {
     const configured = config.get<string>('UPLOAD_DIR', 'uploads')
     this.localRoot = isAbsolute(configured) ? configured : resolve(process.cwd(), configured)
     this.activeDriver = config.get<StorageDriver>('STORAGE_DRIVER', 'local')
+    // Uploads are capped at `maxBytes`, so anything larger in the bucket is unexpected and must not
+    // be allowed to dictate this process's memory usage.
+    this.maxReadBytes = Math.max(1, Math.min(512, Number(config.get('STORAGE_MAX_READ_MB', 64)) || 64)) * 1024 * 1024
     this.s3Bucket = config.get<string>('S3_BUCKET', '').trim()
     const accessKeyId = config.get<string>('S3_ACCESS_KEY_ID', '').trim()
     const secretAccessKey = config.get<string>('S3_SECRET_ACCESS_KEY', '').trim()
@@ -79,23 +95,59 @@ export class ObjectStorageService {
     } else await new Upload({ client: this.s3Client(), params: { Bucket: location.bucket || this.s3Bucket, Key: objectKey, Body: data, ContentType: contentType } }).done()
   }
 
-  async read(location: StorageLocation, objectKey: string) {
+  /** Streams an object without buffering it. Callers that only pass bytes through to an HTTP
+   *  response should prefer this over `read`. */
+  async readStream(location: StorageLocation, objectKey: string): Promise<{ stream: Readable; size: number }> {
     if (location.driver === 'local') {
-      try { return await readFile(this.localPath(objectKey)) } catch (error) {
+      const target = this.localPath(objectKey)
+      let size: number
+      try { size = (await stat(target)).size } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new NotFoundException('文件内容不存在')
         throw new ServiceUnavailableException('本地文件存储读取失败')
       }
+      this.assertReadableSize(size)
+      return { stream: createReadStream(target), size }
     }
     try {
       const response = await this.s3Client().send(new GetObjectCommand({ Bucket: location.bucket || this.s3Bucket, Key: objectKey }))
       if (!response.Body) throw new ServiceUnavailableException('对象存储未返回文件内容')
-      return Buffer.from(await response.Body.transformToByteArray())
+      const size = Number(response.ContentLength || 0)
+      if (size) this.assertReadableSize(size)
+      const body = response.Body as Readable
+      // ContentLength is advisory for some S3-compatible backends, so keep a hard byte ceiling.
+      return { stream: body.pipe(new ReadLimitTransform(this.maxReadBytes)), size }
     } catch (error) {
-      if (error instanceof ServiceUnavailableException) throw error
-      const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
-      if (status === 404 || (error as { name?: string }).name === 'NoSuchKey') throw new NotFoundException('文件内容不存在')
-      throw new ServiceUnavailableException('对象存储读取失败')
+      throw this.readFailure(error)
     }
+  }
+
+  async read(location: StorageLocation, objectKey: string) {
+    const { stream } = await this.readStream(location, objectKey)
+    const chunks: Buffer[] = []
+    let total = 0
+    try {
+      for await (const chunk of stream) {
+        const buffer = Buffer.from(chunk as Uint8Array)
+        total += buffer.byteLength
+        this.assertReadableSize(total)
+        chunks.push(buffer)
+      }
+    } catch (error) {
+      stream.destroy()
+      throw this.readFailure(error)
+    }
+    return Buffer.concat(chunks)
+  }
+
+  private assertReadableSize(size: number) {
+    if (size > this.maxReadBytes) throw new PayloadTooLargeException('文件超出可读取的大小上限')
+  }
+
+  private readFailure(error: unknown) {
+    if (error instanceof NotFoundException || error instanceof PayloadTooLargeException || error instanceof ServiceUnavailableException) return error
+    const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
+    if (status === 404 || (error as { name?: string }).name === 'NoSuchKey') return new NotFoundException('文件内容不存在')
+    return new ServiceUnavailableException('对象存储读取失败')
   }
 
   async delete(location: StorageLocation, objectKey: string) {

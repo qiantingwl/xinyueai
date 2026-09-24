@@ -1,19 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { AssetKind, GenerationJob, PluginCapability, Prisma, ProviderType } from '@prisma/client'
+import { AssetKind, GenerationJob, Prisma, ProviderType } from '@prisma/client'
 import { AssetsService } from '../../assets/assets.service'
 import { PrismaService } from '../../prisma/prisma.service'
 import { ProvidersService, ResolvedProvider } from '../../providers/providers.service'
 import { GenerationJobCancelledError, GenerationRunner } from '../generation-runners'
 import { GenerationOutputService } from '../generation-output.service'
-import { PublicEndpointPolicyService } from '../../common/public-endpoint-policy.service'
 import { readResponseBytes } from '../../common/response-bytes'
-import { fetchNoRedirect, fetchPublicNoRedirect } from '../../common/outbound-http'
+import { fetchNoRedirect, fetchPublicMedia } from '../../common/outbound-http'
+import { canFailoverHttpStatus, postProviderForm, postProviderJson, providerFetch } from '../provider-request.client'
 
 const MAX_GENERATED_VIDEO_BYTES = 500 * 1024 * 1024
 import { ProviderRequestError, ReconciliationRequiredError, TerminalProviderJobError, TerminalSettlementError } from '../generation-provider-errors'
 import { normalizeVideoOptions, videoCapabilities } from '../video-options'
 import { GenerationSettlementService } from '../generation-settlement.service'
 import { ProviderAttemptAuditService } from '../provider-attempt-audit.service'
+import { localizedCostMicros } from '../../billing/micros'
+import { pluginAugmentedPrompt } from '../plugin-prompt'
 
 type ProviderPayload = {
   [key: string]: unknown
@@ -32,39 +34,20 @@ export class VideoGenerationRunner implements GenerationRunner {
     private readonly assets: AssetsService,
     private readonly providers: ProvidersService,
     private readonly outputs: GenerationOutputService,
-    private readonly endpointPolicy: PublicEndpointPolicyService,
     private readonly attemptAudit: ProviderAttemptAuditService,
     private readonly settlement: GenerationSettlementService,
   ) {}
 
-  private async provider(resolved: ResolvedProvider, path: string, body: unknown, timeoutMs = resolved.timeoutMs) {
-    if (!resolved.apiKey) throw new ProviderRequestError('AI provider is not configured')
-    let response: Response
-    try {
-      response = await this.providerFetch(resolved, `${resolved.baseUrl}${path}`, { method: 'POST', headers: this.providers.buildRequestHeaders(resolved), body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) })
-    } catch (error) {
-      throw new ProviderRequestError(error instanceof Error ? error.message : 'Provider network request failed')
-    }
-    if (!response.ok) throw new ProviderRequestError(`Provider returned ${response.status}: ${(await response.text()).slice(0, 500)}`, response.status)
-    return response.json() as Promise<ProviderPayload>
+  private provider(resolved: ResolvedProvider, path: string, body: unknown, timeoutMs = resolved.timeoutMs) {
+    return postProviderJson<ProviderPayload>(resolved, path, body, this.providers.buildRequestHeaders(resolved), ProviderRequestError, timeoutMs)
   }
 
-  private async providerForm(resolved: ResolvedProvider, path: string, form: FormData) {
-    if (!resolved.apiKey) throw new ProviderRequestError('AI provider is not configured')
-    let response: Response
-    try {
-      response = await this.providerFetch(resolved, `${resolved.baseUrl}${path}`, { method: 'POST', headers: this.providers.buildRequestHeaders(resolved, 'openai', undefined), body: form, signal: AbortSignal.timeout(resolved.timeoutMs) })
-    } catch (error) {
-      throw new ProviderRequestError(error instanceof Error ? error.message : 'Provider network request failed')
-    }
-    if (!response.ok) throw new ProviderRequestError(`Provider returned ${response.status}: ${(await response.text()).slice(0, 500)}`, response.status)
-    return response.json() as Promise<ProviderPayload>
+  private providerForm(resolved: ResolvedProvider, path: string, form: FormData) {
+    return postProviderForm<ProviderPayload>(resolved, path, form, this.providers.buildRequestHeaders(resolved, 'openai', undefined), ProviderRequestError)
   }
 
   private canFailover(error: unknown) {
-    if (!(error instanceof ProviderRequestError)) return false
-    if (error.status === undefined) return true
-    return [401, 403, 404, 408, 409, 425, 429].includes(error.status) || error.status >= 500
+    return canFailoverHttpStatus(error, (value): value is ProviderRequestError => value instanceof ProviderRequestError)
   }
 
   private async withProviderFailover<T>(task: GenerationJob, capability: 'CHAT' | 'IMAGE' | 'VIDEO' | 'COMMERCE', execute: (provider: ResolvedProvider) => Promise<T>) {
@@ -102,7 +85,7 @@ export class VideoGenerationRunner implements GenerationRunner {
   async run(task: GenerationJob) {
     await this.outputs.cleanup(task, { requireActiveLease: true })
     const options = task.options as Record<string, unknown>
-    const prompt = await this.pluginPrompt(task, PluginCapability.VIDEO)
+    const prompt = await pluginAugmentedPrompt(this.prisma, task)
     const execution = await this.withProviderFailover(task, 'VIDEO', async (resolved) => {
       const capabilities = videoCapabilities(resolved.videoCapabilities)
       const normalized = normalizeVideoOptions(options, resolved.videoCapabilities)
@@ -123,11 +106,26 @@ export class VideoGenerationRunner implements GenerationRunner {
         const referenceAssetIds = Array.isArray(options.referenceAssetIds)
           ? [...new Set(options.referenceAssetIds.map(String).filter((id) => /^[A-Za-z0-9_-]{1,100}$/.test(id)))].slice(0, 1)
           : []
-        if (referenceAssetIds.length) {
-          const reference = await this.assets.readForUser(task.userId, referenceAssetIds[0])
+        // 首帧/尾帧：可选图片资产，经 multipart 以 first_frame_image / last_frame_image 转发上游
+        const frameIds = [options.firstFrameAssetId, options.lastFrameAssetId]
+          .filter((id): id is string => typeof id === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(id))
+          .slice(0, 2)
+        const frameAssets: Array<{ slot: 'first_frame_image' | 'last_frame_image'; file: Buffer; mimeType: string; name: string }> = []
+        for (const [slot, id] of [['first_frame_image', frameIds[0]], ['last_frame_image', frameIds[1]]] as const) {
+          if (!id) continue
+          const asset = await this.assets.readForUser(task.userId, id)
+          frameAssets.push({ slot, file: Buffer.from(asset.file), mimeType: asset.mimeType, name: asset.name })
+        }
+        if (referenceAssetIds.length || frameAssets.length) {
           const form = new FormData()
           for (const [key, value] of Object.entries(fields)) form.append(key, String(value))
-          form.append('input_reference', new Blob([new Uint8Array(reference.file)], { type: reference.mimeType }), reference.name)
+          if (referenceAssetIds.length) {
+            const reference = await this.assets.readForUser(task.userId, referenceAssetIds[0])
+            form.append('input_reference', new Blob([new Uint8Array(reference.file)], { type: reference.mimeType }), reference.name)
+          }
+          for (const frame of frameAssets) {
+            form.append(frame.slot, new Blob([new Uint8Array(frame.file)], { type: frame.mimeType }), frame.name)
+          }
           payload = await this.providerForm(resolved, capabilities.createPath, form)
         } else {
           payload = await this.provider(resolved, capabilities.createPath, fields)
@@ -169,7 +167,7 @@ export class VideoGenerationRunner implements GenerationRunner {
     })
     try { await this.assertNotCancelled(task.id) } catch (error) { await this.assets.remove(task.userId, asset.id); throw error }
     await this.updateRunningTask(task, {
-      upstreamCostMicros: this.localizedCostMicros(execution.provider.videoCostMicros, execution.provider.pricingUsdExchangeRateMicros),
+      upstreamCostMicros: localizedCostMicros(execution.provider.videoCostMicros, execution.provider.pricingUsdExchangeRateMicros),
     }, true)
     await this.settlement.settleNonChat(task.id, execution.providerAttemptId)
   }
@@ -186,10 +184,6 @@ export class VideoGenerationRunner implements GenerationRunner {
       if (reconciliationRequired) throw new ReconciliationRequiredError(`视频任务持久化失败：${message}`)
       throw new TerminalSettlementError(`视频任务状态写入失败：${message}`)
     }
-  }
-
-  private localizedCostMicros(usdMicros: number, exchangeRateMicros: number) {
-    return Math.min(2_000_000_000, Math.ceil(usdMicros * exchangeRateMicros / 1_000_000))
   }
 
   private videoPath(template: string, id: string) {
@@ -232,7 +226,10 @@ export class VideoGenerationRunner implements GenerationRunner {
     let response: Response
     try { response = await this.providerFetch(resolved, `${resolved.baseUrl}${path}`, { headers: this.providers.buildRequestHeaders(resolved, 'openai', undefined), signal: AbortSignal.timeout(resolved.timeoutMs) }) }
     catch (error) { throw new ProviderRequestError(error instanceof Error ? error.message : 'Provider network request failed') }
-    if (!response.ok) throw new ProviderRequestError(`Provider returned ${response.status}: ${(await response.text()).slice(0, 500)}`, response.status)
+    if (!response.ok) {
+      await response.text().catch(() => '')
+      throw new ProviderRequestError(`Provider returned ${response.status}`, response.status)
+    }
     return response.json() as Promise<ProviderPayload>
   }
 
@@ -240,12 +237,17 @@ export class VideoGenerationRunner implements GenerationRunner {
     let url: URL
     try { url = new URL(input, `${resolved.baseUrl}/`) } catch { throw new ProviderRequestError('视频上游返回了无效的结果地址', 502) }
     const providerOrigin = new URL(resolved.baseUrl).origin
-    if (url.origin !== providerOrigin) await this.endpointPolicy.assertPublicHttpUrl(url.toString())
-    // Only explicitly allowlisted local workers may bypass the public DNS
-    // dispatcher. Admin-managed public Providers must use the dispatcher even
-    // for same-origin result URLs so DNS rebinding cannot reach a private IP.
-    const request = url.origin === providerOrigin && resolved.type === ProviderType.LOCAL_WORKER ? fetchNoRedirect : fetchPublicNoRedirect
-    const response = await request(url, { headers: url.origin === providerOrigin ? this.providers.buildRequestHeaders(resolved, 'openai', undefined) : undefined, signal: AbortSignal.timeout(Math.max(resolved.timeoutMs, 300_000)) })
+    const sameOrigin = url.origin === providerOrigin
+    const headers = sameOrigin ? this.providers.buildRequestHeaders(resolved, 'openai', undefined) : undefined
+    const signal = AbortSignal.timeout(Math.max(resolved.timeoutMs, 300_000))
+    let response: Response
+    try {
+      if (sameOrigin && resolved.type === ProviderType.LOCAL_WORKER) response = await fetchNoRedirect(url, { headers, signal })
+      else if (sameOrigin) response = await this.providerFetch(resolved, url, { headers, signal })
+      else response = await fetchPublicMedia(url, { signal }, { allowProxy: resolved.source !== 'user' })
+    } catch (error) {
+      throw new ProviderRequestError(error instanceof Error ? error.message : '视频结果下载失败', 502)
+    }
     if (!response.ok) throw new ProviderRequestError(`视频下载返回 ${response.status}`, response.status)
     let bytes: Uint8Array
     try { bytes = await readResponseBytes(response, MAX_GENERATED_VIDEO_BYTES, 'Provider 视频') }
@@ -256,31 +258,12 @@ export class VideoGenerationRunner implements GenerationRunner {
   }
 
   private providerFetch(resolved: ResolvedProvider, input: string | URL, init: RequestInit) {
-    return resolved.type === ProviderType.LOCAL_WORKER
-      ? fetchNoRedirect(input, init)
-      : fetchPublicNoRedirect(input, init)
+    return providerFetch(resolved, input, init)
   }
 
   private async assertNotCancelled(jobId: string) {
     const job = await this.prisma.generationJob.findUnique({ where: { id: jobId }, select: { status: true } })
     if (!job || job.status === 'CANCELLED') throw new JobCancelledError('Generation job was cancelled')
-  }
-
-  private async pluginInstruction(task: GenerationJob, capability: PluginCapability) {
-    const options = task.options as Record<string, unknown>
-    const pluginId = typeof options.pluginId === 'string' ? options.pluginId : ''
-    if (!pluginId) return ''
-    // Capability validation happens when the job is created. External
-    // instruction-only skills may be reused across capabilities, so do not
-    // apply the stored capability array a second time in the worker.
-    const plugin = await this.prisma.plugin.findFirst({ where: { id: pluginId, status: 'PUBLISHED', OR: [{ ownerId: task.userId, visibility: 'PRIVATE' }, { visibility: 'OFFICIAL', installations: { some: { userId: task.userId, enabled: true } } }] }, select: { name: true, instruction: true, outputRequirements: true } })
-    if (!plugin) throw new Error('插件已停用、未安装或不支持当前创作类型')
-    return [`当前启用插件：${plugin.name}`, plugin.instruction.trim(), plugin.outputRequirements.trim() ? `输出要求：${plugin.outputRequirements.trim()}` : ''].filter(Boolean).join('\n')
-  }
-
-  private async pluginPrompt(task: GenerationJob, capability: PluginCapability) {
-    const instruction = await this.pluginInstruction(task, capability)
-    return instruction ? `${task.prompt}\n\n插件增强要求（在不改变用户核心意图的前提下执行）：\n${instruction}` : task.prompt
   }
 
 }

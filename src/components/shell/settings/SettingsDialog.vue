@@ -19,6 +19,7 @@
 <script setup lang="ts">
 import type { Component, ComponentPublicInstance } from 'vue'
 import { X } from 'lucide-vue-next'
+import { useEscapeClose } from '../../../composables/useEscapeClose'
 import type { SettingsSection } from '../types'
 
 defineProps<{
@@ -31,4 +32,6 @@ const emit = defineEmits<{
   close: []
   select: [section: SettingsSection]
 }>()
+
+useEscapeClose(() => emit('close'))
 </script>

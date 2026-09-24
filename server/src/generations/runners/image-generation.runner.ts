@@ -5,13 +5,15 @@ import { PrismaService } from '../../prisma/prisma.service'
 import { ProvidersService, ResolvedProvider } from '../../providers/providers.service'
 import { GenerationJobCancelledError, GenerationRunner } from '../generation-runners'
 import { GenerationOutputService } from '../generation-output.service'
-import { PublicEndpointPolicyService } from '../../common/public-endpoint-policy.service'
 import { readResponseBytes } from '../../common/response-bytes'
-import { fetchNoRedirect, fetchPublicNoRedirect } from '../../common/outbound-http'
+import { fetchNoRedirect, fetchPublicMedia } from '../../common/outbound-http'
+import { localizedCostMicros } from '../../billing/micros'
+import { canFailoverHttpStatus, postProviderForm, postProviderJson, providerFetch } from '../provider-request.client'
 import { detectImageFormat, identifyImageFormat, imageFormatMetadata, normalizeImageOptions } from '../image-options'
 import { GenerationSettlementService } from '../generation-settlement.service'
 import { ProviderAttemptAuditService } from '../provider-attempt-audit.service'
 import { ReconciliationRequiredError, TerminalSettlementError } from '../generation-provider-errors'
+import { loadPublishedPlugin } from '../plugin-prompt'
 
 type ProviderPayload = {
   [key: string]: unknown
@@ -34,7 +36,6 @@ export class ImageGenerationRunner implements GenerationRunner {
     private readonly assets: AssetsService,
     private readonly providers: ProvidersService,
     private readonly outputs: GenerationOutputService,
-    private readonly endpointPolicy: PublicEndpointPolicyService,
     private readonly attemptAudit: ProviderAttemptAuditService,
     private readonly settlement: GenerationSettlementService,
   ) {}
@@ -49,12 +50,35 @@ export class ImageGenerationRunner implements GenerationRunner {
     const promptedByTool = toolInstruction ? `${basePrompt}\n\n图片编辑工具要求：${toolInstruction}` : basePrompt
     const prompt = selectedStyle ? `${promptedByTool}\n\n视觉风格：${selectedStyle}。保持主体和用户要求不变，将该风格自然应用到构图、光影、色彩与材质。` : promptedByTool
     const count = task.kind === 'COMMERCE' ? Math.max(1, Math.min(Number(options.modules || 8), 12)) : Math.max(1, Math.min(Number(options.count || 1), 10))
+    const persistPayload = async (resolved: ResolvedProvider, payload: ProviderPayload) => {
+      if (!Array.isArray(payload.data) || !payload.data.length) throw new ImageProviderError('Provider returned no images', 502)
+      if (payload.data.length !== count) throw new ImageProviderError(`Provider 图片数量不完整：期望 ${count} 张，实际 ${payload.data.length} 张`, 502)
+      const imageOptions = normalizeImageOptions(options, resolved.imageCapabilities)
+      try {
+        for (const [position, item] of payload.data.entries()) {
+          await this.assertNotCancelled(task.id)
+          const bytes = await this.imageBytes(item, resolved)
+          await this.assertNotCancelled(task.id)
+          const format = detectImageFormat(bytes, imageOptions.outputFormat)
+          const file = imageFormatMetadata(format)
+          const moduleLabel = typeof item.moduleLabel === 'string' ? item.moduleLabel : ''
+          const asset = await this.outputs.storeAndLink(task, { data: bytes, projectId: task.projectId || undefined, name: task.kind === 'COMMERCE' ? `${options.creationType || '商品视觉'} ${position + 1}${moduleLabel ? ` - ${moduleLabel}` : ''}.${file.extension}` : `生成图片 ${position + 1}.${file.extension}`, mimeType: file.mimeType, kind: task.kind === 'COMMERCE' ? AssetKind.PRODUCT_PACK : AssetKind.IMAGE, position, metadata: { purpose: 'generated', prompt: task.prompt, model: task.model, jobId: task.id, position, moduleLabel, creationType: options.creationType, platform: options.platform, options: { ...options, outputFormat: format } } })
+          try { await this.assertNotCancelled(task.id) } catch (error) { await this.assets.remove(task.userId, asset.id); throw error }
+        }
+      } catch (error) {
+        // A partially persisted attempt must not leak outputs into the next failover candidate.
+        try { await this.outputs.cleanup(task, { requireActiveLease: true }) }
+        catch (cleanupError) { throw new ReconciliationRequiredError(`图片部分结果清理失败：${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`) }
+        throw error
+      }
+      return payload
+    }
     const execution = await this.withProviderFailover(task, async (resolved) => {
       const imageOptions = normalizeImageOptions(options, resolved.imageCapabilities)
       if (resolved.type === ProviderType.LOCAL_WORKER) {
         if (task.kind === 'COMMERCE') throw new ImageProviderError('本地图片工具不能作为商品视觉多图模型使用', 400)
         if (count > 1) throw new ImageProviderError('本地图片工具每个任务只返回 1 张图片', 400)
-        return { resolved, payload: await this.localWorkerImage(task, resolved, prompt, imageOptions) }
+        return { resolved, payload: await persistPayload(resolved, await this.localWorkerImage(task, resolved, prompt, imageOptions)) }
       }
       if (resolved.type === ProviderType.POLLINATIONS) {
         if (imageOptions.referenceAssetIds.length || imageOptions.maskAssetId) throw new ImageProviderError('Pollinations 渠道不支持参考图或蒙版编辑', 400)
@@ -74,14 +98,14 @@ export class ImageGenerationRunner implements GenerationRunner {
           this.assertValidImageBytes(bytes, 'Pollinations')
           return bytes
         }
-        if (task.kind !== 'COMMERCE') return { resolved, payload: { data: [{ _generatedBytes: await requestPollinations(prompt) }] } }
+        if (task.kind !== 'COMMERCE') return { resolved, payload: await persistPayload(resolved, { data: [{ _generatedBytes: await requestPollinations(prompt) }] }) }
         const labels = this.commerceModuleLabels(String(options.creationType || '详情页'), count)
         const data: Record<string, unknown>[] = []
         for (const [position, label] of labels.entries()) {
           const modulePrompt = `${prompt}\n\n请生成一张完整、可直接发布的中文电商${options.creationType || '详情页'}图片。这是整组 ${count} 张中的第 ${position + 1} 张，页面职责：${label}。目标平台：${options.platform || '自动适配'}。保持同一商品、包装、品牌信息和视觉系统一致，不要拼接多张小图，不要虚构未提供的参数、认证或功效。`
           data.push({ _generatedBytes: await requestPollinations(modulePrompt), moduleLabel: label })
         }
-        return { resolved, payload: { data } }
+        return { resolved, payload: await persistPayload(resolved, { data }) }
       }
       const request = async (singlePrompt: string, n: number) => {
         const fields = { model: resolved.model, prompt: singlePrompt, n, size: imageOptions.size, quality: imageOptions.quality, output_format: imageOptions.outputFormat, background: imageOptions.background, ...(imageOptions.outputCompression === undefined ? {} : { output_compression: imageOptions.outputCompression }) }
@@ -96,7 +120,7 @@ export class ImageGenerationRunner implements GenerationRunner {
         }
         return this.normalizeImagePayload(await this.providerForm(resolved, '/images/edits', form))
       }
-      if (task.kind !== 'COMMERCE') return { resolved, payload: await request(prompt, count) }
+      if (task.kind !== 'COMMERCE') return { resolved, payload: await persistPayload(resolved, await request(prompt, count)) }
       const labels = this.commerceModuleLabels(String(options.creationType || '详情页'), count)
       const data: Record<string, unknown>[] = []
       for (const [position, label] of labels.entries()) {
@@ -106,30 +130,13 @@ export class ImageGenerationRunner implements GenerationRunner {
         if (!item) throw new ImageProviderError(`Provider returned no image for commerce module ${position + 1}`, 502)
         data.push({ ...item, moduleLabel: label })
       }
-      return { resolved, payload: { data } }
+      return { resolved, payload: await persistPayload(resolved, { data }) }
     })
-    const { resolved, payload } = execution.result
-    if (!Array.isArray(payload.data) || !payload.data.length) throw new ImageProviderError('Provider returned no images', 502)
-    if (payload.data.length !== count) throw new ReconciliationRequiredError(`Provider 图片数量不完整：期望 ${count} 张，实际 ${payload.data.length} 张`)
-    const imageOptions = normalizeImageOptions(options, resolved.imageCapabilities)
-    for (const [position, item] of payload.data.entries()) {
-      await this.assertNotCancelled(task.id)
-      const bytes = await this.imageBytes(item, resolved)
-      await this.assertNotCancelled(task.id)
-      const format = detectImageFormat(bytes, imageOptions.outputFormat)
-      const file = imageFormatMetadata(format)
-      const moduleLabel = typeof item.moduleLabel === 'string' ? item.moduleLabel : ''
-      const asset = await this.outputs.storeAndLink(task, { data: bytes, projectId: task.projectId || undefined, name: task.kind === 'COMMERCE' ? `${options.creationType || '商品视觉'} ${position + 1}${moduleLabel ? ` - ${moduleLabel}` : ''}.${file.extension}` : `生成图片 ${position + 1}.${file.extension}`, mimeType: file.mimeType, kind: task.kind === 'COMMERCE' ? AssetKind.PRODUCT_PACK : AssetKind.IMAGE, position, metadata: { purpose: 'generated', prompt: task.prompt, model: task.model, jobId: task.id, position, moduleLabel, creationType: options.creationType, platform: options.platform, options: { ...options, outputFormat: format } } })
-      try { await this.assertNotCancelled(task.id) } catch (error) { await this.assets.remove(task.userId, asset.id); throw error }
-    }
+    const { payload } = execution.result
     await this.updateRunningTask(task, {
-      upstreamCostMicros: this.localizedCostMicros(payload.data.length * execution.provider.imageCostMicros, execution.provider.pricingUsdExchangeRateMicros),
+      upstreamCostMicros: localizedCostMicros(payload.data!.length * execution.provider.imageCostMicros, execution.provider.pricingUsdExchangeRateMicros),
     }, true)
     await this.settlement.settleNonChat(task.id, execution.providerAttemptId)
-  }
-
-  private localizedCostMicros(usdMicros: number, exchangeRateMicros: number) {
-    return Math.min(2_000_000_000, Math.ceil(usdMicros * exchangeRateMicros / 1_000_000))
   }
 
   private async withProviderFailover<T>(task: GenerationJob, execute: (provider: ResolvedProvider) => Promise<T>) {
@@ -210,22 +217,12 @@ export class ImageGenerationRunner implements GenerationRunner {
     return payload
   }
 
-  private async provider(resolved: ResolvedProvider, path: string, body: unknown, timeoutMs = resolved.timeoutMs) {
-    if (!resolved.apiKey) throw new ImageProviderError('AI provider is not configured')
-    let response: Response
-    try { response = await this.providerFetch(resolved, `${resolved.baseUrl}${path}`, { method: 'POST', headers: this.providers.buildRequestHeaders(resolved), body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) }) }
-    catch (error) { throw new ImageProviderError(error instanceof Error ? error.message : 'Provider network request failed') }
-    if (!response.ok) throw new ImageProviderError(`Provider returned ${response.status}: ${(await response.text()).slice(0, 500)}`, response.status)
-    return response.json() as Promise<ProviderPayload>
+  private provider(resolved: ResolvedProvider, path: string, body: unknown, timeoutMs = resolved.timeoutMs) {
+    return postProviderJson<ProviderPayload>(resolved, path, body, this.providers.buildRequestHeaders(resolved), ImageProviderError, timeoutMs)
   }
 
-  private async providerForm(resolved: ResolvedProvider, path: string, form: FormData) {
-    if (!resolved.apiKey) throw new ImageProviderError('AI provider is not configured')
-    let response: Response
-    try { response = await this.providerFetch(resolved, `${resolved.baseUrl}${path}`, { method: 'POST', headers: this.providers.buildRequestHeaders(resolved, 'openai', undefined), body: form, signal: AbortSignal.timeout(resolved.timeoutMs) }) }
-    catch (error) { throw new ImageProviderError(error instanceof Error ? error.message : 'Provider network request failed') }
-    if (!response.ok) throw new ImageProviderError(`Provider returned ${response.status}: ${(await response.text()).slice(0, 500)}`, response.status)
-    return response.json() as Promise<ProviderPayload>
+  private providerForm(resolved: ResolvedProvider, path: string, form: FormData) {
+    return postProviderForm<ProviderPayload>(resolved, path, form, this.providers.buildRequestHeaders(resolved, 'openai', undefined), ImageProviderError)
   }
 
   private async pluginPrompt(task: GenerationJob) {
@@ -233,7 +230,7 @@ export class ImageGenerationRunner implements GenerationRunner {
     const options = task.options as Record<string, unknown>
     const pluginId = typeof options.pluginId === 'string' ? options.pluginId : ''
     if (!pluginId) return task.prompt
-    const plugin = await this.prisma.plugin.findFirst({ where: { id: pluginId, status: 'PUBLISHED', OR: [{ ownerId: task.userId, visibility: 'PRIVATE' }, { visibility: 'OFFICIAL', installations: { some: { userId: task.userId, enabled: true } } }] }, select: { name: true, instruction: true, outputRequirements: true } })
+    const plugin = await loadPublishedPlugin(this.prisma, task.userId, pluginId)
     if (!plugin) throw new Error(`插件已停用、未安装或不支持 ${capability} 创作`)
     return [plugin.instruction.trim(), task.prompt, plugin.outputRequirements.trim() ? `输出要求：${plugin.outputRequirements.trim()}` : ''].filter(Boolean).join('\n\n')
   }
@@ -264,12 +261,25 @@ export class ImageGenerationRunner implements GenerationRunner {
     let url: URL
     try { url = new URL(item.url, `${resolved.baseUrl}/`) } catch { throw new ImageProviderError('Provider returned an invalid image URL', 502) }
     const providerOrigin = new URL(resolved.baseUrl).origin
-    if (url.origin !== providerOrigin) await this.endpointPolicy.assertPublicHttpUrl(url.toString())
-    // Only explicitly allowlisted local workers may bypass the public DNS
-    // dispatcher. Admin-managed public Providers must use the dispatcher even
-    // for same-origin result URLs so DNS rebinding cannot reach a private IP.
-    const request = url.origin === providerOrigin && resolved.type === ProviderType.LOCAL_WORKER ? fetchNoRedirect : fetchPublicNoRedirect
-    const response = await request(url, { headers: url.origin === providerOrigin ? this.providers.buildRequestHeaders(resolved, 'openai', undefined) : undefined, signal: AbortSignal.timeout(resolved.timeoutMs) })
+    const sameOrigin = url.origin === providerOrigin
+    if (sameOrigin && resolved.type === ProviderType.LOCAL_WORKER) {
+      const response = await fetchNoRedirect(url, { headers: this.providers.buildRequestHeaders(resolved, 'openai', undefined), signal: AbortSignal.timeout(resolved.timeoutMs) })
+      return this.readDownloadedImage(response)
+    }
+    if (sameOrigin) {
+      const response = await this.providerFetch(resolved, url, { headers: this.providers.buildRequestHeaders(resolved, 'openai', undefined), signal: AbortSignal.timeout(resolved.timeoutMs) })
+      return this.readDownloadedImage(response)
+    }
+    try {
+      const response = await fetchPublicMedia(url, { signal: AbortSignal.timeout(resolved.timeoutMs) }, { allowProxy: resolved.source !== 'user' })
+      return this.readDownloadedImage(response)
+    } catch (error) {
+      if (error instanceof ImageProviderError) throw error
+      throw new ImageProviderError(error instanceof Error ? error.message : '图片结果下载失败', 502)
+    }
+  }
+
+  private async readDownloadedImage(response: Response) {
     if (!response.ok) throw new ImageProviderError(`Provider image download returned ${response.status}`, response.status)
     let bytes: Uint8Array
     try { bytes = await readResponseBytes(response, MAX_GENERATED_IMAGE_BYTES, 'Provider 图片') }
@@ -278,9 +288,7 @@ export class ImageGenerationRunner implements GenerationRunner {
   }
 
   private providerFetch(resolved: ResolvedProvider, input: string | URL, init: RequestInit) {
-    return resolved.type === ProviderType.LOCAL_WORKER
-      ? fetchNoRedirect(input, init)
-      : fetchPublicNoRedirect(input, init)
+    return providerFetch(resolved, input, init)
   }
 
   private async assertNotCancelled(jobId: string) {
@@ -295,9 +303,7 @@ export class ImageGenerationRunner implements GenerationRunner {
   }
 
   private canFailover(error: unknown) {
-    if (!(error instanceof ImageProviderError)) return false
-    if (error.status === undefined) return true
-    return [401, 403, 404, 408, 409, 425, 429].includes(error.status) || error.status >= 500
+    return canFailoverHttpStatus(error, (value): value is ImageProviderError => value instanceof ImageProviderError)
   }
 
   private assertValidImageBytes(bytes: Uint8Array, label: string) {

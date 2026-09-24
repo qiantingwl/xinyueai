@@ -39,19 +39,30 @@ export function useCanvasGenerationOptions(input: {
     return node.data.kind === 'VIDEO' || node.data.generationKind === 'VIDEO' ? 'VIDEO' : 'IMAGE'
   }
 
-  function modelsForNode(node: FlowNode) {
-    const capability = activeGenerationKind(node)
+  function modelsForCapability(capability: 'CHAT' | CanvasGenerationKind) {
     return input.catalogModels.value.filter((model) => model.capability === capability && model.enabled !== false)
   }
 
-  function defaultModel(kind: CanvasGenerationKind) {
-    const models = input.catalogModels.value.filter((model) => model.capability === kind && model.enabled !== false)
+  function modelsForNode(node: FlowNode) {
+    if (node.data.kind === 'TEXT') return modelsForCapability('CHAT')
+    return modelsForCapability(activeGenerationKind(node))
+  }
+
+  function defaultModel(kind: CanvasGenerationKind | 'CHAT') {
+    const models = modelsForCapability(kind)
     return models.find((model) => model.isDefault)?.key || models[0]?.key || ''
   }
 
   function flowNodeModelOptions(id: string) {
     const node = input.nodes.value.find((item) => item.id === id)
-    return node ? modelsForNode(node).map((model) => ({ key: model.key, displayName: model.displayName })) : []
+    return node ? modelsForNode(node) : []
+  }
+
+  function flowNodeGenerationModel(id: string) {
+    const node = input.nodes.value.find((item) => item.id === id)
+    if (!node) return ''
+    if (node.data.kind === 'TEXT') return node.data.model || defaultModel('CHAT')
+    return isGenerationNode(node) ? generationModel(node) : ''
   }
 
   function upstreamNodes(nodeId: string) {
@@ -155,7 +166,9 @@ export function useCanvasGenerationOptions(input: {
     const node = input.nodes.value.find((item) => item.id === id)
     if (!node || !isGenerationNode(node)) return ''
     const options = generationOptions(node)
-    const summary = activeGenerationKind(node) === 'VIDEO' ? `${options.resolution} · ${options.duration}s · ${options.aspectRatio}` : `${String(options.size).replace('x', ' × ')} · ${options.quality}`
+    const summary = activeGenerationKind(node) === 'VIDEO'
+      ? `${String(options.resolution || '720p').toUpperCase()} · ${options.duration || 5} 秒 · ${options.aspectRatio || '16:9'}`
+      : `${imageSizeLabel(String(options.size || '1024x1024'))} · ${qualityLabel(String(options.quality || 'medium'))}`
     const refs = generationContext(node).referenceAssetIds.length
     return refs ? `${summary} · ${refs} 个参考` : summary
   }
@@ -167,5 +180,5 @@ export function useCanvasGenerationOptions(input: {
   }
   function qualityLabel(value: string) { return value === 'low' ? '低' : value === 'high' ? '高' : '标准' }
 
-  return { isGenerationNode, activeGenerationKind, modelsForNode, defaultModel, flowNodeModelOptions, flowNodeGenerationSummary, upstreamNodes, generationContext, generationModel, imageCapabilities, videoCapabilities, generationOptions, generationCreditCost, imageSizeLabel, qualityLabel }
+  return { isGenerationNode, activeGenerationKind, modelsForNode, defaultModel, flowNodeModelOptions, flowNodeGenerationModel, flowNodeGenerationSummary, upstreamNodes, generationContext, generationModel, imageCapabilities, videoCapabilities, generationOptions, generationCreditCost, imageSizeLabel, qualityLabel }
 }

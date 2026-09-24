@@ -44,6 +44,7 @@
 .office-history__list em[data-status="SUCCEEDED"] { background: rgba(49, 182, 107, .12); color: #45bf7b; }
 .office-history__list em[data-status="FAILED"] { background: rgba(226, 79, 79, .12); color: #eb7777; }
 .office-history__empty { align-items: center; color: var(--studio-muted); display: flex; font-size: 12px; gap: 8px; justify-content: center; min-height: 160px; }
+.office-history__empty-state { min-height: 160px; padding: 18px 20px 24px; }
 .office-task-menu { background: var(--studio-elevated); border: 1px solid var(--studio-border); border-radius: 7px; box-shadow: var(--studio-shadow); display: grid; padding: 4px; position: absolute; right: 5px; top: 42px; width: 138px; z-index: 4; }
 .office-task-menu button { align-items: center; background: transparent; border: 0; border-radius: 5px; color: var(--studio-text); display: flex; font-size: 11px; gap: 8px; height: 32px; padding: 0 8px; text-align: left; }
 .office-task-menu button:hover { background: var(--studio-control); } .office-task-menu button.danger { color: var(--studio-danger); }
@@ -51,6 +52,7 @@
 .office-schedule-body { min-height: 0; overflow-y: auto; padding: 10px; }
 .office-schedule-form { border-bottom: 1px solid var(--studio-border); display: grid; gap: 7px; padding-bottom: 12px; }
 .office-schedule-form input, .office-schedule-form textarea, .office-schedule-form select { background: var(--studio-control); border: 1px solid transparent; border-radius: 6px; color: var(--studio-text); font: inherit; font-size: 12px; outline: 0; padding: 8px 9px; resize: vertical; width: 100%; }
+.office-schedule-form select { padding-right: 28px; }
 .office-schedule-form input:focus, .office-schedule-form textarea:focus, .office-schedule-form select:focus { border-color: var(--office-blue); }
 .office-schedule-form > button { align-items: center; background: var(--studio-inverse-bg); border: 0; border-radius: 6px; color: var(--studio-inverse-text); display: flex; font-size: 11px; gap: 7px; height: 34px; justify-content: center; }
 .office-schedule-list { display: grid; padding-top: 6px; }
@@ -61,7 +63,7 @@
 
 .office-welcome { align-content: center; display: grid; gap: 56px; justify-items: center; min-height: 0; overflow-y: auto; padding: 24px 24px 150px; }
 .office-welcome__copy { text-align: center; }
-.office-welcome__copy > span { color: var(--studio-muted); font-size: 10px; font-weight: 700; }
+.office-welcome__copy > span { color: var(--studio-brand); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
 .office-welcome__copy h1 { font-size: 32px; font-weight: 680; letter-spacing: 0; margin: 12px 0 8px; }
 .office-welcome__copy p { color: var(--studio-muted); font-size: 14px; margin: 0; }
 .office-recommendations { display: grid; gap: 7px; width: min(620px, 100%); }
@@ -137,7 +139,7 @@
 .office-deliverable > button { align-items: center; background: var(--studio-inverse-bg); border: 0; border-radius: 6px; color: var(--studio-inverse-text); display: flex; font-size: 11px; gap: 5px; height: 32px; padding: 0 10px; }
 .office-deliverable > button:disabled { opacity: .55; }
 
-.office-composer-wrap { bottom: 16px; left: 50%; max-width: calc(100% - 40px); position: absolute; transform: translateX(-50%); width: min(1000px, calc(100% - 40px)); z-index: 10; }
+.office-composer-wrap { bottom: 24px; left: 50%; max-width: calc(100% - 40px); position: absolute; transform: translateX(-50%); width: min(1000px, calc(100% - 40px)); z-index: 10; }
 .office-composer { background: var(--office-composer-surface); border: 1px solid var(--office-composer-border); border-radius: 24px; box-shadow: var(--office-composer-shadow); min-height: 100px; padding: 10px; transition: border-color .16s ease, box-shadow .16s ease; }
 .office-composer textarea { background: transparent; border: 0; color: var(--studio-text); display: block; font: inherit; font-size: 15px; height: 36px; line-height: 1.5; min-height: 36px; outline: 0; overflow-y: hidden; padding: 3px 10px 7px; resize: none; width: 100%; }
 .office-composer textarea::placeholder { color: var(--studio-muted); }
@@ -222,7 +224,7 @@ html[data-studio-theme="light"] .office-error { background: #fff1f2; border-colo
   .office-welcome__copy h1 { font-size: 26px; }
   .office-recommendations > button { grid-template-columns: 22px minmax(0, 1fr) 18px; }
   .office-recommendations small { display: none; }
-  .office-composer-wrap { bottom: 10px; left: 10px; max-width: calc(100% - 20px); transform: none; width: calc(100% - 20px); }
+  .office-composer-wrap { bottom: 16px; left: 10px; max-width: calc(100% - 20px); transform: none; width: calc(100% - 20px); }
   .office-composer .office-model-button { display: none; }
   .office-composer .office-quick-skill:nth-of-type(n+4) { display: none; }
   .office-composer .office-mode-button, .office-composer .office-skill-button { max-width: 120px; overflow: hidden; }

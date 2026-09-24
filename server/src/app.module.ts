@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config'
 import { BullModule } from '@nestjs/bullmq'
 import { ThrottlerModule } from '@nestjs/throttler'
 import { ThrottlerGuard } from '@nestjs/throttler'
+import { AuthGuard } from './auth/auth.guard'
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 import { validateEnv } from './config/env'
 import { PrismaModule } from './prisma/prisma.module'
@@ -83,6 +84,8 @@ import { ReadinessService } from './common/readiness.service'
     RuntimeMetricsService,
     ReadinessService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // 全局鉴权：匿名面必须显式 @Public()（auth/public.decorator.ts），默认拒绝
+    { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_INTERCEPTOR, useClass: RequestContextInterceptor },
   ],
 })

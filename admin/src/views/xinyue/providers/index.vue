@@ -76,7 +76,9 @@
         </ElTableColumn>
         <ElTableColumn :label="xt('健康状态')" width="110">
           <template #default="{ row }"
-            ><ElTag :type="healthType(row)">{{ xt(healthText(row)) }}</ElTag></template
+            ><ElTag :type="healthType(row as Provider)">{{
+              xt(healthText(row as Provider))
+            }}</ElTag></template
           >
         </ElTableColumn>
         <ElTableColumn :label="xt('状态')" width="82">
@@ -88,11 +90,17 @@
         </ElTableColumn>
         <ElTableColumn :label="xt('操作')" width="190" fixed="right">
           <template #default="{ row }">
-            <ElButton link type="primary" :loading="checking === row.id" @click="discover(row)">{{
-              xt('连接测试')
+            <ElButton
+              link
+              type="primary"
+              :loading="checking === row.id"
+              @click="discover(row as Provider)"
+              >{{ xt('获取模型') }}</ElButton
+            >
+            <ElButton link @click="openChannelEdit(row as Provider)">{{ xt('编辑') }}</ElButton>
+            <ElButton link type="danger" @click="removeChannel(row as Provider)">{{
+              xt('删除')
             }}</ElButton>
-            <ElButton link @click="openChannelEdit(row)">{{ xt('编辑') }}</ElButton>
-            <ElButton link type="danger" @click="removeChannel(row)">{{ xt('删除') }}</ElButton>
           </template>
         </ElTableColumn>
       </ElTable>
@@ -152,8 +160,10 @@
         >
         <ElTableColumn :label="xt('操作')" width="130" fixed="right">
           <template #default="{ row }"
-            ><ElButton link @click="openTemplateEdit(row)">{{ xt('编辑') }}</ElButton
-            ><ElButton link type="danger" @click="removeTemplate(row)">{{
+            ><ElButton link @click="openTemplateEdit(row as ProviderTemplate)">{{
+              xt('编辑')
+            }}</ElButton
+            ><ElButton link type="danger" @click="removeTemplate(row as ProviderTemplate)">{{
               xt('删除')
             }}</ElButton></template
           >
@@ -198,8 +208,8 @@
         >
         <ElTableColumn :label="xt('操作')" width="130" fixed="right"
           ><template #default="{ row }"
-            ><ElButton link @click="openVendorEdit(row)">{{ xt('编辑') }}</ElButton
-            ><ElButton link type="danger" @click="removeVendor(row)">{{
+            ><ElButton link @click="openVendorEdit(row as ModelVendor)">{{ xt('编辑') }}</ElButton
+            ><ElButton link type="danger" @click="removeVendor(row as ModelVendor)">{{
               xt('删除')
             }}</ElButton></template
           ></ElTableColumn
@@ -562,6 +572,7 @@
     type ProviderType
   } from '@/api/xinyue/models'
   import { xinyueText as xt } from '@/locales/xinyue'
+  import { useXinyueAsync } from '@/hooks'
 
   defineOptions({ name: 'XinyueProviders' })
   type AuthType = Provider['authType']
@@ -592,8 +603,7 @@
   const rows = ref<Provider[]>([])
   const templates = ref<ProviderTemplate[]>([])
   const vendors = ref<ModelVendor[]>([])
-  const loading = ref(false)
-  const saving = ref(false)
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
   const checking = ref('')
   const checkingAll = ref(false)
   const batchResult = ref<{ checked: number; healthy: number; unhealthy: number } | null>(null)
@@ -665,10 +675,24 @@
     protocolOptions.find((item) => item.value === value)?.label || value
   const nativeSearchText = (value: string) =>
     nativeSearchOptions.find((item) => item.value === value)?.label || value
+  const providerNeedsKey = (row: Provider) =>
+    !row.hasApiKey && !['POLLINATIONS', 'LOCAL_WORKER'].includes(row.type)
   const healthText = (row: Provider) =>
-    row.lastHealthStatus === 'healthy' ? '正常' : row.lastHealthStatus ? '异常' : '未检测'
+    providerNeedsKey(row)
+      ? '未配置密钥'
+      : row.lastHealthStatus === 'healthy'
+        ? '正常'
+        : row.lastHealthStatus
+          ? '异常'
+          : '未检测'
   const healthType = (row: Provider) =>
-    row.lastHealthStatus === 'healthy' ? 'success' : row.lastHealthStatus ? 'danger' : 'info'
+    providerNeedsKey(row)
+      ? 'warning'
+      : row.lastHealthStatus === 'healthy'
+        ? 'success'
+        : row.lastHealthStatus
+          ? 'danger'
+          : 'info'
   const capabilityText = (value: DiscoveredModel['capability']) =>
     value === 'CHAT'
       ? xt('对话')
@@ -683,16 +707,13 @@
     value ? `$${(value / 1_000_000).toFixed(value < 10_000 ? 4 : 2)}` : '-'
 
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       ;[rows.value, templates.value, vendors.value] = await Promise.all([
         xinyueApi.providers(),
         xinyueApi.providerTemplates(),
         xinyueApi.modelVendors()
       ])
-    } finally {
-      loading.value = false
-    }
+    })
   }
   function openCurrentCreate() {
     if (activeTab.value === 'channels') openChannelCreate()
@@ -748,8 +769,7 @@
   async function saveChannel() {
     if (!channelEditor.name || !channelEditor.baseUrl)
       return ElMessage.warning(xt('请填写渠道名称和 API 地址'))
-    saving.value = true
-    try {
+    await withSaving(async () => {
       const saved = await xinyueApi.saveProvider(
         {
           name: channelEditor.name,
@@ -775,9 +795,7 @@
       channelDialog.value = false
       await load()
       if (channelEditor.autoDiscover) await openDiscovery(saved)
-    } finally {
-      saving.value = false
-    }
+    })
   }
   function openTemplateCreate() {
     Object.assign(templateEditor, emptyTemplate(), { sortOrder: (templates.value.length + 1) * 10 })
@@ -790,8 +808,7 @@
   async function saveTemplate() {
     if (!templateEditor.key || !templateEditor.name)
       return ElMessage.warning(xt('请填写模板标识和名称'))
-    saving.value = true
-    try {
+    await withSaving(async () => {
       await xinyueApi.saveProviderTemplate(
         {
           key: templateEditor.key,
@@ -811,9 +828,7 @@
       )
       templateDialog.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   function openVendorCreate() {
     Object.assign(vendorEditor, emptyVendor(), { sortOrder: (vendors.value.length + 1) * 10 })
@@ -826,8 +841,7 @@
   async function saveVendor() {
     if (!vendorEditor.key || !vendorEditor.name)
       return ElMessage.warning(xt('请填写厂商标识和名称'))
-    saving.value = true
-    try {
+    await withSaving(async () => {
       await xinyueApi.saveModelVendor(
         {
           key: vendorEditor.key,
@@ -841,9 +855,7 @@
       )
       vendorDialog.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   function toggleAllImportable(value: boolean | string | number) {
     selectedModelIds.value = value

@@ -1,6 +1,7 @@
 import { nextTick, ref, type Ref } from 'vue'
 import type { MarkerType, ViewportTransform } from '@vue-flow/core'
 import type { CanvasBackground, CanvasNodeData } from '../../types/canvas'
+import { clone } from '../../utils/clone'
 import { createClientId } from '../../utils/client-id'
 
 export type FlowNode = {
@@ -53,6 +54,7 @@ export function useCanvasHistory(options: CanvasHistoryOptions) {
   const future = ref<LocalSnapshot[]>([])
   const clipboard = ref<CanvasClipboard>({ nodes: [], edges: [] })
   const applyingHistory = ref(false)
+  let lastSnapshotJson = ''
 
   function currentSnapshot(): LocalSnapshot {
     return {
@@ -66,8 +68,11 @@ export function useCanvasHistory(options: CanvasHistoryOptions) {
   function checkpoint(_event?: unknown) {
     if (!options.hydrated.value || applyingHistory.value) return
     const snapshot = currentSnapshot()
-    const last = history.value.at(-1)
-    if (!last || JSON.stringify(last) !== JSON.stringify(snapshot)) history.value.push(snapshot)
+    // 只序列化一次并与上次的缓存串比较：此前每次 checkpoint 都把全文档 stringify 两遍，
+    // 而它会在每次输入框 focus、拖拽 start、快捷键时触发。
+    const json = JSON.stringify(snapshot)
+    if (json !== lastSnapshotJson) history.value.push(snapshot)
+    lastSnapshotJson = json
     if (history.value.length > HISTORY_LIMIT) history.value.shift()
     future.value = []
   }
@@ -79,6 +84,7 @@ export function useCanvasHistory(options: CanvasHistoryOptions) {
     options.viewport.value = { ...snapshot.viewport }
     options.background.value = snapshot.background
     void options.setViewport(snapshot.viewport)
+    lastSnapshotJson = JSON.stringify(snapshot)
     nextTick(() => {
       applyingHistory.value = false
       options.dirty.value = true
@@ -148,6 +154,7 @@ export function useCanvasHistory(options: CanvasHistoryOptions) {
     history.value = []
     future.value = []
     clipboard.value = { nodes: [], edges: [] }
+    lastSnapshotJson = ''
   }
 
   return {
@@ -162,8 +169,4 @@ export function useCanvasHistory(options: CanvasHistoryOptions) {
     resetHistory,
     undo,
   }
-}
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
 }

@@ -35,11 +35,14 @@
       <ElRow :gutter="16">
         <ElCol :xs="24" :md="24" :xl="10"
           ><ElFormItem label="服务地址"
-            ><ElInput
-              v-model.trim="dailyHot.endpoint"
-              placeholder="http://dailyhot:6688" />
-              <small class="help">需要单独部署 DailyHotApi；Docker 内可使用服务名，跨服务器请填写可访问地址。<a href="https://github.com/imsyy/DailyHotApi" target="_blank" rel="noreferrer">部署说明<ArtSvgIcon icon="ri:external-link-line" /></a></small>
-            </ElFormItem
+            ><ElInput v-model.trim="dailyHot.endpoint" placeholder="http://dailyhot:6688" />
+            <small class="help"
+              >需要单独部署 DailyHotApi；Docker 内可使用服务名，跨服务器请填写可访问地址。<a
+                href="https://github.com/imsyy/DailyHotApi"
+                target="_blank"
+                rel="noreferrer"
+                >部署说明<ArtSvgIcon icon="ri:external-link-line" /></a
+            ></small> </ElFormItem
         ></ElCol>
         <ElCol :xs="24" :md="8" :xl="4"
           ><ElFormItem label="推荐数量"
@@ -59,7 +62,9 @@
         ></ElCol>
         <ElCol :xs="12" :md="4" :xl="4"
           ><ElFormItem label="首页推荐"
-            ><ElSwitch v-model="dailyHot.recommendationEnabled" aria-label="启用首页推荐" /></ElFormItem
+            ><ElSwitch
+              v-model="dailyHot.recommendationEnabled"
+              aria-label="启用首页推荐" /></ElFormItem
         ></ElCol>
         <ElCol :xs="12" :md="4" :xl="2"
           ><ElFormItem label="缓存"
@@ -150,7 +155,9 @@
         ></ElCol>
         <ElCol :xs="12" :md="4" :xl="4"
           ><ElFormItem label="首页推荐"
-            ><ElSwitch v-model="tgmeng.recommendationEnabled" aria-label="启用首页推荐" /></ElFormItem
+            ><ElSwitch
+              v-model="tgmeng.recommendationEnabled"
+              aria-label="启用首页推荐" /></ElFormItem
         ></ElCol>
         <ElCol :xs="12" :md="4" :xl="4"
           ><ElFormItem label="搜索保底"
@@ -231,7 +238,12 @@
         >
         <ElTableColumn label="操作" width="190" fixed="right"
           ><template #default="{ row }"
-            ><ElButton link type="primary" :loading="checking === row.id" :disabled="!row.endpoint || (row.type !== 'SEARXNG' && !row.hasApiKey)" @click="check(row)"
+            ><ElButton
+              link
+              type="primary"
+              :loading="checking === row.id"
+              :disabled="!row.endpoint || (row.type !== 'SEARXNG' && !row.hasApiKey)"
+              @click="check(row)"
               >检测</ElButton
             ><ElButton link @click="openEditor(row)">编辑</ElButton
             ><ElButton link type="danger" @click="remove(row)">删除</ElButton></template
@@ -262,7 +274,16 @@
         ></ElRow>
         <ElFormItem label="接口地址"
           ><ElInput v-model.trim="form.endpoint" placeholder="https://..." />
-          <small class="help"><span>{{ providerHelp[form.type] }}</span><a v-if="providerDocs[form.type]" :href="providerDocs[form.type]" target="_blank" rel="noreferrer">{{ form.type === 'SEARXNG' ? '部署说明' : '官方文档' }}<ArtSvgIcon icon="ri:external-link-line" /></a></small>
+          <small class="help"
+            ><span>{{ providerHelp[form.type] }}</span
+            ><a
+              v-if="providerDocs[form.type]"
+              :href="providerDocs[form.type]"
+              target="_blank"
+              rel="noreferrer"
+              >{{ form.type === 'SEARXNG' ? '部署说明' : '官方文档'
+              }}<ArtSvgIcon icon="ri:external-link-line" /></a
+          ></small>
         </ElFormItem>
         <ElFormItem label="API 密钥"
           ><ElInput
@@ -331,6 +352,7 @@
 <script setup lang="ts">
   import { ElMessage, ElMessageBox } from 'element-plus'
   import { webSearchApi } from '@/api/xinyue/web-search'
+  import { useXinyueAsync } from '@/hooks'
   defineOptions({ name: 'XinyueWebSearchChannels' })
   type Row = Record<string, any>
   const defaults: Record<string, string> = {
@@ -381,8 +403,7 @@
     configText: '{}'
   })
   const rows = ref<Row[]>([]),
-    loading = ref(false),
-    saving = ref(false),
+    { loading, saving, withLoading, withSaving } = useXinyueAsync(),
     dialog = ref(false),
     checking = ref(''),
     checkingAll = ref(false),
@@ -435,8 +456,7 @@
         : 'info'
   }
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       const [channels, tgmengSettings, dailyHotSettings] = await Promise.all([
         webSearchApi.channels(),
         webSearchApi.tgmeng(),
@@ -446,9 +466,7 @@
       Object.assign(tgmeng, tgmengSettings)
       Object.assign(dailyHot, dailyHotSettings)
       tgmengLicense.value = ''
-    } finally {
-      loading.value = false
-    }
+    })
   }
   async function saveDailyHot() {
     if (!dailyHot.endpoint?.trim()) return ElMessage.warning('请填写 DailyHot 服务地址')
@@ -542,8 +560,7 @@
     } catch {
       return ElMessage.warning('高级配置不是有效 JSON')
     }
-    saving.value = true
-    try {
+    await withSaving(async () => {
       const body = {
         name: form.name,
         type: form.type,
@@ -559,9 +576,7 @@
       await webSearchApi.saveChannel(body, form.id || undefined)
       dialog.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function check(row: Row) {
     checking.value = row.id

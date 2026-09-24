@@ -50,13 +50,6 @@ export class ComponentLoader {
   }
 
   /**
-   * 加载 iframe 组件
-   */
-  loadIframe(): () => Promise<any> {
-    return () => import('@/views/outside/Iframe.vue')
-  }
-
-  /**
    * 创建空组件
    */
   private createEmptyComponent(): () => Promise<any> {

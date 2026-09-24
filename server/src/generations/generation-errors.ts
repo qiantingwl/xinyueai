@@ -16,6 +16,9 @@ export function publicGenerationError(kind: JobKind, status: JobStatus, errorMes
   if (/timeout|timed out|504|等待超时/.test(message)) {
     return `${subject}等待超时，请稍后重试。`
   }
+  if (/非公网|dns 解析失败|eacces/.test(message)) {
+    return `${subject}结果下载失败，请稍后重试。`
+  }
   if (/no eligible|503|service unavailable|overload|capacity|暂时不可用|暂无可用/.test(message)) {
     return `${subject}服务暂时繁忙，请稍后重试或切换模型。`
   }

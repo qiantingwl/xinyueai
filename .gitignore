@@ -76,3 +76,14 @@ TEST*.md
 /UPLOADS_PERMISSION_REPORT.md
 /security-final-report.md
 /docs/archive/*_2026-08-30.md
+
+# 本地开发日志与工具目录
+devlogs/
+.claude/
+.zcode/
+api-stdout.log
+api-stderr.log
+web-dev.log
+web-dev.err.log
+admin-vite.log
+admin-dev.err.log

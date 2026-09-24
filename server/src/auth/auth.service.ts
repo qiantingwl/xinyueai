@@ -12,6 +12,8 @@ import { PublicEndpointPolicyService } from '../common/public-endpoint-policy.se
 import { fetchPublicNoRedirect } from '../common/outbound-http'
 
 const hash = (value: string, secret: string) => createHash('sha256').update(`${secret}:${value}`).digest('hex')
+export const ADMIN_LOGIN_FAILED = 'admin.login.failed'
+export const ADMIN_LOGIN_SUCCEEDED = 'admin.login.succeeded'
 type LoginMeta = { ip?: string; userAgent?: string }
 type SessionResult = { user: { id: string; email: string | null; username: string | null; displayName: string; role: string }; token: string; expiresAt: Date }
 type ExternalLoginResult = SessionResult | { bindingRequired: true; provider: string; ticket: string; displayName?: string; email?: string }
@@ -25,6 +27,13 @@ function jsonInput(value: ExternalProfile | null | undefined) {
 @Injectable()
 export class AuthService {
   constructor(private readonly prisma: PrismaService, private readonly config: ConfigService, private readonly emailService: EmailService, private readonly crypto: CredentialCryptoService, private readonly referrals: ReferralService, private readonly endpointPolicy: PublicEndpointPolicyService) {}
+
+  /** Echoing the OTP back to the caller is a development convenience only, so it must be opted into
+   *  explicitly and can never be reached outside `NODE_ENV=development`. */
+  private shouldExposeDevCode() {
+    if (this.config.get<string>('NODE_ENV') !== 'development') return false
+    return String(this.config.get<string>('DEV_OTP_EXPOSE') ?? '').trim().toLowerCase() === 'true'
+  }
 
   async isSetupRequired() {
     const admins = await this.prisma.user.findMany({ where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } }, select: { email: true } })
@@ -60,7 +69,7 @@ export class AuthService {
     const domain = email.split('@')[1] || ''
     if (!existingUser && settings.allowedEmailDomains.length && !settings.allowedEmailDomains.some((item) => item.toLowerCase().replace(/^@/, '') === domain)) throw new BadRequestException('该邮箱域名不在注册白名单中')
     const { code, ttl } = await this.issueOtpCode(email, settings.otpTtlMinutes)
-    return { sent: true, exists: Boolean(existingUser), registrationRequired: !existingUser, expiresIn: ttl * 60, ...(this.config.get('NODE_ENV') === 'development' ? { developmentCode: code } : {}) }
+    return { sent: true, exists: Boolean(existingUser), registrationRequired: !existingUser, expiresIn: ttl * 60, ...(this.shouldExposeDevCode() ? { developmentCode: code } : {}) }
   }
 
   async registerWithPassword(input: { username: string; email?: string; password: string; displayName?: string; inviteCode?: string }, meta: { ip?: string; userAgent?: string }) {
@@ -184,7 +193,7 @@ export class AuthService {
     if (existingUser && existingUser.status !== 'ACTIVE') throw new UnauthorizedException('账号当前不可用')
     if (!existingUser && settings.allowedEmailDomains.length && !settings.allowedEmailDomains.some((item) => item.toLowerCase().replace(/^@/, '') === (email.split('@')[1] || ''))) throw new BadRequestException('该邮箱域名不在注册白名单中')
     const { code, ttl } = await this.issueOtpCode(email, settings.otpTtlMinutes)
-    return { sent: true, provider: ticket.provider, exists: Boolean(existingUser), expiresIn: ttl * 60, ...(this.config.get('NODE_ENV') === 'development' ? { developmentCode: code } : {}) }
+    return { sent: true, provider: ticket.provider, exists: Boolean(existingUser), expiresIn: ttl * 60, ...(this.shouldExposeDevCode() ? { developmentCode: code } : {}) }
   }
 
   async completeExternalBind(input: { ticket: string; email: string; code: string; username?: string; displayName?: string; password?: string }, meta: LoginMeta) {
@@ -298,9 +307,63 @@ export class AuthService {
     if (!user?.passwordHash || !['ADMIN', 'SUPER_ADMIN'].includes(user.role) || user.status !== 'ACTIVE') {
       throw new UnauthorizedException('管理员账号或密码错误')
     }
-    if (!await verifyPassword(password, user.passwordHash)) throw new UnauthorizedException('管理员账号或密码错误')
+    // IP throttling alone lets a distributed attacker keep guessing one account, so the account
+    // itself carries a failure budget as well.
+    await this.assertAdminLoginAllowed(user.id)
+    if (!await verifyPassword(password, user.passwordHash)) {
+      await this.recordAdminLoginAttempt(user.id, ADMIN_LOGIN_FAILED, meta)
+      throw new UnauthorizedException('管理员账号或密码错误')
+    }
+    await this.recordAdminLoginAttempt(user.id, ADMIN_LOGIN_SUCCEEDED, meta)
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
     return this.createSession(user, meta, 'admin-password')
+  }
+
+  private adminLoginPolicy() {
+    const clamp = (key: string, fallback: number, min: number, max: number) => {
+      const parsed = Number(this.config.get(key, fallback))
+      return Math.max(min, Math.min(max, Number.isFinite(parsed) && parsed > 0 ? parsed : fallback))
+    }
+    const baseLockSeconds = clamp('ADMIN_LOGIN_LOCK_SECONDS', 60, 5, 3_600)
+    return {
+      maxFailures: clamp('ADMIN_LOGIN_MAX_FAILURES', 5, 3, 50),
+      windowMs: clamp('ADMIN_LOGIN_FAILURE_WINDOW_MINUTES', 15, 1, 1_440) * 60_000,
+      baseLockSeconds,
+      maxLockSeconds: Math.max(baseLockSeconds, clamp('ADMIN_LOGIN_MAX_LOCK_SECONDS', 900, 5, 86_400)),
+    }
+  }
+
+  /** Counts failures since the later of the sliding window start and the last successful login, so
+   *  a genuine sign-in resets the budget without erasing audit history. */
+  private async adminLoginFailures(userId: string, windowMs: number, limit: number) {
+    const windowStart = new Date(Date.now() - windowMs)
+    const lastSuccess = await this.prisma.auditLog.findFirst({
+      where: { actorId: userId, action: ADMIN_LOGIN_SUCCEEDED, createdAt: { gte: windowStart } },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    })
+    const since = lastSuccess ? lastSuccess.createdAt : windowStart
+    const failures = await this.prisma.auditLog.findMany({
+      where: { actorId: userId, action: ADMIN_LOGIN_FAILED, createdAt: { gt: since } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: { createdAt: true },
+    })
+    return { count: failures.length, lastFailureAt: failures[0]?.createdAt ?? null }
+  }
+
+  private async assertAdminLoginAllowed(userId: string) {
+    const policy = this.adminLoginPolicy()
+    const { count, lastFailureAt } = await this.adminLoginFailures(userId, policy.windowMs, policy.maxFailures + 16)
+    if (count < policy.maxFailures || !lastFailureAt) return
+    const lockSeconds = Math.min(policy.maxLockSeconds, policy.baseLockSeconds * 2 ** (count - policy.maxFailures))
+    const retryAfterMs = lastFailureAt.getTime() + lockSeconds * 1_000 - Date.now()
+    if (retryAfterMs <= 0) return
+    throw new HttpException(`管理员账号已因连续登录失败被临时锁定，请在 ${Math.ceil(retryAfterMs / 1_000)} 秒后重试`, HttpStatus.TOO_MANY_REQUESTS)
+  }
+
+  private recordAdminLoginAttempt(userId: string, action: string, meta: LoginMeta) {
+    return this.prisma.auditLog.create({ data: { actorId: userId, action, targetType: 'admin_security', targetId: userId, ipAddress: meta.ip, userAgent: meta.userAgent } })
   }
 
   async peekSession(token?: string) {
@@ -379,6 +442,7 @@ export class AuthService {
       chatHistoryEnabled: settings.defaultChatHistoryEnabled,
       trainingOptOut: settings.defaultTrainingOptOut,
       shareUsageAnalytics: settings.defaultShareUsageAnalytics,
+      onboarded: false,
     }
   }
 

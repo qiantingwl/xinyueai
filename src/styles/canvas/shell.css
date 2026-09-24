@@ -165,6 +165,9 @@
   .canvas-editor-page:not(.is-inspector-open) .canvas-tool-dock,
   .canvas-editor-page:not(.is-inspector-open) .canvas-navigation-dock { bottom: calc(44vh + 12px); }
   .canvas-editor-page:not(.is-inspector-open) .canvas-selection-actions { bottom: calc(44vh + 66px); }
+  .canvas-editor-page:not(.is-sidebar-open) .canvas-tool-dock { bottom: 12px; }
+  .canvas-editor-page:not(.is-sidebar-open) .canvas-navigation-dock { bottom: 74px; }
+  .canvas-editor-page:not(.is-sidebar-open) .canvas-selection-actions { bottom: 128px; }
   .canvas-editor-header-actions .canvas-icon-button:nth-child(4),
   .canvas-editor-header-actions .canvas-icon-button:nth-child(5) { display: none; }
   .canvas-title-input { width: 112px; }

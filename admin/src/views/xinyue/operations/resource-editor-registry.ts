@@ -408,6 +408,7 @@ export const operationEditorConfigs: Record<string, ResourceEditorConfig> = {
       categoryId: '',
       status: 'DRAFT',
       featured: false,
+      preinstalled: false,
       priceCredits: 0,
       sortOrder: 0
     },
@@ -491,7 +492,13 @@ export const operationEditorConfigs: Record<string, ResourceEditorConfig> = {
           { label: '已停用', value: 'DISABLED' }
         ]
       },
-      { key: 'featured', label: '精选推荐', type: 'switch', span: 12 }
+      { key: 'featured', label: '精选推荐', type: 'switch', span: 12 },
+      {
+        key: 'preinstalled',
+        label: '默认启用（免费技能用户无需安装）',
+        type: 'switch',
+        span: 12
+      }
     ]
   },
   pluginCategories: {
@@ -557,8 +564,22 @@ export const operationEditorConfigs: Record<string, ResourceEditorConfig> = {
         allowCreate: true,
         help: '留空时跟随平台当前默认聊天模型；只有确实需要固定模型时才指定。'
       },
-      { key: 'description', label: '简介', type: 'textarea', rows: 2, maxlength: 2000, help: '展示给用户的能力说明，建议写清适用任务和边界。' },
-      { key: 'systemPrompt', label: '系统指令', type: 'textarea', rows: 8, maxlength: 30000, help: '定义角色、工作步骤、事实约束和输出格式；不要在这里填写 API Key 或个人数据。' },
+      {
+        key: 'description',
+        label: '简介',
+        type: 'textarea',
+        rows: 2,
+        maxlength: 2000,
+        help: '展示给用户的能力说明，建议写清适用任务和边界。'
+      },
+      {
+        key: 'systemPrompt',
+        label: '系统指令',
+        type: 'textarea',
+        rows: 8,
+        maxlength: 30000,
+        help: '定义角色、工作步骤、事实约束和输出格式；不要在这里填写 API Key 或个人数据。'
+      },
       {
         key: 'templateIds',
         label: '提示词模板',
@@ -621,7 +642,14 @@ export const operationEditorConfigs: Record<string, ResourceEditorConfig> = {
     fields: [
       { key: 'key', label: '工具标识', required: true, span: 12, maxlength: 80 },
       { key: 'name', label: '工具名称', required: true, span: 12, maxlength: 100 },
-      { key: 'description', label: '说明', type: 'textarea', rows: 3, maxlength: 2000, help: '预设中标记“需部署/配置”的工具默认关闭，完成配置和检测后再启用。' },
+      {
+        key: 'description',
+        label: '说明',
+        type: 'textarea',
+        rows: 3,
+        maxlength: 2000,
+        help: '预设中标记“需部署/配置”的工具默认关闭，完成配置和检测后再启用。'
+      },
       { key: 'icon', label: '图标地址 / 内置标识', span: 12, maxlength: 80 },
       {
         key: 'kind',
@@ -655,7 +683,13 @@ export const operationEditorConfigs: Record<string, ResourceEditorConfig> = {
         placeholder: '[{"key":"apiKey","label":"API Key","type":"password","required":true}]',
         when: { key: 'authType', value: 'API_KEY' }
       },
-      { key: 'endpoint', label: '调用地址', placeholder: 'https://...', maxlength: 500, help: '必须是服务器可访问的公网 HTTP(S) 地址；localhost、内网 IP 和云元数据地址会被拒绝。' },
+      {
+        key: 'endpoint',
+        label: '调用地址',
+        placeholder: 'https://...',
+        maxlength: 500,
+        help: '必须是服务器可访问的公网 HTTP(S) 地址；localhost、内网 IP 和云元数据地址会被拒绝。'
+      },
       {
         key: 'httpMethod',
         label: '请求方法',
@@ -704,8 +738,20 @@ export const operationEditorConfigs: Record<string, ResourceEditorConfig> = {
         filterable: true,
         allowCreate: true
       },
-      { key: 'requiresApproval', label: '调用前审批', type: 'switch', span: 12, help: '涉及外部写入、通知、支付或业务工作流时建议保持开启。' },
-      { key: 'enabled', label: '启用', type: 'switch', span: 12, help: '第三方工具应在 Endpoint、鉴权、参数 Schema 和审批策略全部验证后启用。' }
+      {
+        key: 'requiresApproval',
+        label: '调用前审批',
+        type: 'switch',
+        span: 12,
+        help: '涉及外部写入、通知、支付或业务工作流时建议保持开启。'
+      },
+      {
+        key: 'enabled',
+        label: '启用',
+        type: 'switch',
+        span: 12,
+        help: '第三方工具应在 Endpoint、鉴权、参数 Schema 和审批策略全部验证后启用。'
+      }
     ]
   },
   externalLinks: {

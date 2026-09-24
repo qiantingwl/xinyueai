@@ -20,7 +20,6 @@ const optionalUrl = z.preprocess((value) => {
 }, z.string().url().optional())
 
 const optInBoolean = z.preprocess((value) => isOptInEnabled(value), z.boolean())
-
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3100),
@@ -37,7 +36,15 @@ const schema = z.object({
   OTP_TTL_MINUTES: z.coerce.number().int().positive().default(10),
   GLOBAL_RATE_LIMIT: z.coerce.number().int().positive().default(600),
   ADMIN_LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(30),
+  ADMIN_LOGIN_MAX_FAILURES: z.coerce.number().int().min(3).max(50).default(5),
+  ADMIN_LOGIN_FAILURE_WINDOW_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
+  ADMIN_LOGIN_LOCK_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
+  ADMIN_LOGIN_MAX_LOCK_SECONDS: z.coerce.number().int().min(5).max(86_400).default(900),
+  DEV_OTP_EXPOSE: optInBoolean,
   UPLOAD_DIR: z.string().default('uploads'),
+  STORAGE_MAX_READ_MB: z.coerce.number().int().min(1).max(512).default(64),
+  EXPORT_MAX_MB: z.coerce.number().int().min(1).max(4096).default(512),
+  EXPORT_MAX_ROWS_PER_COLLECTION: z.coerce.number().int().min(1_000).max(5_000_000).default(100_000),
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   S3_ENDPOINT: optionalUrl,
   S3_REGION: z.string().default('auto'),

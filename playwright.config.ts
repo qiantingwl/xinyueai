@@ -23,6 +23,7 @@ const webServers = [
 
 export default defineConfig({
   testDir: './tests/e2e',
+  globalTeardown: './tests/e2e/global-teardown.ts',
   outputDir: './test-results/artifacts',
   timeout: 45_000,
   expect: { timeout: 8_000 },

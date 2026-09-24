@@ -27,22 +27,19 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Check, Copy, Download, X } from 'lucide-vue-next'
 import type { CodeArtifact } from '../types'
 import { artifactDocument, artifactExtension, highlightCode, languageLabel, normalizedLanguage } from '../utils/code-artifacts'
+import { useCopyFeedback } from '../composables/useCopyFeedback'
 
 const props = defineProps<{ artifact: CodeArtifact }>()
 const emit = defineEmits<{ close: [] }>()
 const tab = ref<'preview' | 'code'>('preview')
-const copied = ref(false)
+const { copied, copy } = useCopyFeedback()
 const highlighted = computed(() => highlightCode(props.artifact.code, props.artifact.language))
 const documentContent = computed(() => artifactDocument(props.artifact.code, props.artifact.language))
 const lineCount = computed(() => props.artifact.code.split(/\r?\n/).length)
 
 watch(() => props.artifact.code, () => { tab.value = 'preview' })
 
-async function copyCode() {
-  await navigator.clipboard.writeText(props.artifact.code)
-  copied.value = true
-  window.setTimeout(() => { copied.value = false }, 1600)
-}
+const copyCode = () => copy(props.artifact.code)
 
 function downloadCode() {
   const extension = artifactExtension(props.artifact.language)

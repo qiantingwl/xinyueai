@@ -13,7 +13,6 @@ const CanvasLibraryPage = () => import('./views/CanvasLibraryPage.vue')
 const CanvasEditorPage = () => import('./views/CanvasEditorPage.vue')
 const ImagePromptPage = () => import('./views/ImagePromptPage.vue')
 const WorkspaceLayout = () => import('./components/WorkspaceLayout.vue')
-const ApiLandingPage = () => import('./views/ApiLandingPage.vue')
 const LegalPage = () => import('./views/LegalPage.vue')
 const SharedConversationPage = () => import('./views/SharedConversationPage.vue')
 const AdminRedirect = { render: () => null }
@@ -42,12 +41,25 @@ export const router = createRouter({
         { path: '', name: 'workspace', component: StudioPage, meta: { title: '工作空间' } },
       ],
     },
-    { path: '/api', name: 'api', component: ApiLandingPage, meta: { title: 'API' } },
     { path: '/about', name: 'about', component: LegalPage, meta: { title: '关于我们' } },
     { path: '/copyright', name: 'copyright', component: LegalPage, meta: { title: '版权说明' } },
     { path: '/privacy', name: 'privacy', component: LegalPage, meta: { title: '隐私政策' } },
     { path: '/terms', name: 'terms', component: LegalPage, meta: { title: '用户协议' } },
     { path: '/share/:token', name: 'shared-conversation', component: SharedConversationPage, meta: { title: '共享对话' } },
+    { path: '/plugins', redirect: '/capabilities' },
+    { path: '/agents', redirect: '/office' },
+    { path: '/projects', redirect: '/workspace?tab=projects' },
+    { path: '/files', redirect: '/workspace?tab=files' },
+    {
+      path: '/studio/:mode?',
+      redirect: (to) => {
+        const mode = String(to.params.mode || '')
+        if (mode === 'images' || mode === 'image') return '/image'
+        if (mode === 'videos' || mode === 'video') return '/video'
+        if (mode === 'commerce') return '/commerce'
+        return '/chat'
+      },
+    },
     {
       path: '/admin/:pathMatch(.*)*',
       component: AdminRedirect,

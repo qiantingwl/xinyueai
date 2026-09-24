@@ -53,6 +53,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { Image as ImageIcon, LoaderCircle, Music2, Play, Search, Upload, Video, X } from 'lucide-vue-next'
 import { api } from '../services/api'
+import { uploadAsset } from '../utils/asset-upload'
+import { formatFileSize } from '../utils/format-bytes'
+import { formatShortDay as formatDate } from '../utils/datetime'
+import { useEscapeClose } from '../composables/useEscapeClose'
 
 export type CanvasMediaKind = 'IMAGE' | 'VIDEO' | 'AUDIO'
 
@@ -68,6 +72,7 @@ export interface CanvasMediaAsset {
 
 const props = defineProps<{ kind: CanvasMediaKind; projectId?: string }>()
 const emit = defineEmits<{ close: []; select: [asset: CanvasMediaAsset] }>()
+useEscapeClose(() => emit('close'))
 const assets = ref<CanvasMediaAsset[]>([])
 const loading = ref(true)
 const uploading = ref(false)
@@ -101,17 +106,12 @@ async function uploadFile(event: Event) {
   uploading.value = true
   error.value = ''
   try {
-    const form = new FormData()
-    form.append('file', file)
-    const params = new URLSearchParams({ kind: assetKind.value, purpose: 'library' })
-    if (props.projectId) params.set('projectId', props.projectId)
-    const asset = await api<CanvasMediaAsset>(`/assets/uploads?${params}`, { method: 'POST', body: form })
+    const asset = await uploadAsset<CanvasMediaAsset>(file, { kind: assetKind.value, purpose: 'library', projectId: props.projectId })
     emit('select', asset)
   } catch (reason) { error.value = reason instanceof Error ? reason.message : '上传失败' }
   finally { uploading.value = false; input.value = '' }
 }
 
 function choose(asset: CanvasMediaAsset) { emit('select', asset) }
-function formatSize(value: number) { return value >= 1024 * 1024 ? `${(value / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.ceil(value / 1024))} KB` }
-function formatDate(value: string) { return new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(new Date(value)) }
+function formatSize(value: number) { return formatFileSize(value) }
 </script>

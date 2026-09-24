@@ -19,6 +19,7 @@ test('cookie-authenticated mutations require the request marker or an allowed or
   assert.equal(cookieMutationAllowed({ method: 'GET', hasSessionCookie: true }, origins), true)
   assert.equal(cookieMutationAllowed({ method: 'POST', hasSessionCookie: false }, origins), true)
   assert.equal(cookieMutationAllowed({ method: 'POST', hasSessionCookie: true, requestMarker: '1' }, origins), true)
+  assert.equal(cookieMutationAllowed({ method: 'POST', hasSessionCookie: true, requestMarker: '1', origin: 'https://evil.example' }, origins), false)
   assert.equal(cookieMutationAllowed({ method: 'DELETE', hasSessionCookie: true, origin: 'https://app.example.com' }, origins), true)
   assert.equal(cookieMutationAllowed({ method: 'PATCH', hasSessionCookie: true, origin: 'https://evil.example' }, origins), false)
   assert.equal(cookieMutationAllowed({ method: 'POST', hasSessionCookie: true }, origins), false)

@@ -30,9 +30,12 @@
   --studio-line: #262626;
   --studio-border: #292929;
 
-  /* 文本 */
+  /* 文本：主色（标题/加粗） > 次级（正文） > 弱化 > 最淡 */
   --studio-text: #f7f7f7;
+  --studio-text-secondary: #d0d0d0;
   --studio-muted: #a7a7a7;
+  --studio-faint: #6b6b6b;
+  --studio-link: var(--studio-brand);
 
   /* 反馈色 */
   --studio-danger: #ff9c9c;
@@ -44,6 +47,7 @@
 
   /* 焦点/强调别名 */
   --studio-focus: var(--studio-brand);
+  --studio-accent-warm: #f59e0b;
 
   /* 圆角阶梯：控件 / 卡片 / 气泡 / 胶囊 */
   --studio-radius-xs: 6px;
@@ -82,6 +86,9 @@
   --studio-z-overlay: 60;
   --studio-z-modal: 70;
   --studio-z-toast: 80;
+  /* 输入框浮层（创作更多面板/插件选择器）：高于全部模态与移动端层级，彼此相差一级 */
+  --studio-z-floating: 1400;
+  --studio-z-floating-top: 1401;
 
   /* 动效 */
   --studio-duration-fast: 120ms;
@@ -90,9 +97,9 @@
   --studio-ease: cubic-bezier(.32, .72, 0, 1);
   --studio-ease-spring: cubic-bezier(.34, 1.4, .44, 1);
 
-  /* 聊天内容宽度（Kimi 等阅读向 preset 覆盖为 wide） */
-  --studio-chat-width: 760px;
-  --studio-chat-width-wide: 880px;
+  /* 聊天内容宽度：随主栏变宽，避免大屏两侧空、中间一列显得过小 */
+  --studio-chat-width: 960px;
+  --studio-chat-width-wide: 1080px;
 
   /* 品牌光晕（首页问候、强调背景） */
   --studio-brand-glow: radial-gradient(closest-side, rgba(77, 107, 254, .24), transparent);
@@ -109,6 +116,11 @@
   --studio-vendor-qwen: #615ced;
   --studio-vendor-doubao: #7b61ff;
   --studio-vendor-kimi: #f2f2f2;
+  --studio-vendor-zhipu: #3859ff;
+  --studio-vendor-minimax: #e2167e;
+  --studio-vendor-hunyuan: #0055e9;
+  --studio-vendor-stepfun: #0160ff;
+  --studio-vendor-longcat: #29e154;
   --studio-vendor-default: #8a8a8a;
 }
 
@@ -134,13 +146,18 @@ html[data-studio-theme="light"] {
   --studio-border: #dedede;
 
   --studio-text: #171717;
+  --studio-text-secondary: #3f3f46;
   --studio-muted: #646464;
+  --studio-faint: #9a9aa2;
+  --studio-link: var(--studio-brand);
 
   --studio-danger: #b42318;
   --studio-success: #247a52;
 
   --studio-inverse-bg: #18181b;
   --studio-inverse-text: #fff;
+
+  --studio-accent-warm: #d97706;
 
   --studio-shadow-sm: 0 2px 10px rgba(24, 24, 27, .08);
   --studio-shadow: 0 18px 48px rgba(24, 24, 27, .16);
@@ -153,4 +170,110 @@ html[data-studio-theme="light"] {
 
   --studio-vendor-kimi: #171717;
   --studio-vendor-default: #6b6b6b;
+}
+
+/*
+ * 季星首页令牌（chatUiPreset = jixing）：清新明亮、品牌蓝、大圆角卡片。
+ * 作用域为聊天首页根节点 .chat-ui--jixing（对话态回落 doubao，不带该类），
+ * 与明暗主题正交——浅色与深色各一套令牌，均只覆盖变量，不改组件。
+ */
+html[data-studio-theme="light"] .chat-ui--jixing {
+  color-scheme: light;
+  accent-color: #2e6bff;
+
+  --studio-brand: #2f6bff;
+  --studio-brand-hover: #1f5bf0;
+  --studio-brand-pressed: #1a4fd6;
+  --studio-brand-soft: rgba(47, 107, 255, .1);
+  --studio-brand-soft-strong: rgba(47, 107, 255, .18);
+
+  --studio-bg: #f6f7fb;
+  --studio-panel: #fff;
+  --studio-panel-soft: #f7f9fd;
+  --studio-elevated: #fff;
+  --studio-input: #f3f6fb;
+  --studio-control: #f1f4f9;
+  --studio-control-hover: #e5eaf3;
+  --studio-overlay: rgba(15, 23, 42, .45);
+
+  --studio-line: #e5e7ef;
+  --studio-border: #e5e7ef;
+
+  --studio-text: #101828;
+  --studio-text-secondary: #344054;
+  --studio-muted: #667085;
+  --studio-faint: #98a2b3;
+  --studio-link: var(--studio-brand);
+
+  --studio-danger: #d92d20;
+  --studio-success: #12805c;
+
+  --studio-inverse-bg: #182233;
+  --studio-inverse-text: #fff;
+
+  --studio-radius-xs: 8px;
+  --studio-radius-sm: 10px;
+  --studio-radius-md: 14px;
+  --studio-radius-lg: 20px;
+
+  --studio-shadow-sm: 0 2px 10px rgba(16, 42, 100, .06);
+  --studio-shadow: 0 16px 48px rgba(16, 42, 100, .1);
+  --studio-shadow-lg: 0 24px 64px rgba(16, 42, 100, .14);
+
+  --studio-brand-glow: radial-gradient(closest-side, rgba(46, 107, 255, .14), transparent);
+
+  --studio-bubble-user: #eaf1fe;
+  --studio-bubble-user-text: var(--studio-text);
+
+  --studio-vendor-kimi: #171717;
+  --studio-vendor-default: #6b6b6b;
+}
+
+html:not([data-studio-theme="light"]) .chat-ui--jixing {
+  --studio-brand: #2e6bff;
+  --studio-brand-hover: #4d84ff;
+  --studio-brand-pressed: #1f5bf0;
+  --studio-brand-soft: rgba(46, 107, 255, .18);
+  --studio-brand-soft-strong: rgba(46, 107, 255, .28);
+
+  --studio-bg: #0c1220;
+  --studio-panel: #111a2c;
+  --studio-panel-soft: #16203a;
+  --studio-elevated: #1c2942;
+  --studio-input: #151f36;
+  --studio-control: #22304e;
+  --studio-control-hover: #2a3a5e;
+  --studio-overlay: rgba(4, 8, 18, .62);
+
+  --studio-line: #233252;
+  --studio-border: #263655;
+
+  --studio-text: #eef2fb;
+  --studio-text-secondary: #c4cee4;
+  --studio-muted: #93a1bd;
+  --studio-faint: #5f6f92;
+  --studio-link: var(--studio-brand);
+
+  --studio-danger: #ff9c9c;
+  --studio-success: #84d4a1;
+
+  --studio-inverse-bg: #f4f7ff;
+  --studio-inverse-text: #101828;
+
+  --studio-radius-xs: 8px;
+  --studio-radius-sm: 10px;
+  --studio-radius-md: 14px;
+  --studio-radius-lg: 22px;
+
+  --studio-shadow-sm: 0 4px 16px rgba(2, 6, 16, .4);
+  --studio-shadow: 0 24px 80px rgba(2, 6, 16, .55);
+  --studio-shadow-lg: 0 32px 96px rgba(2, 6, 16, .6);
+
+  --studio-brand-glow: radial-gradient(closest-side, rgba(46, 107, 255, .22), transparent);
+
+  --studio-bubble-user: #22304e;
+  --studio-bubble-user-text: var(--studio-text);
+
+  --studio-vendor-kimi: #f2f2f2;
+  --studio-vendor-default: #8a8a8a;
 }

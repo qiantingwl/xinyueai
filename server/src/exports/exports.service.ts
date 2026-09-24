@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { ExportJobStatus } from '@prisma/client'
 import { InjectQueue } from '@nestjs/bullmq'
 import { Queue } from 'bullmq'
@@ -16,12 +16,14 @@ export class ExportsService {
       if (!teamId) throw new BadRequestException('团队导出必须提供 teamId')
       const member = await this.prisma.teamMember.findUnique({ where: { teamId_userId: { teamId, userId } }, include: { team: { select: { id: true, name: true, slug: true, status: true } } } })
       if (!member || member.team.status !== 'ACTIVE') throw new BadRequestException('你不是该团队成员')
+      if (!['OWNER', 'ADMIN'].includes(member.role)) throw new ForbiddenException('只有团队所有者或管理员可以导出团队数据')
     }
     const job = await this.prisma.exportJob.create({ data: { userId, scope, teamId: scope === 'TEAM' ? teamId : null, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } })
     try {
       await this.queue.add('export', { exportId: job.id }, { jobId: job.id, attempts: 2, backoff: { type: 'exponential', delay: 2_000 }, removeOnComplete: 1000, removeOnFail: 5000 })
     } catch (error) {
-      await this.prisma.exportJob.update({ where: { id: job.id }, data: { status: ExportJobStatus.FAILED, error: error instanceof Error ? error.message : '导出任务入队失败', completedAt: new Date() } })
+      // Queue failures carry broker hosts and credentials; keep them out of the user-visible record.
+      await this.prisma.exportJob.update({ where: { id: job.id }, data: { status: ExportJobStatus.FAILED, error: '导出任务入队失败，请稍后重试', completedAt: new Date() } })
       throw error
     }
     return this.public(job)
@@ -54,10 +56,6 @@ export class ExportsService {
       throw new BadRequestException('导出文件不存在，请重新导出')
     }
     return row
-  }
-
-  async expire() {
-    return this.prisma.exportJob.updateMany({ where: { expiresAt: { lt: new Date() }, status: { in: [ExportJobStatus.QUEUED, ExportJobStatus.SUCCEEDED] } }, data: { status: ExportJobStatus.EXPIRED } })
   }
 
   private public(row: { id: string; scope: string; teamId: string | null; status: ExportJobStatus; fileName: string; error: string; expiresAt: Date; createdAt: Date; startedAt: Date | null; completedAt: Date | null }) {

@@ -2,7 +2,7 @@
   <div class="xinyue-page">
     <header class="page-title"
       ><div
-        ><h1>{{ xt('商业化中心') }}</h1
+        ><h1>{{ xt('充值与支付') }}</h1
         ><p>{{ xt('充值商品、支付渠道、交易订单和兑换码集中管理') }}</p></div
       ><ElButton :loading="loading" @click="load"
         ><ArtSvgIcon icon="ri:refresh-line" />{{ xt('刷新') }}</ElButton
@@ -21,9 +21,13 @@
             ><ElTableColumn :label="xt('商品')" min-width="220"
               ><template #default="{ row }"
                 ><strong>{{ row.name }}</strong
-                ><ElTag v-if="row.recommended" size="small" type="warning" class="inline-tag">{{
-                  xt('推荐')
-                }}</ElTag
+                ><ElTag
+                  v-if="row.recommended"
+                  size="small"
+                  type="primary"
+                  effect="dark"
+                  class="inline-tag"
+                  >{{ xt('推荐') }}</ElTag
                 ><small class="note">{{ row.description || xt('暂无商品说明') }}</small></template
               ></ElTableColumn
             ><ElTableColumn :label="xt('创作点')" width="120"
@@ -47,11 +51,21 @@
               ></ElTableColumn
             ><ElTableColumn :label="xt('操作')" width="140"
               ><template #default="{ row }"
-                ><ElButton link type="primary" @click="openPackage(row)">{{ xt('编辑') }}</ElButton
-                ><ElButton link type="danger" @click="removePackage(row)">{{
+                ><ElButton link type="primary" @click="openPackage(row as RechargePackage)">{{
+                  xt('编辑')
+                }}</ElButton
+                ><ElButton link type="danger" @click="removePackage(row as RechargePackage)">{{
                   xt('删除')
                 }}</ElButton></template
               ></ElTableColumn
+            ><template #empty
+              ><div class="table-empty"
+                ><ArtSvgIcon icon="ri:coin-line" class="table-empty-icon" />
+                <p class="table-empty-title">{{ xt('暂无充值商品') }}</p>
+                <p class="table-empty-desc">{{
+                  xt('点击右上角「新增商品」创建第一个充值档位')
+                }}</p></div
+              ></template
             ></ElTable
           ></ElCard
         >
@@ -118,9 +132,13 @@
               ></ElTableColumn
             ><ElTableColumn :label="xt('操作')" width="190"
               ><template #default="{ row }"
-                ><ElButton link type="primary" @click="checkChannel(row)">{{ xt('检测') }}</ElButton
-                ><ElButton link @click="openChannel(row)">{{ xt('编辑') }}</ElButton
-                ><ElButton link type="danger" @click="removeChannel(row)">{{
+                ><ElButton link type="primary" @click="checkChannel(row as PaymentChannel)">{{
+                  xt('检测')
+                }}</ElButton
+                ><ElButton link @click="openChannel(row as PaymentChannel)">{{
+                  xt('编辑')
+                }}</ElButton
+                ><ElButton link type="danger" @click="removeChannel(row as PaymentChannel)">{{
                   xt('删除')
                 }}</ElButton></template
               ></ElTableColumn
@@ -195,7 +213,7 @@
                   v-if="row.status === 'PAID'"
                   link
                   type="primary"
-                  @click="complete(row)"
+                  @click="complete(row as PaymentTransaction)"
                   >{{ xt('完成入账') }}</ElButton
                 ><span v-else class="note">{{ xt('无需处理') }}</span></template
               ></ElTableColumn
@@ -233,17 +251,17 @@
               }}</template></ElTableColumn
             ><ElTableColumn :label="xt('状态')" width="100"
               ><template #default="{ row }"
-                ><ElTag :type="codeEnabled(row) ? 'success' : 'info'">{{
-                  codeEnabled(row) ? xt('可使用') : xt('已停用')
+                ><ElTag :type="codeEnabled(row as RedemptionCode) ? 'success' : 'info'">{{
+                  codeEnabled(row as RedemptionCode) ? xt('可使用') : xt('已停用')
                 }}</ElTag></template
               ></ElTableColumn
             ><ElTableColumn :label="xt('操作')" width="100"
               ><template #default="{ row }"
                 ><ElButton
                   link
-                  :type="codeEnabled(row) ? 'danger' : 'primary'"
-                  @click="toggleCode(row)"
-                  >{{ codeEnabled(row) ? xt('停用') : xt('启用') }}</ElButton
+                  :type="codeEnabled(row as RedemptionCode) ? 'danger' : 'primary'"
+                  @click="toggleCode(row as RedemptionCode)"
+                  >{{ codeEnabled(row as RedemptionCode) ? xt('停用') : xt('启用') }}</ElButton
                 ></template
               ></ElTableColumn
             ></ElTable
@@ -442,7 +460,9 @@
     type RechargePackage,
     type RedemptionCode
   } from '@/api/xinyue/commerce'
-  import { xinyueLocale, xinyueText as xt } from '@/locales/xinyue'
+  import { xinyueText as xt } from '@/locales/xinyue'
+  import { useXinyueAsync } from '@/hooks'
+  import { formatDateTime, formatMoneyCents } from '@/utils/xinyue/formatters'
   defineOptions({ name: 'XinyueCommerce' })
   const providerText: Record<string, string> = {
     MANUAL: '人工收款',
@@ -504,9 +524,8 @@
     checkoutUrl: ''
   })
   const tab = ref('packages')
-  const loading = ref(false)
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
   const loadingTransactions = ref(false)
-  const saving = ref(false)
   const packages = ref<RechargePackage[]>([])
   const channels = ref<PaymentChannel[]>([])
   const transactions = ref<PaymentTransaction[]>([])
@@ -526,12 +545,8 @@
     maxUses: number
     expiresAt?: Date
   }>({ name: '', code: '', credits: 10, maxUses: 1, expiresAt: undefined })
-  const money = (cents: number, currency = 'CNY') =>
-    new Intl.NumberFormat(xinyueLocale(), { style: 'currency', currency }).format(cents / 100)
-  const date = (value: string) =>
-    new Intl.DateTimeFormat(xinyueLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(
-      new Date(value)
-    )
+  const money = (cents: number, currency = 'CNY') => formatMoneyCents(cents, currency)
+  const date = (value: string) => formatDateTime(value)
   const codeEnabled = (row: RedemptionCode) =>
     !row.disabledAt &&
     (!row.expiresAt || new Date(row.expiresAt) > new Date()) &&
@@ -545,17 +560,14 @@
           ? 'danger'
           : 'info'
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       ;[packages.value, channels.value, codes.value] = await Promise.all([
         xinyueApi.rechargePackages(),
         xinyueApi.paymentChannels(),
         xinyueApi.redemptionCodes()
       ])
       await loadTransactions()
-    } finally {
-      loading.value = false
-    }
+    })
   }
   async function loadTransactions() {
     loadingTransactions.value = true
@@ -593,8 +605,7 @@
   }
   async function savePackage() {
     if (!packageForm.name) return ElMessage.warning(xt('请填写商品名称'))
-    saving.value = true
-    try {
+    await withSaving(async () => {
       const body = {
         name: packageForm.name,
         description: packageForm.description,
@@ -608,9 +619,7 @@
       await xinyueApi.saveRechargePackage(body, packageForm.id || undefined)
       packageDialog.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function removePackage(row: RechargePackage) {
     await ElMessageBox.confirm(`${xt('确认删除或下架')} "${row.name}"?`, xt('充值商品'), {
@@ -679,14 +688,11 @@
       publicConfig,
       ...(Object.keys(secrets).length ? { secrets } : {})
     }
-    saving.value = true
-    try {
+    await withSaving(async () => {
       await xinyueApi.savePaymentChannel(body, channelForm.id || undefined)
       channelDrawer.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function checkChannel(row: PaymentChannel) {
     await xinyueApi.checkPaymentChannel(row.id)
@@ -709,8 +715,7 @@
   }
   async function createCode() {
     if (!codeForm.name) return ElMessage.warning(xt('请填写批次名称'))
-    saving.value = true
-    try {
+    await withSaving(async () => {
       const result = await xinyueApi.createRedemptionCode({
         ...codeForm,
         code: codeForm.code || undefined,
@@ -721,9 +726,7 @@
       plainCodeDialog.value = true
       Object.assign(codeForm, { name: '', code: '', credits: 10, maxUses: 1, expiresAt: undefined })
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function toggleCode(row: RedemptionCode) {
     await xinyueApi.setRedemptionCodeStatus(row.id, !codeEnabled(row))
@@ -790,6 +793,32 @@
 
   .inline-tag {
     margin-left: 8px;
+  }
+
+  .table-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 34px 0;
+    color: var(--art-gray-500);
+  }
+
+  .table-empty-icon {
+    font-size: 34px;
+    color: var(--art-gray-400);
+  }
+
+  .table-empty-title {
+    margin: 0;
+    font-size: 13px;
+    color: var(--art-gray-600);
+  }
+
+  .table-empty-desc {
+    margin: 0;
+    font-size: 12px;
   }
 
   .line-through {

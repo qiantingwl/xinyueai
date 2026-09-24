@@ -19,11 +19,11 @@
         <div class="metadata">
           <span>{{ xt('路径') }} /{{ page.slug }}</span>
           <span>{{ xt('浏览') }} {{ page.views }}</span>
-          <span>{{ xt('更新于') }} {{ formatDate(page.updatedAt) }}</span>
+          <span>{{ xt('更新于') }} {{ formatDateTime(page.updatedAt) }}</span>
         </div>
       </header>
       <ElImage v-if="page.coverUrl" class="hero-image" :src="page.coverUrl" fit="cover" />
-      <div class="markdown-body content" v-html="page.contentHtml"></div>
+      <div class="markdown-body content" v-html="sanitizedContent"></div>
     </div>
     <ElResult
       v-else-if="!loading"
@@ -41,24 +41,23 @@
 
 <script setup lang="ts">
   import '@/assets/styles/core/md.scss'
-  import { useDateFormat } from '@vueuse/core'
   import { contentApi as xinyueApi, type ContentPage } from '@/api/xinyue/content'
   import { router } from '@/router'
   import { xinyueText as xt } from '@/locales/xinyue'
+  import { sanitizeHtml } from '@/utils/sanitize'
+  import { useXinyueAsync } from '@/hooks'
+  import { formatDateTime } from '@/utils/xinyue/formatters'
 
   defineOptions({ name: 'ArticleDetail' })
   const route = useRoute()
   const page = ref<ContentPage | null>(null)
-  const loading = ref(false)
-  const formatDate = (value: string) => useDateFormat(value, 'YYYY-MM-DD HH:mm').value
+  const { loading, withLoading } = useXinyueAsync()
+  const sanitizedContent = computed(() => sanitizeHtml(page.value?.contentHtml || ''))
 
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       page.value = await xinyueApi.contentPage(String(route.params.id))
-    } finally {
-      loading.value = false
-    }
+    })
   }
   const edit = () =>
     page.value && router.push({ name: 'ArticlePublish', query: { id: page.value.id } })

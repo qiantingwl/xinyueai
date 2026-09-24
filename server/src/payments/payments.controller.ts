@@ -8,6 +8,7 @@ import { AuthenticatedUser, CurrentUser } from '../common/request-user'
 import { PrismaService } from '../prisma/prisma.service'
 import { PAYMENT_METHODS, PAYMENT_PROVIDERS, type PaymentMethod } from './payment.constants'
 import { PaymentsService } from './payments.service'
+import { Public } from '../auth/public.decorator'
 
 class CheckoutDto { @IsIn(['SUBSCRIPTION', 'RECHARGE']) orderType!: 'SUBSCRIPTION' | 'RECHARGE'; @IsString() orderId!: string; @IsOptional() @IsString() channelId?: string; @IsIn(PAYMENT_METHODS) paymentMethod!: PaymentMethod }
 class ChannelDto {
@@ -46,6 +47,7 @@ class RefundDto {
 class ProcessRefundDto { @IsOptional() @IsBoolean() manualConfirmed?: boolean }
 class RejectRefundDto { @IsString() @MinLength(2) @MaxLength(500) reason!: string }
 
+@Public()
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}

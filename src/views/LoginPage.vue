@@ -40,7 +40,7 @@
             <h1>登录暂未开放</h1>
             <p>管理员尚未开放邮箱验证码登录。</p>
           </div>
-          <RouterLink class="button button--solid login-submit" to="/chat">返回工作台</RouterLink>
+          <RouterLink class="button button--solid login-submit" :to="homePath">返回工作台</RouterLink>
         </div>
 
         <div v-else class="auth-step auth-step--multi">
@@ -175,10 +175,7 @@
       </section>
 
       <p class="login-legal">
-        <span>继续即表示你同意 Xinyue AI 的用户协议和隐私政策。</span>
-        <span class="login-legal__links">
-          <RouterLink to="/terms">用户协议</RouterLink><i>·</i><RouterLink to="/privacy">隐私政策</RouterLink>
-        </span>
+        继续即表示你同意 Xinyue AI 的 <RouterLink to="/terms">用户协议</RouterLink> 和 <RouterLink to="/privacy">隐私政策</RouterLink>。
       </p>
     </section>
 
@@ -199,6 +196,7 @@ import { ArrowLeft, LoaderCircle, RotateCcw } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import { useCatalogStore } from '../stores/catalog'
 import { apiUrl } from '../services/api'
+import { firstSidebarPath } from '../utils/sidebar-nav'
 import { updateStoredSettings } from '../utils/settings-storage'
 
 type LoginMode = 'password' | 'email'
@@ -229,10 +227,11 @@ const registrationTicket = ref('')
 const pendingRegistration = ref<{ username: string; displayName?: string; password: string } | null>(null)
 let countdownTimer: number | null = null
 
+const homePath = computed(() => firstSidebarPath(catalog.settings) || '/chat')
 const redirectPath = computed(() =>
   typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') && !route.query.redirect.startsWith('//')
     ? route.query.redirect
-    : '/chat',
+    : homePath.value,
 )
 const linuxDoUrl = computed(() => apiUrl(`/auth/oauth/linuxdo/start?redirect=${encodeURIComponent(redirectPath.value)}${inviteCode ? `&invite=${encodeURIComponent(inviteCode)}` : ''}`))
 const availableModes = computed(() => [

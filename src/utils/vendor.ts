@@ -25,21 +25,32 @@ const KNOWN_VENDOR_KEYS = new Set([
   'qwen',
   'doubao',
   'kimi',
+  'zhipu',
+  'minimax',
+  'hunyuan',
+  'stepfun',
+  'longcat',
 ])
 
 export function inferVendor(item: VendorLike): VendorInfo {
-  if (item.vendor?.name) return { key: item.vendor.key || item.vendor.name, label: item.vendor.name }
-  const value = `${item.displayName || ''} ${item.upstreamModel || ''}`.toLowerCase()
-  if (/gpt|openai|o\d(?:-|$)/.test(value)) return { key: 'openai', label: 'OpenAI' }
-  if (/deepseek/.test(value)) return { key: 'deepseek', label: 'DeepSeek' }
-  if (/grok|xai/.test(value)) return { key: 'xai', label: 'xAI' }
-  if (/claude|anthropic/.test(value)) return { key: 'anthropic', label: 'Anthropic' }
-  if (/gemini|google/.test(value)) return { key: 'google', label: 'Google' }
-  if (/qwen|通义|千问/.test(value)) return { key: 'qwen', label: '通义千问' }
-  if (/doubao|豆包/.test(value)) return { key: 'doubao', label: '豆包' }
-  if (/kimi|moonshot|月之暗面/.test(value)) return { key: 'kimi', label: 'Kimi' }
-  const provider = item.provider?.name || item.provider?.type
-  return { key: provider || 'other', label: provider || '其他模型' }
+  const hay = `${item.vendor?.key || ''} ${item.vendor?.name || ''} ${item.displayName || ''} ${item.upstreamModel || ''}`.toLowerCase()
+  if (/gpt|openai|(^|[^a-z])o\d(?:-|$)/.test(hay)) return { key: 'openai', label: 'OpenAI' }
+  if (/deepseek/.test(hay)) return { key: 'deepseek', label: 'DeepSeek' }
+  if (/grok|xai/.test(hay)) return { key: 'xai', label: 'xAI' }
+  if (/claude|anthropic/.test(hay)) return { key: 'anthropic', label: 'Anthropic' }
+  if (/gemini|google/.test(hay)) return { key: 'google', label: 'Google' }
+  if (/qwen|通义|千问/.test(hay)) return { key: 'qwen', label: '通义千问' }
+  if (/doubao|豆包|bytedance|seed-\d/.test(hay)) return { key: 'doubao', label: '豆包' }
+  if (/kimi|moonshot|月之暗面/.test(hay)) return { key: 'kimi', label: 'Kimi' }
+  if (/zhipu|z-ai|智谱|\bglm\b|glm[-_.]/.test(hay)) return { key: 'zhipu', label: '智谱 GLM' }
+  if (/minimax/.test(hay)) return { key: 'minimax', label: 'MiniMax' }
+  if (/hunyuan|混元|(^|[^a-z])hy[34]([^a-z]|$)/.test(hay)) return { key: 'hunyuan', label: '腾讯混元' }
+  if (/stepfun|阶跃|(^|[^a-z])step[-_.]/.test(hay)) return { key: 'stepfun', label: '阶跃星辰' }
+  if (/longcat/.test(hay)) return { key: 'longcat', label: 'LongCat' }
+  if (item.vendor?.name && item.vendor.key && item.vendor.key !== 'other') {
+    return { key: item.vendor.key, label: item.vendor.name }
+  }
+  return { key: 'other', label: '其他模型' }
 }
 
 /** 厂商品牌色（CSS 变量引用），未知厂商回退 default */

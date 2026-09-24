@@ -5,7 +5,7 @@
 ## 1. 边界
 
 - Worker 只执行算法，不管理用户、套餐、创作点、项目、文件库或审计。
-- Xinyue NestJS 创建 `GenerationJob`、执行权限和额度预检，通过 BullMQ 调用 Worker，并把结果写入 `Asset`。
+- Xinyue NestJS 创建 `GenerationJob`、执行权限和额度预检；`generation` 队列的 Processor 通过 HTTP 调用 Worker，并把结果写入 `Asset`。Worker 不接触 BullMQ 或数据库。
 - Worker 只能由管理员配置，不能作为用户 BYOK 渠道。
 - 推荐仅暴露在 Docker 内网或受控私网；可选 Bearer Token 由管理员渠道保存。
 - 模型文件、缓存和 GPU 运行目录不进入主 Git 仓库或主应用镜像。

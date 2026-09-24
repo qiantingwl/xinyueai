@@ -46,7 +46,7 @@ export function publicMessageMetadata(value: unknown) {
   const metadata = recordOf(value)
   if (!Object.keys(metadata).length) return null
   const result: Record<string, unknown> = {}
-  for (const key of ['jobId', 'feedback', 'reasoning', 'suggestionVersion', 'suggestions']) {
+  for (const key of ['jobId', 'feedback', 'reasoning', 'reasoningTokens', 'thinkingSeconds', 'suggestionVersion', 'suggestions']) {
     if (metadata[key] !== undefined) result[key] = metadata[key]
   }
   const webSearch = publicWebSearch(metadata.webSearch)

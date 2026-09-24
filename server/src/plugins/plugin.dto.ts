@@ -29,6 +29,7 @@ export class AdminPluginDto extends PrivatePluginDto {
   @IsString() @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/) @MaxLength(100) slug!: string
   @IsOptional() @IsEnum(PluginStatus) status?: PluginStatus
   @IsOptional() @IsBoolean() featured?: boolean
+  @IsOptional() @IsBoolean() preinstalled?: boolean
   @IsOptional() @IsInt() @Min(0) @Max(10_000_000) priceCredits?: number
   @IsOptional() @IsInt() @Min(-10000) @Max(10000) sortOrder?: number
 }

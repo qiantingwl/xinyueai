@@ -64,7 +64,7 @@
           >
           <ElTableColumn :label="xt('成员')" :width="isCompact ? 75 : 90"
             ><template #default="{ row }"
-              ><ElButton link type="primary" @click="openMembers(row)"
+              ><ElButton link type="primary" @click="openMembers(row as UserGroup)"
                 >{{ row._count.members }} {{ xt('人') }}</ElButton
               ></template
             ></ElTableColumn
@@ -98,12 +98,17 @@
           >
           <ElTableColumn :label="xt('操作')" :width="isCompact ? 150 : 230" fixed="right"
             ><template #default="{ row }"
-              ><ElButton v-if="!row.isDefault" link type="success" @click="setDefault(row)">{{
-                xt('默认')
+              ><ElButton
+                v-if="!row.isDefault"
+                link
+                type="success"
+                @click="setDefault(row as UserGroup)"
+                >{{ xt('默认') }}</ElButton
+              ><ElButton link type="primary" @click="openPolicy(row as UserGroup)">{{
+                xt('策略')
               }}</ElButton
-              ><ElButton link type="primary" @click="openPolicy(row)">{{ xt('策略') }}</ElButton
-              ><ElButton link @click="openEdit(row)">{{ xt('编辑') }}</ElButton
-              ><ElDropdown @command="(command: string) => commandGroup(command, row)"
+              ><ElButton link @click="openEdit(row as UserGroup)">{{ xt('编辑') }}</ElButton
+              ><ElDropdown @command="(command: string) => commandGroup(command, row as UserGroup)"
                 ><ElButton link :aria-label="xt('更多分组操作')"
                   ><ArtSvgIcon icon="ri:more-2-fill" /></ElButton
                 ><template #dropdown
@@ -252,20 +257,20 @@
   import { ElMessage, ElMessageBox } from 'element-plus'
   import { customerApi as xinyueApi, type AdminUser, type UserGroup } from '@/api/xinyue/customers'
   import { modelApi, type ModelPreset } from '@/api/xinyue/models'
+  import { useCompactLayout, useXinyueAsync } from '@/hooks'
   import { xinyueText as xt } from '@/locales/xinyue'
   defineOptions({ name: 'XinyueGroups' })
+  const { loading, saving, withLoading, withSaving } = useXinyueAsync()
   const groups = ref<UserGroup[]>([])
   const users = ref<AdminUser[]>([])
   const models = ref<ModelPreset[]>([])
-  const loading = ref(false)
-  const saving = ref(false)
   const editDialog = ref(false)
   const policyDrawer = ref(false)
   const memberDrawer = ref(false)
   const memberLoading = ref(false)
   const groupForm = reactive({ id: '', name: '', description: '', color: '#397157', enabled: true })
   const makeDefault = ref(false)
-  const isCompact = ref(false)
+  const isCompact = useCompactLayout()
   const policyGroup = ref<UserGroup | null>(null)
   const policy = reactive({
     restrictModels: false,
@@ -290,16 +295,13 @@
     COMMERCE: '商品视觉'
   } as const
   async function load() {
-    loading.value = true
-    try {
+    await withLoading(async () => {
       ;[groups.value, users.value, models.value] = await Promise.all([
         xinyueApi.groups(),
         xinyueApi.users(),
         modelApi.models()
       ])
-    } finally {
-      loading.value = false
-    }
+    })
   }
   function openCreate() {
     Object.assign(groupForm, { id: '', name: '', description: '', color: '#397157', enabled: true })
@@ -319,8 +321,7 @@
   }
   async function saveGroup() {
     if (!groupForm.name) return ElMessage.warning(xt('请填写分组名称'))
-    saving.value = true
-    try {
+    await withSaving(async () => {
       const { id, ...body } = groupForm
       const payload = id
         ? body
@@ -329,9 +330,7 @@
       if (makeDefault.value && !saved.isDefault) await xinyueApi.setDefaultGroup(saved.id)
       editDialog.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   function openPolicy(row: UserGroup) {
     policyGroup.value = row
@@ -344,15 +343,13 @@
     policyDrawer.value = true
   }
   async function savePolicy() {
-    if (!policyGroup.value) return
-    saving.value = true
-    try {
-      await xinyueApi.saveGroupPolicy(policyGroup.value.id, { ...policy })
+    const group = policyGroup.value
+    if (!group) return
+    await withSaving(async () => {
+      await xinyueApi.saveGroupPolicy(group.id, { ...policy })
       policyDrawer.value = false
       await load()
-    } finally {
-      saving.value = false
-    }
+    })
   }
   async function openMembers(row: UserGroup) {
     memberGroup.value = row
@@ -398,15 +395,9 @@
     await xinyueApi.deleteGroup(row.id)
     await load()
   }
-  function updateCompact() {
-    isCompact.value = window.innerWidth <= 1200
-  }
   onMounted(() => {
-    updateCompact()
-    window.addEventListener('resize', updateCompact)
     void load()
   })
-  onBeforeUnmount(() => window.removeEventListener('resize', updateCompact))
 </script>
 
 <style scoped>
