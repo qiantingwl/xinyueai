@@ -2,30 +2,43 @@
 
 开源、可自托管的 AI 创作与模型管理平台。
 
-Xinyue AI 把多模型对话、模型网关、无限画布、图片/视频/商品视觉生成、办公输出、助手与技能生态，以及完整的运营后台放在同一个工作空间里。前端是 Vue 3，后端是 NestJS + Prisma + BullMQ，一条命令即可用 Docker 部署。
+同一工作空间包含多模型对话、模型网关、无限画布、图片 / 视频 / 商品视觉、办公输出、助手与技能，以及运营后台。用户端使用 Vue 3，服务端使用 NestJS、Prisma 与 BullMQ，可以用 Docker 一条命令部署。
+
+当前发布版本是 **1.0.1**。此后尚未单独发版的改动，记在 [更新日志](CHANGELOG.md) 的「未发布」一节。
 
 ![Xinyue AI 对话工作区](docs/images/xinyue-chat.png)
+
+## 目录
+
+- [功能](#功能)
+- [界面预览](#界面预览)
+- [快速开始](#快速开始)
+- [技术栈](#技术栈)
+- [文档](#文档)
+- [贡献](#贡献)
 
 ## 功能
 
 **AI 工作空间**
 
 - 多模型流式对话：思考过程、联网搜索与引用、分支、临时聊天、附件、追问建议、共享链接
-- 五套可切换的聊天界面（`gpt`、`doubao`、`qianwen`、`kimi`、`jixing`），由管理员在后台全站切换
+- 五套聊天皮肤，由管理员在后台全站切换：`gpt`、`doubao`、`qianwen`、`kimi`、`jixing`（季星）。名称只区分布局，不代表与对应厂商合作
 - 项目、文件库、团队空间与团队额度
-- 办公中心：PPT、文档、表格等办公任务，导出 PPTX / DOCX / XLSX
+- 办公中心：PPT、文档、表格，可导出 PPTX / DOCX / XLSX
 
-**助手、技能与知识库（开箱即用）**
+**助手、技能与知识库**
+
+启动时会补齐缺失的内置项，已有记录不会被覆盖。
 
 - 12 个内置助手：通用工作、商品视觉、商业文案、知识服务、深度调研、办公写作、数据分析、代码与架构、会议纪要、产品经理、视觉创意、学习辅导
-- 14 个预装技能，按 7 个分类组织：流程图、思维导图、SVG 矢量图、信息图、数据图表、HTML 原型、PRD、灵感板、宫格图、文章配图、条漫、Logo、去 AI 味改写、翻译本地化；预装技能无需安装即可在对话中使用，用户可自行停用
+- 14 个预装技能，分 7 类：流程图、思维导图、SVG 矢量图、信息图、数据图表、HTML 原型、PRD、灵感板、宫格图、文章配图、条漫、Logo、去 AI 味改写、翻译本地化。无需安装即可在对话中使用，用户可以停用
 - 6 个知识库模板：产品资料、品牌规范、客服 FAQ、团队 SOP、行业研究、学习笔记
 - 8 个内置工具：项目上下文、文件目录、数据汇总、日期时间、知识库检索，以及可选的 n8n / Dify / FastGPT 工作流
-- 外部技能市场（LobeHub Skills、SkillHub、SkillsMP、CocoLoop）作为发现源，由 `EXTERNAL_SKILL_MARKET_ENABLED` 控制（代码默认关闭，示例配置已开启）；安装前会做格式与安全扫描，不代表许可证授权
+- 外部技能市场只作发现源：LobeHub Skills、SkillHub、SkillsMP、CocoLoop。开关是 `EXTERNAL_SKILL_MARKET_ENABLED`（代码默认关闭，示例配置为开启）。安装前会做格式与安全扫描；扫描不代表获得许可证授权
 
 **模型网关**
 
-- OpenAI Compatible、Anthropic、Gemini、NewAPI、Sub2API、Pollinations 与本地 Worker 协议
+- 协议：OpenAI Compatible、Anthropic、Gemini、NewAPI、Sub2API、Pollinations，以及本地 Worker
 - 渠道优先级、权重、健康检查、冷却熔断和失败切换
 - 用户自带 Key（BYOK）与私有路由
 - Token 额度、创作点、价格快照、预留、对账和不可变流水
@@ -33,15 +46,15 @@ Xinyue AI 把多模型对话、模型网关、无限画布、图片/视频/商�
 **创作**
 
 - 无限画布（Vue Flow）：生成节点、连线、结果回填、自动保存与版本
-- 图片 / 视频（首尾帧）/ 商品视觉生成，图片反推提示词
-- 提示词库与灵感中心、作品发布与审核
-- 可选本地图片 Worker：抠图（rembg）、擦除/扩图（IOPaint）、超分（Real-ESRGAN）、受控 ComfyUI 工作流
+- 图片、视频（首尾帧）、商品视觉，以及图片反推提示词
+- 提示词库、灵感中心、作品发布与审核
+- 可选本地图片 Worker：抠图（rembg）可按部署文档启用。擦除 / 扩图（IOPaint）与超分（Real-ESRGAN）尚未通过发布认证，默认关闭。受控 ComfyUI 网关只运行管理员挂载并审核过的工作流
 
 **管理后台**
 
 - 用户、用户组、团队、套餐订阅、支付充值、优惠与兑换码
 - 渠道、模型目录、定价、路由、生成任务、联网搜索
-- 助手 / 技能 / 工具 / 知识库预设管理，一键恢复默认技能
+- 助手、技能、工具与知识库预设，可一键恢复默认技能
 - 公告、通知、审核、客服、告警、审计、系统健康、存储迁移
 - 用户端左侧导航、首页内容与站点配置
 
@@ -55,7 +68,7 @@ Xinyue AI 把多模型对话、模型网关、无限画布、图片/视频/商�
 | --- | --- |
 | ![管理后台](docs/images/xinyue-admin-dashboard.png) | ![能力中心](docs/images/xinyue-capability-center.png) |
 
-截图由 `npm run screenshots:demo` 在本地测试环境生成。
+截图由 `npm run screenshots:demo` 在本地测试环境生成，不含密钥和用户隐私数据。
 
 ## 快速开始
 
@@ -67,15 +80,15 @@ Xinyue AI 把多模型对话、模型网关、无限画布、图片/视频/商�
 curl -fsSL https://raw.githubusercontent.com/qiantingwl/xinyueai/main/install.sh | bash
 ```
 
-已克隆仓库时也可以直接运行 `./install.sh`。
+已经克隆仓库时，也可以直接运行 `./install.sh`。
 
-脚本会检查 Docker、生成运行密钥和一次性安装令牌，并启动 PostgreSQL、Redis、Backend 和 Frontend。Frontend（Nginx）是唯一对外入口，默认端口 `8080`，被占用时自动递增并写回 `.env.production`。
+脚本会检查 Docker，生成运行密钥和一次性安装令牌，并启动 PostgreSQL、Redis、Backend 和 Frontend。Frontend（Nginx）是唯一对外入口，默认端口 `8080`；端口被占用时自动递增，并写回 `.env.production`。
 
-安装完成后打开 `http://服务器IP:端口/install`，填入服务器本机 `.env.production` 中的 `INSTALL_TOKEN` 创建管理员。令牌不会打印到终端，管理员创建后该入口自动关闭。
+安装完成后打开 `http://服务器IP:端口/install`，填入服务器本机 `.env.production` 中的 `INSTALL_TOKEN` 创建管理员。令牌不会打印到终端。管理员创建后，该入口自动关闭。
 
-### Docker Compose
+### 自定义 Docker Compose
 
-需要自定义域名、存储或反向代理时：
+需要自己指定域名、存储或反向代理时：
 
 ```bash
 git clone https://github.com/qiantingwl/xinyueai.git
@@ -114,9 +127,9 @@ npm run admin:dev           # 管理端（5174）
 | 管理端 | http://localhost:5174/admin/ |
 | API | http://localhost:3100/v1 |
 
-首次打开 `/install`，用 `server/.env` 中自动生成的 `INSTALL_TOKEN` 创建管理员。之后到后台「模型与生成 → 上游渠道」添加至少一个模型渠道，并在「模型与定价」中启用模型，对话和生成才能工作。系统不会返回伪造的演示回复。
+首次打开 `/install`，用 `server/.env` 里自动生成的 `INSTALL_TOKEN` 创建管理员。然后到后台「模型与生成 → 上游渠道」添加至少一个模型渠道，并在「模型与定价」中启用模型。没有健康渠道时，接口会返回明确的不可用错误，不会用演示回复代替真实结果。
 
-开发、测试与验证流程见 [开发指南](docs/DEVELOPMENT.md)。
+开发、测试与提交前检查见 [开发指南](docs/DEVELOPMENT.md)。
 
 ## 技术栈
 
@@ -148,4 +161,4 @@ npm run admin:dev           # 管理端（5174）
 
 ## 贡献
 
-欢迎提交 Bug 修复、文档、UI、Provider 适配和测试。请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+欢迎提交缺陷修复、文档、界面、Provider 适配和测试。请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请按 [SECURITY.md](SECURITY.md) 私下报告，不要创建公开 Issue。

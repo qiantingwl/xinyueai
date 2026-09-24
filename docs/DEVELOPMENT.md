@@ -39,7 +39,7 @@ npm run admin:dev    # 管理端（Vite，5174，路径 /admin/）
 
 也可以分开启动：`npm run dev:web`（仅用户端）、`npm run server:dev`（仅 API）。两个 Vite 开发服务器都把 `/v1` 代理到 3100。
 
-API 需要至少一个可用的模型渠道才能对话和生成：在管理端「模型与生成 → 上游渠道」添加渠道并检测，再到「模型与定价」启用模型。没有健康渠道时，API 会明确返回不可用错误，不会伪造回复。
+API 需要至少一个可用的模型渠道才能对话和生成：在管理端「模型与生成 → 上游渠道」添加渠道并检测，再到「模型与定价」启用模型。没有健康渠道时，API 会返回明确的不可用错误，不会用演示回复代替真实结果。
 
 ## 4. 目录结构
 
@@ -121,14 +121,16 @@ npm run test:unit
 
 E2E 默认复用已经启动的 5173 / 5174 / 3100，需要一个管理员账号：
 
-```powershell
-$env:E2E_ADMIN_EMAIL = '管理员邮箱'
-$env:E2E_ADMIN_PASSWORD = '管理员密码'
-$env:E2E_BASE_URL = 'http://localhost:5173'
-$env:E2E_ADMIN_URL = 'http://localhost:5174/admin'
-$env:E2E_API_ORIGIN = 'http://localhost:3100'
+```bash
+export E2E_ADMIN_EMAIL='管理员邮箱'
+export E2E_ADMIN_PASSWORD='管理员密码'
+export E2E_BASE_URL='http://localhost:5173'
+export E2E_ADMIN_URL='http://localhost:5174/admin'
+export E2E_API_ORIGIN='http://localhost:3100'
 npx playwright test
 ```
+
+Windows PowerShell 请改用 `$env:E2E_ADMIN_EMAIL = '管理员邮箱'` 这种写法。
 
 - 未设置 `E2E_BASE_URL` / `E2E_API_ORIGIN` 时，Playwright 会尝试自行启动用户端与 `server/dist`。
 - `tests/e2e/global-teardown.ts` 每轮结束后清理 `e2e-*` 测试画布。

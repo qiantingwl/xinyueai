@@ -1,4 +1,4 @@
-# Xinyue AI Server
+# Xinyue AI 服务端
 
 Xinyue AI 的 NestJS API、BullMQ 任务处理与业务服务。产品说明见 [README](../README.md)，系统原理见 [ARCHITECTURE](../docs/ARCHITECTURE.md)，部署见 [DEPLOYMENT](../docs/DEPLOYMENT.md)。
 
@@ -31,7 +31,7 @@ npm --prefix server run admin:reset-password   # 重置密码
 
 启动后 API 会幂等补齐内置助手、工具、技能分类与预装技能（`CapabilityPresetsService`），不会覆盖已存在的记录。
 
-没有健康的模型渠道时，API 会明确返回不可用错误，不会伪造回复。
+没有健康的模型渠道时，API 会返回明确的不可用错误，不会用演示回复代替真实结果。
 
 ## 目录
 

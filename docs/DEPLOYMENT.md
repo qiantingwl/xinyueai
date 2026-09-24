@@ -1,8 +1,10 @@
 # Xinyue AI 部署与运维指南
 
-本文只维护可直接执行的部署和运维步骤；产品功能以当前版本代码和数据库迁移为准。
+本文只写可以直接执行的部署和运维步骤。产品功能以当前版本代码和数据库迁移为准。
 
-本文覆盖 Docker Compose 生产部署、首次安装、升级、备份恢复、健康检查和手工 Node.js 部署。
+覆盖范围：Docker Compose 生产部署、首次安装、升级、备份恢复、健康检查，以及不使用 Docker 的 Node.js 部署。
+
+文中命令使用 bash，与 README 和 `install.sh` 一致。在 Windows PowerShell 中，把 `cp` 写成 `Copy-Item`，把 `curl` 写成 `Invoke-RestMethod`。
 
 ## 1. 生产架构
 
@@ -26,8 +28,8 @@ Nginx 路由：用户端位于 `/`，管理端位于 `/admin/`，API 位于 `/v1
 
 ### 2.2 创建生产配置
 
-```powershell
-Copy-Item .env.production.example .env.production
+```bash
+cp .env.production.example .env.production
 ```
 
 必须修改 `.env.production` 中的 `POSTGRES_PASSWORD`、`SESSION_SECRET`、`CREDENTIAL_ENCRYPTION_KEY`、`INSTALL_TOKEN` 和 `LOCAL_WORKER_TOKEN`，所有系统令牌均不得少于 32 位且不能使用占位值。`INSTALL_TOKEN` 只用于授权首次管理员创建，不能放入 URL、日志或工单。管理员账号通过首次访问 `/install` 页面创建，生产启动不会回退到固定管理员密码。
@@ -40,7 +42,7 @@ Backend `3100`、PostgreSQL `5432` 和 Redis `6379` 只在 Compose 网络内开�
 
 ### 2.3 启动
 
-```powershell
+```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml config
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
@@ -86,7 +88,7 @@ TRUST_PROXY=1
 
 然后重建后端：
 
-```powershell
+```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build backend
 ```
 
@@ -121,7 +123,7 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d --bui
 
 升级前至少备份数据库、上传文件和运行配置：
 
-```powershell
+```bash
 npm run backup:production
 ```
 
@@ -129,7 +131,7 @@ npm run backup:production
 
 数据库恢复应在维护窗口执行：
 
-```powershell
+```bash
 npm run restore:production -- --source=backups/2026-08-17_00-00-00-000 --confirm
 ```
 
@@ -176,7 +178,7 @@ AWS S3 可留空 `S3_ENDPOINT` 并填写真实 Region；部分自建兼容服务
 
 生产 Compose 提供可选的 `DailyHotApi` 服务，它只负责首页多源热点推荐，不替代 SearXNG 或模型原生联网搜索。启用方式：
 
-```powershell
+```bash
 docker compose --profile recommendations --env-file .env.production -f docker-compose.prod.yml up -d
 ```
 
@@ -203,7 +205,7 @@ LOCAL_WORKER_RESULT_TTL_SECONDS=604800
 LOCAL_WORKER_REMBG_MODEL=u2net
 ```
 
-```powershell
+```bash
 docker compose --profile image-tools --env-file .env.production -f docker-compose.prod.yml up -d --build image-worker
 ```
 
@@ -218,7 +220,7 @@ API 地址：http://image-worker:8080
 
 其余图片 Worker 按需启动，不需要时不要构建。`iopaint` 和 `realesrgan` 当前属于未认证的实验 profile，不得作为生产能力启用；只有在完成各自 README 中的依赖、漏洞和推理验收后，才可以在隔离 staging 使用：
 
-```powershell
+```bash
 docker compose --profile iopaint --env-file .env.production -f docker-compose.prod.yml up -d --build iopaint-worker
 docker compose --profile realesrgan --env-file .env.production -f docker-compose.prod.yml up -d --build realesrgan-worker
 docker compose --profile comfyui --env-file .env.production -f docker-compose.prod.yml up -d --build comfyui-gateway
@@ -230,7 +232,7 @@ docker compose --profile comfyui --env-file .env.production -f docker-compose.pr
 
 ### 4.1 升级
 
-```powershell
+```bash
 git pull --ff-only
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
@@ -249,12 +251,12 @@ Prisma 迁移不会自动执行数据库降级，不能只回退代码而忽略�
 
 ## 5. 健康检查与故障定位
 
-```powershell
+```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
 docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail 200 backend
 docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail 200 frontend
-Invoke-RestMethod http://localhost:8080/v1/health/live
-Invoke-RestMethod http://localhost:8080/v1/health/ready
+curl -fsS http://localhost:8080/v1/health/live
+curl -fsS http://localhost:8080/v1/health/ready
 ```
 
 上线检查：
@@ -280,7 +282,7 @@ Invoke-RestMethod http://localhost:8080/v1/health/ready
 
 不使用 Docker 时，需要自行提供 PostgreSQL 17、Redis 7、Node.js 20.19+（推荐 22）、pnpm 和 Nginx。
 
-```powershell
+```bash
 npm ci
 npm --prefix server ci
 pnpm --dir admin install --frozen-lockfile
@@ -326,7 +328,7 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d --bui
 
 完整清单见 [DEVELOPMENT.md](DEVELOPMENT.md#7-提交前验证)。最少执行：
 
-```powershell
+```bash
 npm run audit:ui-actions
 npm run test:unit
 npm run verify
