@@ -14,10 +14,36 @@ import tseslint from 'typescript-eslint'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-// 读取 .auto-import.json 文件的内容，并将其解析为 JSON 对象
-const autoImportConfig = JSON.parse(
-  fs.readFileSync(path.resolve(__dirname, '.auto-import.json'), 'utf-8')
-)
+// unplugin-auto-import 在 Vite 启动时写出 .auto-import.json，该文件被 gitignore。
+// CI 只跑 lint、不会先启动 Vite。缺失时改从已提交的 auto-imports.d.ts 读取全局名称。
+// 类型名（如 VNode）只出现在 d.ts 的 type 再导出里，生成的 JSON 不含它们，因此始终合并进来。
+function globalsFromAutoImportDts() {
+  const dtsPath = path.resolve(__dirname, 'src/types/import/auto-imports.d.ts')
+  if (!fs.existsSync(dtsPath)) return {}
+
+  const globals = {}
+  const source = fs.readFileSync(dtsPath, 'utf-8')
+  for (const match of source.matchAll(/^ {2}const (\w+):/gm)) globals[match[1]] = true
+  const typeExport = source.match(/export type \{([^}]+)\}/)
+  if (typeExport) {
+    for (const name of typeExport[1].split(',')) {
+      const trimmed = name.trim()
+      if (trimmed) globals[trimmed] = true
+    }
+  }
+  return globals
+}
+
+function loadAutoImportGlobals() {
+  const fromDts = globalsFromAutoImportDts()
+  const jsonPath = path.resolve(__dirname, '.auto-import.json')
+  if (!fs.existsSync(jsonPath)) return fromDts
+
+  const parsed = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'))
+  return { ...fromDts, ...(parsed.globals ?? {}) }
+}
+
+const autoImportGlobals = loadAutoImportGlobals()
 
 export default [
   // 指定文件匹配规则
@@ -44,8 +70,7 @@ export default [
 
     languageOptions: {
       globals: {
-        // 合并从 autoImportConfig 中读取的全局变量配置
-        ...autoImportConfig.globals,
+        ...autoImportGlobals,
         // TypeScript 全局命名空间
         Api: 'readonly'
       }

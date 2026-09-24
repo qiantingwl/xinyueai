@@ -1,27 +1,26 @@
-## Summary
+## 变更说明
 
-Describe what changed and why.
+说明改了什么、为什么改。
 
-## Scope
+## 范围
 
-- [ ] User application
-- [ ] Administration
-- [ ] API / worker
-- [ ] Database migration
-- [ ] Deployment / documentation
+- [ ] 用户端
+- [ ] 管理端
+- [ ] API / Worker
+- [ ] 数据库迁移
+- [ ] 部署 / 文档
 
-## Verification
+## 验证
 
-- [ ] User application builds
-- [ ] Administration builds
-- [ ] API builds
-- [ ] Relevant behavior was checked locally
+- [ ] 用户端构建通过
+- [ ] 管理端构建通过
+- [ ] API 构建通过
+- [ ] 已在本地核对相关行为
 
-## Risk
+## 风险
 
-List migrations, configuration changes, compatibility concerns, or rollback
-steps. Write `None` when there are no known risks.
+列出迁移、配置变更、兼容性或回滚步骤。没有已知风险时写「无」。
 
-## Security
+## 安全
 
-- [ ] No credentials, `.env` files, user uploads, or production data are included
+- [ ] 未包含凭据、`.env`、用户上传或生产数据

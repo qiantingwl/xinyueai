@@ -1,7 +1,7 @@
 # Xinyue IOPaint Worker
 
-Optional isolated Worker for `iopaint-inpaint` and `iopaint-outpaint`. It implements the same authenticated, idempotent and cancellable protocol as the background-removal Worker. Models are downloaded into `/models` at runtime and are not stored in Git.
+可选的独立 Worker，能力为 `iopaint-inpaint` 与 `iopaint-outpaint`。鉴权、幂等和取消语义与抠图 Worker 相同。模型在运行时下载到 `/models`，不进入 Git。
 
-Production note: this profile is currently not release-certified. IOPaint 1.6.0 pins an older FastAPI/Pillow stack that conflicts with the patched worker baseline. Keep the profile disabled until a reviewed dependency or source compatibility update passes import, `pip check`, vulnerability and inference tests. Do not enable it merely to satisfy a route configuration.
+生产说明：此 profile 目前未通过发布认证。IOPaint 1.6.0 锁定了较旧的 FastAPI / Pillow 组合，与已修补的 Worker 基线冲突。在依赖或源码兼容更新通过导入、`pip check`、漏洞扫描和推理测试之前，请保持关闭。不要为了凑一条路由配置而启用它。
 
-The default CPU model is `lama`. Use `IOPAINT_MODEL` and `DEVICE` only with models and hardware verified by the operator.
+默认 CPU 模型是 `lama`。只有在运维人员核验过模型和硬件后，才调整 `IOPAINT_MODEL` 与 `DEVICE`。
