@@ -77,7 +77,7 @@ flowchart LR
 
 ## 3. 生成任务链
 
-这是全仓工程密度最高的部分，入口 `server/src/generations/`。
+生成任务是后端最复杂的一条链路，代码入口在 `server/src/generations/`。
 
 ### 3.1 创建：`POST /v1/generations`
 
@@ -187,7 +187,7 @@ Processor 启动时先完整扫描一次，之后默认每 30 秒一次（`GENER
 
 - **图片**：`/images/generations`；有参考图或蒙版时走 multipart `/images/edits`；`LOCAL_WORKER` 走 `/process`；Pollinations 走 GET。下载结果跨源时必须通过公网校验，限 50 MB，并校验 PNG / JPEG / WEBP 魔数。
 - **视频**：首尾帧 multipart 提交；异步任务立即落库 `providerJobId` 作为重启恢复锚点；轮询默认间隔 3 秒、上限 600 秒，每轮检查取消并续租。只有渠道一致才续轮询，避免向新渠道重复提交。
-- **商品视觉（COMMERCE）**：复用图片 Runner，每个模块串行出一张图。**不表达部分成功**：模块数不符即整单失败并全额退款。
+- **商品视觉（COMMERCE）**：复用图片 Runner，每个模块串行出一张图。**不支持部分成功**：模块数不符即整单失败并全额退款。
 - **图片反推**：是一种特殊的 CHAT 任务，图片以 base64 入参，并声明"图片内文字不得当作指令"；不创建消息、不发流式事件。
 
 ## 6. SSE 事件链
@@ -254,7 +254,7 @@ PENDING ──预留+扣费──> RESERVED ──结算──> SETTLED
 
 ### 8.3 预装技能
 
-免费官方技能在 `config.preinstalled === true` 时对所有用户可用，无需安装记录（`server/src/plugins/plugin-preinstall.ts#preinstalledPluginWhere`）。用户"卸载"预装技能时写入一条 `enabled: false` 的安装记录来隐藏它。管理员可调用 `POST /v1/admin/plugins/restore-defaults` 恢复默认技能。
+免费官方技能在 `config.preinstalled === true` 时对所有用户可用，无需安装记录（`server/src/plugins/plugin-preinstall.ts#preinstalledPluginWhere`）。用户停用预装技能时，会写入一条 `enabled: false` 的安装记录把它隐藏。管理员可调用 `POST /v1/admin/plugins/restore-defaults` 恢复默认技能。
 
 ### 8.4 外部技能市场
 
@@ -285,7 +285,7 @@ PENDING ──预留+扣费──> RESERVED ──结算──> SETTLED
 
 - `src/main.ts` 并行加载公共模型目录与 Cookie 会话；`src/router.ts` 首次导航时探测 `GET /v1/auth/setup/status`，未安装统一导向 `/install`，后端暂不可用时不误判为未安装。
 - `src/services/api.ts` 统一 API 根、Cookie 凭据、超时、错误解析，并为写请求附加 `X-Xinyue-Request: 1`。本地会话只是界面提示，权威登录态由 `GET /v1/auth/session` 决定。
-- 聊天皮肤由后台 `SystemSetting.chatUiPreset` 全站设置（默认 `gpt`），配置在 `src/layouts/chat-presets.ts`；进入会话后，消息线程统一使用同一套线程布局。样式与令牌见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。
+- 聊天皮肤由后台 `SystemSetting.chatUiPreset` 全站设置（默认 `gpt`），配置在 `src/layouts/chat-presets.ts`。进入会话后，消息线程统一使用 `doubao` 线程布局。样式与令牌见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。
 - 左侧导航是站点级配置，`server/src/common/sidebar-nav.ts` 是唯一解析来源，用户端与管理端只保留各自的目录。
 
 ### 11.2 管理端

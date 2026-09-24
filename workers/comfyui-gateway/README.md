@@ -1,8 +1,8 @@
-# Xinyue Controlled ComfyUI Gateway
+# Xinyue 受控 ComfyUI 网关
 
-This optional gateway exposes only administrator-mounted ComfyUI workflows through the Xinyue Local Worker protocol. Users cannot submit workflow JSON, node IDs or arbitrary parameters.
+这个可选网关只把管理员挂载的 ComfyUI 工作流暴露给 Xinyue Local Worker 协议。用户不能提交工作流 JSON、节点 ID 或任意参数。
 
-Each `/workflows/*.json` file must contain:
+每个 `/workflows/*.json` 必须包含：
 
 ```json
 {
@@ -22,4 +22,4 @@ Each `/workflows/*.json` file must contain:
 }
 ```
 
-The example above documents the manifest shape only; it is not a complete workflow. Export an API-format workflow from the operator's ComfyUI instance, review every node and model, then mount it read-only. Changing workflow files requires a gateway restart.
+上面的示例只说明清单结构，不是一份可运行的完整工作流。请从运维人员自己的 ComfyUI 导出 API 格式工作流，逐项核对节点和模型，再以只读方式挂载。更换工作流文件后需要重启网关。
