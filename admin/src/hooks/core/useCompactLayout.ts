@@ -1,6 +1,6 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-export function useCompactLayout(breakpoint = 1200) {
+export function useCompactLayout(breakpoint = 768) {
   const isCompact = ref(typeof window !== 'undefined' ? window.innerWidth <= breakpoint : false)
   function update() {
     isCompact.value = window.innerWidth <= breakpoint

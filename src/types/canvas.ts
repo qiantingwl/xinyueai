@@ -114,6 +114,11 @@ export interface CanvasAgentOperation {
   y?: number
 }
 
+export function canvasOperationShouldGenerate(operation: Pick<CanvasAgentOperation, 'type' | 'prompt'>): boolean {
+  if (operation.type === 'run_generation') return true
+  return (operation.type === 'add_image' || operation.type === 'add_video') && Boolean(operation.prompt?.trim())
+}
+
 export interface CanvasProjectSummary {
   id: string
   name: string

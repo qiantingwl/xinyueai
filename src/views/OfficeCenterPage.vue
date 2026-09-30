@@ -146,7 +146,7 @@
         </div>
         <textarea ref="taskInput" v-model="prompt" rows="2" :placeholder="selectedSkill.placeholder" @focus="collapseOfficePopovers" @keydown="handleKeydown" />
         <footer>
-          <div>
+          <div class="office-composer-tools">
             <button type="button" aria-label="添加文件" title="添加文件" :disabled="uploading" @click="openFilePicker"><LoaderCircle v-if="uploading" class="office-spin" :size="18" /><Plus v-else :size="20" /></button>
             <span class="office-control-anchor">
               <button class="office-mode-button" type="button" :aria-expanded="modeMenuOpen" @click="toggleModeMenu"><Zap v-if="taskMode === 'fast'" :size="15" /><BrainCircuit v-else-if="taskMode === 'expert'" :size="15" /><Bot v-else :size="15" />{{ modeLabel }}<ChevronDown :size="13" /></button>
@@ -162,9 +162,11 @@
                 <ModelCatalogPicker :models="selectableModels" :model-value="model" :title="taskMode === 'agent' ? '选择 Agent 模型' : '选择办公模型'" :description-mode="taskMode === 'agent' ? 'agent' : 'default'" @select="selectOfficeModel" @close="modelMenuOpen = false" />
               </div>
             </span>
-            <button v-for="item in officeQuickSkills" :key="item.skill.id" class="office-quick-skill" :class="{ active: selectedSkill.id === item.skill.id }" type="button" @click="selectSkill(item.skill)"><component :is="item.icon" :size="15" />{{ item.label }}</button>
-            <span class="office-control-anchor">
-              <button class="office-mode-button" type="button" :aria-expanded="formatMenuOpen" title="选择交付文件格式" @click="toggleFormatMenu"><FileSpreadsheet v-if="exportFormat === 'xlsx'" :size="15" /><Presentation v-else-if="exportFormat === 'pptx'" :size="15" /><FileText v-else :size="15" />{{ exportFormatLabel }}<ChevronDown :size="13" /></button>
+            <div class="office-quick-skills">
+              <button v-for="item in officeQuickSkills" :key="item.skill.id" class="office-quick-skill" :class="{ active: selectedSkill.id === item.skill.id }" type="button" @click="selectSkill(item.skill)"><component :is="item.icon" :size="15" />{{ item.label }}</button>
+            </div>
+            <span class="office-control-anchor office-format-anchor">
+              <button class="office-mode-button office-format-button" type="button" :aria-expanded="formatMenuOpen" title="选择交付文件格式" @click="toggleFormatMenu"><FileSpreadsheet v-if="exportFormat === 'xlsx'" :size="15" /><Presentation v-else-if="exportFormat === 'pptx'" :size="15" /><FileText v-else :size="15" /><span>{{ exportFormatLabel }}</span><ChevronDown :size="13" /></button>
               <div v-if="formatMenuOpen" class="office-mode-menu">
                 <button v-for="item in exportFormats" :key="item.value" type="button" :class="{ active: exportFormat === item.value }" @click="exportFormat = item.value; formatMenuOpen = false"><component :is="item.icon" :size="16" /><span><strong>{{ item.label }}</strong><small>{{ item.note }}</small></span><Check v-if="exportFormat === item.value" :size="15" /></button>
               </div>

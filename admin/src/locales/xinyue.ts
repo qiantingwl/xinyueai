@@ -85,6 +85,7 @@ const englishGlossary: Record<string, string> = {
   提示词模板: 'Prompt Templates',
   提示词库: 'Prompt Library',
   技能管理: 'Skills',
+  '搜索名称、说明或能力': 'Search name, description, or capability',
   技能分类: 'Skill Categories',
   'AI 助手': 'AI Assistants',
   工具与审批: 'Tools & Approvals',

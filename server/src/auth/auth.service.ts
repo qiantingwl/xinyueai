@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { LedgerType, Prisma, type User } from '@prisma/client'
-import { createHash, randomBytes, randomInt } from 'node:crypto'
+import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
 import { PrismaService } from '../prisma/prisma.service'
 import { hashPassword, verifyPassword } from './password'
 import { EmailService } from './email.service'
@@ -12,6 +12,11 @@ import { PublicEndpointPolicyService } from '../common/public-endpoint-policy.se
 import { fetchPublicNoRedirect } from '../common/outbound-http'
 
 const hash = (value: string, secret: string) => createHash('sha256').update(`${secret}:${value}`).digest('hex')
+const hashMatches = (left: string, right: string) => {
+  const a = Buffer.from(left || '')
+  const b = Buffer.from(right || '')
+  return a.length === b.length && a.length > 0 && timingSafeEqual(a, b)
+}
 export const ADMIN_LOGIN_FAILED = 'admin.login.failed'
 export const ADMIN_LOGIN_SUCCEEDED = 'admin.login.succeeded'
 type LoginMeta = { ip?: string; userAgent?: string }
@@ -201,7 +206,7 @@ export class AuthService {
     const authTicket = await this.readAuthTicket(input.ticket, 'external_binding')
     const otp = await this.prisma.otpCode.findFirst({ where: { email, consumedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } })
     if (!otp || otp.attempts >= 5) throw new UnauthorizedException('验证码无效或已过期')
-    if (otp.codeHash !== hash(input.code, this.config.getOrThrow('SESSION_SECRET'))) {
+    if (!hashMatches(otp.codeHash, hash(input.code, this.config.getOrThrow('SESSION_SECRET')))) {
       await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } })
       throw new BadRequestException('验证码错误')
     }
@@ -255,7 +260,7 @@ export class AuthService {
     if (existingUser && existingUser.status !== 'ACTIVE') throw new UnauthorizedException('账号当前不可用')
     const otp = await this.prisma.otpCode.findFirst({ where: { email, consumedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } })
     if (!otp || otp.attempts >= 5) throw new UnauthorizedException('验证码无效或已过期')
-    if (otp.codeHash !== hash(code, this.config.getOrThrow('SESSION_SECRET'))) {
+    if (!hashMatches(otp.codeHash, hash(code, this.config.getOrThrow('SESSION_SECRET')))) {
       await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } })
       throw new BadRequestException('验证码错误')
     }

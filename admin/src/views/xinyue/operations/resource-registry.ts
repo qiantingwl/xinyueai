@@ -171,7 +171,7 @@ export const operationResources: Record<string, ResourceConfig> = {
   },
   tools: {
     title: '工具与审批',
-    description: '管理内置能力、第三方工作流模板、调用凭证和审批策略',
+    description: '管理内置能力、n8n / Dify / FastGPT / Langflow 工作流、调用凭证和审批策略',
     icon: 'ri:tools-line',
     endpoint: '/v1/admin/tools',
     columns: [

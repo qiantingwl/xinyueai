@@ -48,190 +48,193 @@
         </template>
       </ArtTableHeader>
 
-      <ElTable
-        v-loading="loading"
-        :data="pagedRows"
-        height="100%"
-        row-key="id"
-        :table-layout="isCompact ? 'fixed' : 'auto'"
-      >
-        <ElTableColumn
-          v-for="column in config.columns"
-          :key="column.key"
-          :label="xt(column.label)"
-          :min-width="isCompact ? undefined : column.minWidth"
-          :width="isCompact ? undefined : column.width"
-          show-overflow-tooltip
+      <div class="table-scroll">
+        <ElTable
+          v-loading="loading"
+          :data="pagedRows"
+          height="100%"
+          row-key="id"
+          table-layout="auto"
+          class="resource-table"
         >
-          <template #default="{ row }">
-            <div v-if="column.type === 'image'" class="table-image-cell">
-              <ElImage
-                v-if="rowCover(row)"
-                :src="rowCover(row)"
-                fit="cover"
-                class="table-cover"
-                :preview-src-list="rowPreviewList(row)"
-                :initial-index="0"
-                preview-teleported
-              />
-              <span v-else class="image-placeholder">
-                <ArtSvgIcon icon="ri:image-line" />
-              </span>
-              <small v-if="row.uploadedPreviewImages?.length">
-                +{{ row.uploadedPreviewImages.length }} {{ xt('张预览') }}
-              </small>
-            </div>
-            <ElTag
-              v-else-if="column.type === 'status'"
-              :type="statusType(valueAt(row, column.key))"
-              effect="light"
-            >
-              {{ statusText(valueAt(row, column.key)) }}
-            </ElTag>
-            <span v-else-if="column.type === 'date'">{{
-              formatDate(valueAt(row, column.key))
-            }}</span>
-            <span v-else-if="column.type === 'bytes'">{{
-              formatBytes(Number(valueAt(row, column.key) || 0))
-            }}</span>
-            <span v-else-if="column.type === 'number'">{{
-              formatNumber(Number(valueAt(row, column.key) || 0))
-            }}</span>
-            <span v-else>{{ displayValue(valueAt(row, column.key)) }}</span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn
-          :label="xt('操作')"
-          :width="isCompact ? 150 : 230"
-          fixed="right"
-          align="right"
-        >
-          <template #default="{ row }">
-            <ElButton link type="primary" @click="showDetail(row)">{{ xt('查看') }}</ElButton>
-            <ElButton v-if="editorConfig?.canEdit" link type="primary" @click="openEditor(row)">{{
-              xt('编辑')
-            }}</ElButton>
-            <ElButton
-              v-if="resourceKey === 'projects'"
-              link
-              type="primary"
-              @click="openProject(row)"
-              >{{ xt('工作流') }}</ElButton
-            >
-            <ElButton
-              v-if="resourceKey === 'toolApprovals' && row.status === 'PENDING'"
-              link
-              type="success"
-              @click="reviewToolApproval(row, 'APPROVED')"
-              >{{ xt('批准') }}</ElButton
-            >
-            <ElButton
-              v-if="resourceKey === 'toolApprovals' && row.status === 'PENDING'"
-              link
-              type="danger"
-              @click="reviewToolApproval(row, 'REJECTED')"
-              >{{ xt('拒绝') }}</ElButton
-            >
-            <ElButton
-              v-if="resourceKey === 'support'"
-              link
-              type="primary"
-              @click="openTicket(row)"
-              >{{ xt('处理') }}</ElButton
-            >
-            <ElButton v-if="canCancel(row)" link type="warning" @click="cancelJob(row)">{{
-              xt('取消')
-            }}</ElButton>
-            <ElButton v-if="canRetry(row)" link type="primary" @click="retryJob(row)">{{
-              xt('重试')
-            }}</ElButton>
-            <ElButton
-              v-if="
-                resourceKey === 'notificationDeliveries' &&
-                row.status === 'FAILED' &&
-                Number(row.attempts || 0) < 5
-              "
-              link
-              type="primary"
-              @click="retryNotification(row)"
-              >{{ xt('重试') }}</ElButton
-            >
-            <ElButton
-              v-if="resourceKey === 'assets'"
-              link
-              type="danger"
-              @click="removeAsset(row)"
-              >{{ xt('删除') }}</ElButton
-            >
-            <ElButton
-              v-if="canAcknowledge(row)"
-              link
-              type="warning"
-              @click="updateAlert(row, 'acknowledge')"
-              >{{ xt('确认') }}</ElButton
-            >
-            <ElButton
-              v-if="canResolve(row)"
-              link
-              type="success"
-              @click="updateAlert(row, 'resolve')"
-              >{{ xt('解决') }}</ElButton
-            >
-            <ElButton
-              v-if="resourceKey === 'alertRules'"
-              link
-              type="warning"
-              @click="muteAlertRule(row)"
-              >{{ xt('静默') }}</ElButton
-            >
-            <ElDropdown
-              v-if="resourceKey === 'moderation' && row.status === 'OPEN' && !row.appeal"
-              @command="(command: string) => resolveModeration(row, command)"
-            >
-              <ElButton link type="warning"
-                >{{ xt('处置') }}<ArtSvgIcon icon="ri:arrow-down-s-line"
-              /></ElButton>
-              <template #dropdown
-                ><ElDropdownMenu
-                  ><ElDropdownItem command="APPROVED">{{ xt('批准') }}</ElDropdownItem
-                  ><ElDropdownItem command="DISMISSED">{{
-                    xt('驳回')
-                  }}</ElDropdownItem></ElDropdownMenu
-                ></template
+          <ElTableColumn
+            v-for="column in config.columns"
+            :key="column.key"
+            :label="xt(column.label)"
+            :min-width="column.minWidth"
+            :width="column.width"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <div v-if="column.type === 'image'" class="table-image-cell">
+                <ElImage
+                  v-if="rowCover(row)"
+                  :src="rowCover(row)"
+                  fit="cover"
+                  class="table-cover"
+                  :preview-src-list="rowPreviewList(row)"
+                  :initial-index="0"
+                  preview-teleported
+                />
+                <span v-else class="image-placeholder">
+                  <ArtSvgIcon icon="ri:image-line" />
+                </span>
+                <small v-if="row.uploadedPreviewImages?.length">
+                  +{{ row.uploadedPreviewImages.length }} {{ xt('张预览') }}
+                </small>
+              </div>
+              <ElTag
+                v-else-if="column.type === 'status'"
+                :type="statusType(valueAt(row, column.key))"
+                effect="light"
               >
-            </ElDropdown>
-            <ElDropdown
-              v-if="
-                resourceKey === 'moderation' &&
-                ['PENDING', 'IN_REVIEW'].includes(row.appeal?.status)
-              "
-              @command="(command: string) => reviewModerationAppeal(row, command)"
-            >
-              <ElButton link type="primary"
-                >{{ xt('复核申诉') }}<ArtSvgIcon icon="ri:arrow-down-s-line"
-              /></ElButton>
-              <template #dropdown
-                ><ElDropdownMenu
-                  ><ElDropdownItem v-if="row.appeal.status === 'PENDING'" command="IN_REVIEW">{{
-                    xt('开始复核')
-                  }}</ElDropdownItem
-                  ><ElDropdownItem command="APPROVED">{{ xt('通过申诉') }}</ElDropdownItem
-                  ><ElDropdownItem command="REJECTED">{{
-                    xt('驳回申诉')
-                  }}</ElDropdownItem></ElDropdownMenu
-                ></template
+                {{ statusText(valueAt(row, column.key)) }}
+              </ElTag>
+              <span v-else-if="column.type === 'date'">{{
+                formatDate(valueAt(row, column.key))
+              }}</span>
+              <span v-else-if="column.type === 'bytes'">{{
+                formatBytes(Number(valueAt(row, column.key) || 0))
+              }}</span>
+              <span v-else-if="column.type === 'number'">{{
+                formatNumber(Number(valueAt(row, column.key) || 0))
+              }}</span>
+              <span v-else>{{ displayValue(valueAt(row, column.key)) }}</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn
+            :label="xt('操作')"
+            :width="isCompact ? 168 : 230"
+            fixed="right"
+            align="right"
+          >
+            <template #default="{ row }">
+              <ElButton link type="primary" @click="showDetail(row)">{{ xt('查看') }}</ElButton>
+              <ElButton v-if="editorConfig?.canEdit" link type="primary" @click="openEditor(row)">{{
+                xt('编辑')
+              }}</ElButton>
+              <ElButton
+                v-if="resourceKey === 'projects'"
+                link
+                type="primary"
+                @click="openProject(row)"
+                >{{ xt('工作流') }}</ElButton
               >
-            </ElDropdown>
-            <ElButton
-              v-if="editorConfig?.canDelete"
-              link
-              type="danger"
-              @click="removeResource(row)"
-              >{{ xt(resourceKey === 'promptLibrary' ? '重置' : '删除') }}</ElButton
-            >
-          </template>
-        </ElTableColumn>
-      </ElTable>
+              <ElButton
+                v-if="resourceKey === 'toolApprovals' && row.status === 'PENDING'"
+                link
+                type="success"
+                @click="reviewToolApproval(row, 'APPROVED')"
+                >{{ xt('批准') }}</ElButton
+              >
+              <ElButton
+                v-if="resourceKey === 'toolApprovals' && row.status === 'PENDING'"
+                link
+                type="danger"
+                @click="reviewToolApproval(row, 'REJECTED')"
+                >{{ xt('拒绝') }}</ElButton
+              >
+              <ElButton
+                v-if="resourceKey === 'support'"
+                link
+                type="primary"
+                @click="openTicket(row)"
+                >{{ xt('处理') }}</ElButton
+              >
+              <ElButton v-if="canCancel(row)" link type="warning" @click="cancelJob(row)">{{
+                xt('取消')
+              }}</ElButton>
+              <ElButton v-if="canRetry(row)" link type="primary" @click="retryJob(row)">{{
+                xt('重试')
+              }}</ElButton>
+              <ElButton
+                v-if="
+                  resourceKey === 'notificationDeliveries' &&
+                  row.status === 'FAILED' &&
+                  Number(row.attempts || 0) < 5
+                "
+                link
+                type="primary"
+                @click="retryNotification(row)"
+                >{{ xt('重试') }}</ElButton
+              >
+              <ElButton
+                v-if="resourceKey === 'assets'"
+                link
+                type="danger"
+                @click="removeAsset(row)"
+                >{{ xt('删除') }}</ElButton
+              >
+              <ElButton
+                v-if="canAcknowledge(row)"
+                link
+                type="warning"
+                @click="updateAlert(row, 'acknowledge')"
+                >{{ xt('确认') }}</ElButton
+              >
+              <ElButton
+                v-if="canResolve(row)"
+                link
+                type="success"
+                @click="updateAlert(row, 'resolve')"
+                >{{ xt('解决') }}</ElButton
+              >
+              <ElButton
+                v-if="resourceKey === 'alertRules'"
+                link
+                type="warning"
+                @click="muteAlertRule(row)"
+                >{{ xt('静默') }}</ElButton
+              >
+              <ElDropdown
+                v-if="resourceKey === 'moderation' && row.status === 'OPEN' && !row.appeal"
+                @command="(command: string) => resolveModeration(row, command)"
+              >
+                <ElButton link type="warning"
+                  >{{ xt('处置') }}<ArtSvgIcon icon="ri:arrow-down-s-line"
+                /></ElButton>
+                <template #dropdown
+                  ><ElDropdownMenu
+                    ><ElDropdownItem command="APPROVED">{{ xt('批准') }}</ElDropdownItem
+                    ><ElDropdownItem command="DISMISSED">{{
+                      xt('驳回')
+                    }}</ElDropdownItem></ElDropdownMenu
+                  ></template
+                >
+              </ElDropdown>
+              <ElDropdown
+                v-if="
+                  resourceKey === 'moderation' &&
+                  ['PENDING', 'IN_REVIEW'].includes(row.appeal?.status)
+                "
+                @command="(command: string) => reviewModerationAppeal(row, command)"
+              >
+                <ElButton link type="primary"
+                  >{{ xt('复核申诉') }}<ArtSvgIcon icon="ri:arrow-down-s-line"
+                /></ElButton>
+                <template #dropdown
+                  ><ElDropdownMenu
+                    ><ElDropdownItem v-if="row.appeal.status === 'PENDING'" command="IN_REVIEW">{{
+                      xt('开始复核')
+                    }}</ElDropdownItem
+                    ><ElDropdownItem command="APPROVED">{{ xt('通过申诉') }}</ElDropdownItem
+                    ><ElDropdownItem command="REJECTED">{{
+                      xt('驳回申诉')
+                    }}</ElDropdownItem></ElDropdownMenu
+                  ></template
+                >
+              </ElDropdown>
+              <ElButton
+                v-if="editorConfig?.canDelete"
+                link
+                type="danger"
+                @click="removeResource(row)"
+                >{{ xt(resourceKey === 'promptLibrary' ? '重置' : '删除') }}</ElButton
+              >
+            </template>
+          </ElTableColumn>
+        </ElTable>
+      </div>
 
       <div class="table-footer">
         <ElPagination
@@ -449,10 +452,10 @@
   )
   const searchItems = computed(() => [
     {
-      label: xt('关键词'),
+      label: '',
       key: 'keyword',
       type: 'input',
-      props: { clearable: true, placeholder: `${xt('搜索')}${xt(config.value.title)}` }
+      props: { clearable: true, placeholder: xt('搜索名称、说明或能力') }
     }
   ])
   const filteredRows = computed(() => {
@@ -1066,16 +1069,15 @@
     overflow: hidden;
   }
 
-  .art-table-card :deep(.el-table) {
-    width: 100%;
-    min-width: 0 !important;
-    max-width: 100%;
+  .table-scroll {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
   }
 
-  .art-table-card :deep(.el-table__inner-wrapper),
-  .art-table-card :deep(.el-table__body-wrapper),
-  .art-table-card :deep(.el-scrollbar__wrap) {
-    max-width: 100%;
+  .art-table-card :deep(.el-table) {
+    width: 100%;
+    min-width: 100%;
   }
 
   .resource-heading {
@@ -1165,7 +1167,11 @@
 
   @media (width <= 768px) {
     .resource-heading p {
-      display: none;
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-line-clamp: 1;
+      line-clamp: 1;
+      -webkit-box-orient: vertical;
     }
 
     .table-footer :deep(.el-pagination__sizes),

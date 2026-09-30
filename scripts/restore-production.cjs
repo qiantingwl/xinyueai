@@ -20,7 +20,11 @@ for (const [file, expected] of Object.entries(manifest.files || {})) {
 
 const envFile = resolve(root, '.env.production')
 const composeFile = resolve(root, 'docker-compose.prod.yml')
-if (process.argv.includes('--restore-config')) copyFileSync(resolve(source, 'environment.production'), envFile)
+if (process.argv.includes('--restore-config')) {
+  const backupEnv = resolve(source, 'environment.production')
+  if (!existsSync(backupEnv)) throw new Error('该备份未包含 environment.production（默认不再打包密钥），请手工准备 .env.production')
+  copyFileSync(backupEnv, envFile)
+}
 if (!existsSync(envFile)) throw new Error('缺少 .env.production；使用 --restore-config 恢复备份配置，或先手工配置')
 const compose = ['compose', '--env-file', envFile, '-f', composeFile]
 function run(args, options = {}) {

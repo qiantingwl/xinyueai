@@ -474,6 +474,7 @@ export class PaymentsService {
     const config = input.publicConfig || {}, secrets = input.secrets || {}
     if (input.providerKey === 'EASYPAY' && (!config.apiUrl || !config.merchantId || !secrets.merchantKey)) throw new BadRequestException('易支付需要 API 地址、商户 ID 和商户密钥')
     if (input.providerKey === 'EASYPAY' && !/^\d+$/.test(String(config.merchantId))) throw new BadRequestException('易支付商户 ID（PID）必须为数字')
+    if (input.providerKey === 'EASYPAY' && String(secrets.merchantKey).trim().length < 16) throw new BadRequestException('易支付商户密钥过短（MD5 签名依赖密钥强度），至少 16 位')
     if (input.providerKey === 'EASYPAY') await this.endpointPolicy.assertPublicHttpUrl(String(config.apiUrl))
     if (input.providerKey === 'STRIPE' && (!secrets.secretKey || !secrets.webhookSecret)) throw new BadRequestException('Stripe 需要 Secret Key 和 Webhook Secret')
     if (input.providerKey === 'EXTERNAL' && (!config.checkoutUrl || !secrets.webhookSecret)) throw new BadRequestException('外部收银台需要结账地址和回调密钥')

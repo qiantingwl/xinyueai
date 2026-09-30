@@ -139,17 +139,28 @@
         <nav v-if="workspacePanel === 'agent'" class="canvas-agent-dock-tabs" aria-label="Agent 面板"><div><button type="button" role="tab" :aria-selected="agentDockView === 'create' || agentDockView === 'connect'" :class="{ 'is-active': agentDockView === 'create' || agentDockView === 'connect' }" @click="agentDockView = agentAvailable ? 'create' : 'connect'">对话</button><button type="button" role="tab" :aria-selected="agentDockView === 'history'" :class="{ 'is-active': agentDockView === 'history' }" @click="agentDockView = 'history'; void loadAgentHistory()"><History :size="15" />历史 <span v-if="agentHistory.length">{{ agentHistory.length }}</span></button></div><button class="canvas-agent-new-chat" type="button" @click="agentDockView = 'create'; agentGoal = ''"><Plus :size="15" />新建对话</button></nav>
 
         <section v-if="workspacePanel === 'agent'" class="canvas-agent-dock">
-          <section v-if="agentDockView === 'connect'" class="canvas-agent-connect" aria-live="polite"><div class="canvas-agent-connect-status"><span class="canvas-agent-status-dot" :class="{ 'is-ready': agentAvailable }" /><div><strong>{{ agentAvailable ? 'Agent 已就绪' : 'Agent 未配置' }}</strong><small>{{ agentAvailable ? `${agentModelsCount} 个可用模型，可直接执行画布计划` : '管理端尚未配置可用 Agent 模型' }}</small></div></div><div class="canvas-agent-connect-detail"><span>运行方式</span><strong>工作台 Agent 服务</strong><small>当前画布会随任务提交到已配置的服务，结果需确认后才会写回节点。</small></div><button type="button" class="canvas-agent-connect-link" @click="openWorkspaceSettings('api')">查看模型与服务配置 <ArrowRight :size="14" /></button></section>
+          <section v-if="agentDockView === 'connect'" class="canvas-agent-connect" aria-live="polite"><div class="canvas-agent-connect-status"><span class="canvas-agent-status-dot" :class="{ 'is-ready': agentAvailable }" /><div><strong>{{ agentAvailable ? 'Agent 已就绪' : 'Agent 未配置' }}</strong><small>{{ agentAvailable ? `${agentModelsCount} 个可用模型，可直接执行画布计划` : '管理端尚未配置可用 Agent 模型' }}</small></div></div><div class="canvas-agent-connect-detail"><span>运行方式</span><strong>工作台 Agent 服务</strong><small>确认计划后写入节点；带提示词的图片和视频会自动开始生成。</small></div><button type="button" class="canvas-agent-connect-link" @click="openWorkspaceSettings('api')">查看模型与服务配置 <ArrowRight :size="14" /></button></section>
           <template v-else-if="agentDockView === 'create'">
-          <section class="canvas-agent-welcome"><div><h2>你好，我是你的画布助手</h2><p>我可以帮你生成图像、优化布局、撰写文案、梳理思路、提取关键信息，让创意更高效实现。</p><button type="button" @click="agentGoal = '请介绍一下你能如何协助我完成当前画布。'">了解 Agent 能做什么 <ArrowRight :size="15" /></button></div><span class="canvas-agent-welcome-icon" aria-hidden="true"><Sparkles :size="30" /></span></section>
-          <span class="canvas-agent-starter-heading">你可以试试 <Sparkles :size="14" /></span>
+          <div class="canvas-agent-body">
+          <section class="canvas-agent-welcome"><div><h2>你好，我是你的画布助手</h2><p>生成图像、整理布局、写文案，确认计划后写入节点。</p></div></section>
+          <span class="canvas-agent-starter-heading">你可以试试</span>
           <div class="canvas-agent-starters" aria-label="常用画布操作">
-            <button type="button" @click="addAgentStarter('image')"><ImageIcon :size="17" /><span><strong>生成一套新品发布海报</strong><small>营造促销氛围，突出产品亮点</small></span></button>
-            <button type="button" @click="addAgentStarter('layout')"><PanelsTopLeft :size="17" /><span><strong>优化当前画布布局</strong><small>提升对齐与信息效率</small></span></button>
-            <button type="button" @click="addAgentStarter('plan')"><FileText :size="17" /><span><strong>撰写一段产品宣传文案</strong><small>突出卖点，吸引用户</small></span></button>
-            <button type="button" @click="addAgentStarter('group')"><Sparkles :size="17" /><span><strong>增强画面质感</strong><small>提升细节与光影表现</small></span></button>
-            <button type="button" @click="agentGoal = '将当前画布中的文案与图片按对应关系进行批量替换。'"><Copy :size="17" /><span><strong>批量替换文案与图片</strong><small>保持风格一致，批量应用</small></span></button>
-            <button type="button" @click="agentGoal = '基于当前画布生成三套可对比的设计方案。'"><Layers3 :size="17" /><span><strong>生成多套设计方案</strong><small>提供多种风格供选择</small></span></button>
+            <button type="button" @click="addAgentStarter('image')"><ImageIcon :size="16" /><span><strong>生成发布海报</strong><small>突出产品亮点</small></span></button>
+            <button type="button" @click="addAgentStarter('layout')"><PanelsTopLeft :size="16" /><span><strong>优化画布布局</strong><small>对齐与层级</small></span></button>
+            <button type="button" @click="addAgentStarter('plan')"><FileText :size="16" /><span><strong>撰写宣传文案</strong><small>卖点与口号</small></span></button>
+            <button type="button" @click="addAgentStarter('group')"><Sparkles :size="16" /><span><strong>增强画面质感</strong><small>光影与细节</small></span></button>
+            <button type="button" @click="agentGoal = '将当前画布中的文案与图片按对应关系进行批量替换。'"><Copy :size="16" /><span><strong>批量替换素材</strong><small>保持风格一致</small></span></button>
+            <button type="button" @click="agentGoal = '基于当前画布生成三套可对比的设计方案。'"><Layers3 :size="16" /><span><strong>多套设计方案</strong><small>三种风格对比</small></span></button>
+          </div>
+          <div class="canvas-agent-skill-block">
+            <span class="canvas-agent-starter-heading">技能</span>
+            <RouterLink class="canvas-agent-skill-more" to="/capabilities?tab=skills">{{ agentSkills.length > visibleAgentSkills.length ? `全部 ${agentSkills.length}` : '全部' }}</RouterLink>
+          </div>
+          <div class="canvas-agent-skills" aria-label="可用技能">
+            <p v-if="agentSkillsLoading" class="canvas-agent-skills-empty">正在读取技能</p>
+            <p v-else-if="!visibleAgentSkills.length" class="canvas-agent-skills-empty">还没有可用技能，可到能力中心安装</p>
+            <button v-for="skill in visibleAgentSkills" :key="skill.id" type="button" :class="{ 'is-active': agentPluginId === skill.id }" :title="skill.description" @click="selectAgentSkill(skill)">{{ skill.name }}</button>
+          </div>
           </div>
           <div class="canvas-agent-dock-footer">
             <section class="canvas-agent-reference-assets"><span>本轮参考素材</span><button type="button" title="打开资产面板添加参考素材" @click="assetsPanelOpen = true"><Plus :size="15" />添加参考素材</button></section>
@@ -410,8 +421,9 @@ import CanvasFlowNode from '../components/CanvasFlowNode.vue'
 import PluginSelector from '../components/PluginSelector.vue'
 import { api, streamApiEvents } from '../services/api'
 import { uploadAsset } from '../utils/asset-upload'
+import type { Plugin } from '../types'
 import type { CanvasAgentOperation, CanvasBackground, CanvasDocumentPayload, CanvasDramaStage, CanvasGenerationKind, CanvasGenerationOptions, CanvasImageToolOptions, CanvasImageToolType, CanvasKind, CanvasNodeData, CanvasNodeKind, CanvasRecord } from '../types/canvas'
-import { emptyCanvasDocument } from '../types/canvas'
+import { emptyCanvasDocument, canvasOperationShouldGenerate } from '../types/canvas'
 import { canvasTextRewritePlan } from '../utils/canvas-text'
 import { clone } from '../utils/clone'
 import { createClientId } from '../utils/client-id'
@@ -528,6 +540,19 @@ const compactCanvasQuery = window.matchMedia('(max-width: 680px)')
 const miniMapOpen = ref(false)
 const canvasAppearanceOpen = ref(false)
 const agentPluginId = ref('')
+const agentSkills = ref<Plugin[]>([])
+const agentSkillsLoading = ref(false)
+const canvasAgentSkillPriority = ['commerce-studio', 'article-illustration', 'comic-strip', 'svg-vector', 'video-storyboard', 'product-detail-page', 'deep-writer', 'web-research', 'flowchart', 'mind-map', 'infographic', 'humanize-rewrite']
+function canvasAgentSkillRank(skill: Plugin) {
+  const selectedBoost = skill.id === agentPluginId.value ? -100 : 0
+  const slugIndex = canvasAgentSkillPriority.indexOf(skill.slug)
+  if (slugIndex >= 0) return selectedBoost + slugIndex
+  if (skill.capabilities.includes('IMAGE') || skill.capabilities.includes('COMMERCE')) return selectedBoost + 40
+  if (skill.category?.slug === 'creative' || skill.category?.slug === 'content' || skill.category?.slug === 'diagram') return selectedBoost + 50
+  if (skill.capabilities.includes('OFFICE') && !skill.capabilities.includes('IMAGE')) return selectedBoost + 80
+  return selectedBoost + 60
+}
+const visibleAgentSkills = computed(() => [...agentSkills.value].sort((left, right) => canvasAgentSkillRank(left) - canvasAgentSkillRank(right) || left.name.localeCompare(right.name, 'zh-CN')).slice(0, 8))
 const agentSmartPlanning = ref(true)
 const agentGenerationCount = ref(1)
 const shortcutHelpOpen = ref(false)
@@ -723,6 +748,11 @@ onMounted(() => {
   void studio.refreshCredits().catch(() => undefined)
   void api<Array<{ readAt?: string | null }>>('/notifications').then((items) => { unreadNotifications.value = items.filter((item) => !item.readAt).length }).catch(() => undefined)
   void loadCanvas()
+  void loadAgentSkills()
+})
+
+watch(workspacePanel, (panel) => {
+  if (panel === 'agent') void loadAgentSkills()
 })
 
 onBeforeUnmount(() => {
@@ -1293,6 +1323,32 @@ function addAgentStarter(action: 'image' | 'plan' | 'group' | 'layout') {
   if (agentAvailable.value) openAgentPlan()
 }
 
+async function loadAgentSkills() {
+  if (!auth.isAuthenticated) {
+    agentSkills.value = []
+    agentSkillsLoading.value = false
+    return
+  }
+  agentSkillsLoading.value = true
+  try {
+    agentSkills.value = await api<Plugin[]>('/plugins/available?capability=CHAT')
+    if (agentPluginId.value && !agentSkills.value.some((skill) => skill.id === agentPluginId.value)) agentPluginId.value = ''
+  } catch {
+    agentSkills.value = []
+  } finally {
+    agentSkillsLoading.value = false
+  }
+}
+
+function selectAgentSkill(skill: Plugin) {
+  agentPluginId.value = agentPluginId.value === skill.id ? '' : skill.id
+  if (!agentPluginId.value) return
+  if (!agentGoal.value.trim()) {
+    agentGoal.value = `用「${skill.name}」处理当前画布。`
+    void nextTick(() => resizeAgentGoalInput())
+  }
+}
+
 function openCanvasContextMenu(event: MouseEvent) {
   event.preventDefault()
   nodeCreateMenu.value = null
@@ -1686,6 +1742,7 @@ async function applyAgentOperations(operations: CanvasAgentOperation[]) {
         style: { width: `${width}px`, height: `${height}px` },
       })
       if (operation.tempId) aliases.set(operation.tempId, id)
+      if (canvasOperationShouldGenerate(operation)) generationTargets.push(id)
       continue
     }
 

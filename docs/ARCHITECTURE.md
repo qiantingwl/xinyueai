@@ -262,13 +262,13 @@ PENDING ──预留+扣费──> RESERVED ──结算──> SETTLED
 
 ### 8.5 Agent 任务
 
-`AgentTask` 状态：`DRAFT / QUEUED / RUNNING / WAITING_APPROVAL / SUCCEEDED / PARTIAL / FAILED / CANCELLED`。步骤、事件、工具调用分表记录；高风险工具使 Agent 任务进入 `WAITING_APPROVAL`；`AgentSchedule` 使用幂等键防止重复执行。
+`AgentTask` 状态：`DRAFT / QUEUED / RUNNING / WAITING_APPROVAL / SUCCEEDED / PARTIAL / FAILED / CANCELLED`。LangGraph 图为准备 → 规划 → 工具 → 写稿 → 校验 → 再规划/交付。内置工具含知识库、项目上下文、文件目录、读取文件、数据汇总、时间与可选联网搜索；已配置 Endpoint 的 n8n / Dify / FastGPT / Langflow 对办公任务全局可见，调用前可审批。步骤、事件、工具调用分表记录；`AgentSchedule` 使用幂等键防止重复执行。
 
 ## 9. 内容、资产与工作区
 
 - **资产**：`POST /v1/assets/uploads` 在服务端校验 MIME、扩展名与内容签名；内容只能通过带权限检查的 `GET /v1/assets/:id/content` 读取。每条 `Asset` 记录存储驱动、Bucket 与 SHA-256，支持在后台从本地卷迁移到 S3。
 - **项目与团队**：项目指令、成员权限、版本与项目 Skill；团队成员、邀请、角色、团队额度与审计。
-- **画布**：`CanvasDocument` 保存节点、边、视口与版本；生成节点只保存生成任务 ID 与展示状态，结果由 `JobOutput` / `Asset` 回填，刷新页面可从数据库恢复。
+- **画布**：`CanvasDocument` 保存节点、边、视口与版本；生成节点只保存生成任务 ID 与展示状态，结果由 `JobOutput` / `Asset` 回填。画布 Agent 确认操作后，带提示词的图片/视频节点会自动开始生成。
 - **提示词库**：内置快照 `server/prompt-library-data`、管理员覆盖、已审核公开作品，以及显式启用的外部来源；同步失败保留上次可用快照。
 - **作品与分享**：作品有草稿 / 发布、可见性与审核状态；对话分享使用不可猜测的 Token，撤销即失效，公开映射不含私有附件路径与账务字段。
 - **办公与导出**：办公任务是带 `officeSkill` 的 Chat 任务；导出走独立 `export` 队列，生成 DOCX / XLSX / PPTX / ZIP，并作为受控资产下载。

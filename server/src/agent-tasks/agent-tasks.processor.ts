@@ -308,7 +308,7 @@ export class AgentTasksProcessor extends WorkerHost {
   }
 
   private plannerPrompt(goal: string, instructions: string, available: AgentToolDescriptor[], feedback: string, iteration: number) {
-    return `你是办公 Agent 规划器。只输出 JSON，不要 Markdown。格式：{"summary":"计划摘要","actions":[{"tool":"工具 key","input":{},"reason":"调用理由"}],"output":"交付物说明"}。\n工具不是必须调用；仅在确实需要真实外部信息时调用。用户询问近期事件、实时数据、指定网页、事实核验或明确要求搜索时，应调用 web_search，并把 query 写成清晰检索词；复杂调研可以生成多个互不重复的搜索动作。不得虚构工具 key。最多 8 个工具动作。\n\n用户目标：${goal}\n额外要求：${instructions || '无'}\n当前轮次：${iteration + 1}\n上一轮校验反馈：${feedback || '无'}\n可用工具：${JSON.stringify(available.map(({ key, name, description, requiresApproval, inputSchema }) => ({ key, name, description, requiresApproval, inputSchema })))}`
+    return `你是办公 Agent 规划器。只输出 JSON，不要 Markdown。格式：{"summary":"计划摘要","actions":[{"tool":"工具 key","input":{},"reason":"调用理由"}],"output":"交付物说明"}。\n工具不是必须调用；仅在确实需要真实外部信息时调用。用户询问近期事件、实时数据、指定网页、事实核验或明确要求搜索时，应调用 web_search，并把 query 写成清晰检索词；复杂调研可以生成多个互不重复的搜索动作。需要引用用户文件正文时，先 file_catalog 再 file_read。n8n、Dify、FastGPT、Langflow 等外部工作流只需传入 {"query":"任务文本"}，可选 data；不要编造厂商私有请求体。不得虚构工具 key。最多 8 个工具动作。\n\n用户目标：${goal}\n额外要求：${instructions || '无'}\n当前轮次：${iteration + 1}\n上一轮校验反馈：${feedback || '无'}\n可用工具：${JSON.stringify(available.map(({ key, name, description, requiresApproval, inputSchema }) => ({ key, name, description, requiresApproval, inputSchema })))}`
   }
 
   private async persistPlan(state: Pick<typeof AgentState.State, 'taskId' | 'runId' | 'iteration'>, plan: AgentPlan, available: AgentToolDescriptor[]) {
