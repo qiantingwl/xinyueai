@@ -8,7 +8,62 @@
 /* 把手不做任何视觉提示（悬停蓝带被吐槽），靠 col-resize 光标示意 */
 .canvas-sidebar-resize-handle:hover { background: transparent; }
 .canvas-sidebar-resize-handle:focus { outline: none; background: transparent; }
-.canvas-agent-dock { min-height: 0; display: flex; flex-direction: column; padding: 18px 18px 14px; overflow: hidden; }
+.canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-dock { min-height: 0; display: flex; flex-direction: column; padding: 14px 16px 12px; overflow: hidden; }
+.canvas-agent-dock { min-height: 0; display: flex; flex-direction: column; padding: 14px 16px 12px; overflow: hidden; }
+.canvas-agent-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-welcome { flex: 0 0 auto; display: block; padding: 12px 14px; }
+.canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-welcome h2 { font-size: 15px; line-height: 22px; }
+.canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-welcome p { margin: 4px 0 0; font-size: 12px; line-height: 1.5; }
+.canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-starter-heading { flex: 0 0 auto; display: flex; align-items: center; margin: 12px 2px 8px; height: auto; line-height: 18px; }
+.canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-starters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+}
+.canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-starters button {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+  height: auto;
+  padding: 10px;
+  flex-shrink: 1;
+  overflow: hidden;
+}
+.canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-starters span { display: grid; gap: 2px; min-width: 0; }
+.canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-starters strong,
+.canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-starters small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-starters svg { flex: 0 0 auto; margin-top: 1px; color: var(--canvas-accent); }
+.canvas-agent-skill-block { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 2px 6px; }
+.canvas-agent-skill-block .canvas-agent-starter-heading { margin: 0; }
+.canvas-agent-skill-more { color: var(--canvas-accent); font-size: 11px; text-decoration: none; }
+.canvas-agent-skill-more:hover { text-decoration: underline; }
+.canvas-agent-skills { display: flex; flex-wrap: wrap; gap: 6px; flex: 0 0 auto; min-height: 0; overflow: hidden; }
+.canvas-agent-skills button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: var(--studio-panel);
+  color: var(--studio-text);
+  font-size: 11px;
+  line-height: 26px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canvas-agent-skills button:hover { border-color: color-mix(in srgb, var(--canvas-accent) 45%, var(--studio-border)); }
+.canvas-agent-skills button.is-active { background: var(--canvas-accent-soft); border-color: color-mix(in srgb, var(--canvas-accent) 50%, var(--studio-border)); color: var(--canvas-accent); }
+.canvas-agent-skills-empty { margin: 0; color: var(--studio-muted); font-size: 11px; line-height: 1.5; }
 /* 内容顶部对齐（对齐 kimi/千问官网首页）：留白集中在建议区与底部输入区之间 */
 .canvas-agent-welcome { flex: 0 0 auto; background: color-mix(in srgb, var(--canvas-accent-soft) 55%, var(--studio-panel)); border: 1px solid color-mix(in srgb, var(--canvas-accent) 22%, var(--studio-border)); border-radius: 14px; padding: 16px; }
 .canvas-agent-welcome h2 { margin: 0; color: var(--studio-text); font-size: 17px; line-height: 24px; font-weight: 650; }
@@ -16,9 +71,9 @@
 .canvas-agent-welcome button { width: max-content; height: 30px; padding: 0 10px; background: transparent; color: var(--canvas-accent); border: 1px solid color-mix(in srgb, var(--canvas-accent) 30%, var(--studio-border)); border-radius: 7px; box-shadow: none; }
 .canvas-agent-welcome button:hover { background: var(--studio-panel); box-shadow: none; transform: none; }
 .canvas-agent-welcome-icon { align-self: center; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 12px; color: var(--canvas-accent); background: color-mix(in srgb, var(--studio-panel) 70%, transparent); }
-.canvas-agent-starter-heading { margin: 20px 2px 10px; color: var(--studio-muted); font-size: 12px; }
-.canvas-agent-starters { min-height: 0; overflow: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.canvas-agent-starters button { min-height: 58px; padding: 10px; border: 1px solid var(--studio-border); border-radius: 10px; background: var(--studio-panel); color: var(--studio-text); text-align: left; }
+.canvas-agent-starter-heading { margin: 12px 2px 8px; color: var(--studio-muted); font-size: 12px; }
+.canvas-agent-starters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; overflow: visible; min-height: 0; }
+.canvas-agent-starters button { min-height: 0; padding: 10px; border: 1px solid var(--studio-border); border-radius: 10px; background: var(--studio-panel); color: var(--studio-text); text-align: left; }
 .canvas-agent-starters button:hover { border-color: color-mix(in srgb, var(--canvas-accent) 45%, var(--studio-border)); background: color-mix(in srgb, var(--canvas-accent-soft) 35%, var(--studio-panel)); transform: none; box-shadow: none; }
 /* 底部输入区成组贴底：参考素材行 + 输入框 + 提示作为一个整体，避免参考行孤零零悬在面板中部 */
 .canvas-agent-dock-footer { flex: 0 0 auto; margin-top: auto; display: flex; flex-direction: column; }
@@ -81,7 +136,7 @@
 .canvas-appearance-presets svg:last-child { color: var(--studio-muted); flex: 0 0 auto; }
 @media (max-width: 760px) {
   .canvas-workspace-sidebar { width: min(100vw, var(--canvas-sidebar-width)); }
-  .canvas-agent-starters { grid-template-columns: 1fr; }
+  .canvas-editor-page .canvas-workspace-sidebar.is-agent .canvas-agent-starters { grid-template-columns: 1fr 1fr; }
   .canvas-agent-composer-controls { flex-wrap: wrap; }
 }
 

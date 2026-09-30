@@ -4,7 +4,7 @@
 
 信息依据仓库中的 `package.json`、锁文件、Dockerfile、Compose 与 Worker 配置整理。某项能力如果需要管理员配置、可选 Compose profile 或外部服务，会明确标记，不把可选能力描述为默认可用。
 
-最后核对日期：2026-09-24。
+最后核对日期：2026-09-30。
 
 > 本文不是法律意见。许可证、模型权重、媒体、提示词数据和第三方在线服务可能分别适用不同条款；发布或商用前仍需核对对应版本的上游许可证。
 
@@ -247,9 +247,10 @@ Provider 密钥只应存放于服务端加密字段或部署环境中。使用�
 | Brave Search | 托管搜索 API | 预置但关闭；支持普通网页与新闻检索 |
 | Exa | 托管语义搜索 API | 预置但关闭；返回正文摘要与可选域名过滤 |
 | DailyHotApi / TGMeng Trend API | 热点推荐聚合 | 用于首页热点和搜索回退，不等于模型搜索能力 |
-| n8n | 外部工作流 Tool | 默认关闭，配置 Webhook、鉴权头并要求审批后使用 |
-| Dify | 外部 Workflow Tool | 默认关闭，配置 Workflow API 与 Bearer Key 后使用 |
-| FastGPT | 外部应用 Tool | 默认关闭，配置应用 API 与 Bearer Key 后使用 |
+| n8n | 外部工作流 Tool | 默认关闭，配置 Webhook、鉴权头并要求审批后使用；服务端把 Agent 的 `query` 转成 Webhook JSON。许可为 fair-code，不是 OSI 开源 |
+| Dify | 外部 Workflow Tool | 默认关闭，配置 Workflow API 与 Bearer Key 后使用；服务端把 `query` 映射为 `inputs`。许可证带多租户限制 |
+| FastGPT | 外部应用 Tool | 默认关闭，配置应用 API 与 Bearer Key 后使用；服务端把 `query` 映射为 `messages` |
+| Langflow | 外部工作流 Tool | 默认关闭，配置 `/api/v1/run/{flow_id}` 与 `x-api-key` 后使用。MIT，适合作为真正开源的可视化 Agent 工作流 |
 | Linux.do | OAuth 登录来源 | 默认关闭；启用后使用 state、PKCE、回调校验和邮箱绑定 |
 | Stripe | 支付和退款网关 | 管理员配置 Secret/Webhook Secret；服务端验签和幂等入账 |
 | 易支付兼容网关 | 支付和退款协议 | 管理员提供公网 API、PID 与密钥；服务端校验签名 |

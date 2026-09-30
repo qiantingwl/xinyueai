@@ -149,7 +149,6 @@
 
 @media (max-width: 900px) {
   .canvas-editor-page { --canvas-sidebar-width: 292px; }
-  .canvas-agent-starters { grid-template-columns: 1fr; }
   .canvas-flow { right: var(--canvas-sidebar-width); }
 }
 

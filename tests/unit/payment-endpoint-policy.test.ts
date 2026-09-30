@@ -32,9 +32,27 @@ test('enabled EasyPay channels reject private API endpoints before persistence',
       providerKey: 'EASYPAY',
       supportedMethods: ['alipay'],
       publicConfig: { apiUrl: 'http://127.0.0.1:8080', merchantId: '1001' },
-      secrets: { merchantKey: 'secret' },
+      secrets: { merchantKey: 'easypay-merchant-key-0123456789' },
     }, true),
     /非公网地址/,
+  )
+})
+
+test('enabled EasyPay channels reject short merchant keys before persistence', async () => {
+  const service = createService()
+  const validateChannel = (service as unknown as {
+    validateChannel(input: unknown, strict: boolean): Promise<void>
+  }).validateChannel.bind(service)
+
+  await assert.rejects(
+    () => validateChannel({
+      name: 'Weak Key EasyPay',
+      providerKey: 'EASYPAY',
+      supportedMethods: ['alipay'],
+      publicConfig: { apiUrl: 'https://pay.example.com', merchantId: '1001' },
+      secrets: { merchantKey: 'short-key' },
+    }, true),
+    /商户密钥过短/,
   )
 })
 

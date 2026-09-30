@@ -10,6 +10,7 @@ import { ModerationService } from '../moderation/moderation.service'
 import { imageCapabilities, imageCreditCost, imageResolutionTier, normalizeImageOptions } from './image-options'
 import { normalizeVideoOptions, videoCapabilities, videoCreditCost } from './video-options'
 import { PluginsService } from '../plugins/plugins.service'
+import { chatPluginCapabilityFallbacks } from '../plugins/plugin-capability'
 import { ResourceAccessService } from '../common/resource-access.service'
 import { GenerationEventsService } from './generation-events.service'
 import { GenerationLifecycleService } from './generation-lifecycle.service'
@@ -93,7 +94,8 @@ export class GenerationsService {
     const capability = input.kind === 'CHAT' ? 'CHAT' : input.kind === 'VIDEO' ? 'VIDEO' : input.kind === 'COMMERCE' ? 'COMMERCE' : 'IMAGE'
     const pluginCapability = input.kind === 'CHAT' && typeof input.options.officeSkill === 'string' ? PluginCapability.OFFICE : PluginCapability[capability]
     const pluginId = typeof input.options.pluginId === 'string' && input.options.pluginId.trim() ? input.options.pluginId.trim() : undefined
-    const plugin = pluginId ? await this.plugins.resolveForUse(userId, pluginId, pluginCapability, account?.role) : null
+    const pluginFallbacks = input.kind === 'CHAT' ? chatPluginCapabilityFallbacks(pluginCapability) : []
+    const plugin = pluginId ? await this.plugins.resolveForUse(userId, pluginId, pluginCapability, account?.role, pluginFallbacks) : null
     const assistantId = input.kind === 'CHAT' && typeof input.options.assistantId === 'string' ? input.options.assistantId : undefined
     const assistant = assistantId ? await this.prisma.assistant.findFirst({ where: { id: assistantId, enabled: true, visibility: 'PUBLIC' }, select: { id: true, defaultModel: true } }) : null
     if (assistantId && !assistant) throw new NotFoundException('助手不存在或已停用')

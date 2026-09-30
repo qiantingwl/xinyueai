@@ -2,7 +2,10 @@
 <!-- 支持常用表单组件、自定义组件、插槽、校验、隐藏表单项 -->
 <!-- 写法同 ElementPlus 官方文档组件，把属性写在 props 里面就可以了 -->
 <template>
-  <section class="art-search-bar art-card-xs" :class="{ 'is-expanded': isExpanded }">
+  <section
+    class="art-search-bar art-card-xs"
+    :class="{ 'is-expanded': isExpanded, 'is-inline-search': inlineActions }"
+  >
     <ElForm
       ref="formRef"
       :model="modelValue"
@@ -13,9 +16,9 @@
         <ElCol
           v-for="item in visibleFormItems"
           :key="item.key"
-          :xs="getColSpan(item.span, 'xs')"
-          :sm="getColSpan(item.span, 'sm')"
-          :md="getColSpan(item.span, 'md')"
+          :xs="fieldColSpan(item.span, 'xs')"
+          :sm="fieldColSpan(item.span, 'sm')"
+          :md="fieldColSpan(item.span, 'md')"
           :lg="getColSpan(item.span, 'lg')"
           :xl="getColSpan(item.span, 'xl')"
         >
@@ -69,7 +72,15 @@
             </slot>
           </ElFormItem>
         </ElCol>
-        <ElCol :xs="24" :sm="24" :md="span" :lg="span" :xl="span" class="action-column">
+        <ElCol
+          :xs="24"
+          :sm="inlineActions ? 8 : 24"
+          :md="inlineActions ? 8 : span"
+          :lg="span"
+          :xl="span"
+          class="action-column"
+          :class="{ 'is-inline': inlineActions }"
+        >
           <div class="action-buttons-wrapper" :style="actionButtonsStyle">
             <div class="form-buttons">
               <ElButton v-if="showReset" class="reset-button" @click="handleReset" v-ripple>
@@ -153,6 +164,8 @@
   const { width } = useWindowSize()
   const { t } = useI18n()
   const isMobile = computed(() => width.value < 500)
+  const visibleItemCount = computed(() => props.items.filter((item) => !item.hidden).length)
+  const inlineActions = computed(() => visibleItemCount.value <= props.buttonLeftLimit)
 
   const formInstance = useTemplateRef<FormInstance>('formRef')
 
@@ -323,6 +336,13 @@
     return calculateResponsiveSpan(itemSpan, span.value, breakpoint)
   }
 
+  const fieldColSpan = (itemSpan: number | undefined, breakpoint: ResponsiveBreakpoint): number => {
+    if (breakpoint === 'xs') return getColSpan(itemSpan, breakpoint)
+    if (inlineActions.value && visibleItemCount.value === 1) return 16
+    if (inlineActions.value && visibleItemCount.value === 2) return 8
+    return getColSpan(itemSpan, breakpoint)
+  }
+
   // 搜索表单清空输入时不保留空字符串，避免后续请求携带空字段。
   const normalizeFieldValue = (value: unknown) => {
     return value === '' ? undefined : value
@@ -425,9 +445,9 @@
    */
   const visibleFormItems = computed(() => {
     const filteredItems = props.items.filter((item) => !item.hidden)
-    const shouldShowLess = !props.isExpand && !isExpanded.value
+    const shouldShowLess = props.showExpand && !props.isExpand && !isExpanded.value
     if (shouldShowLess) {
-      const maxItemsPerRow = Math.floor(24 / props.span) - 1
+      const maxItemsPerRow = Math.max(1, Math.floor(24 / props.span) - 1)
       return filteredItems.slice(0, maxItemsPerRow)
     }
     return filteredItems
@@ -454,11 +474,7 @@
    * 操作按钮样式
    */
   const actionButtonsStyle = computed(() => ({
-    'justify-content': isMobile.value
-      ? 'flex-end'
-      : props.items.filter((item) => !item.hidden).length <= props.buttonLeftLimit
-        ? 'flex-start'
-        : 'flex-end'
+    'justify-content': isMobile.value ? 'flex-end' : inlineActions.value ? 'flex-start' : 'flex-end'
   }))
 
   /**
@@ -509,15 +525,41 @@
   .art-search-bar {
     padding: 15px 20px 0;
 
+    &.is-inline-search :deep(.el-row) {
+      align-items: flex-start;
+    }
+
+    @media (width >= 560px) {
+      &.is-inline-search :deep(.el-row) {
+        flex-wrap: nowrap;
+      }
+
+      &.is-inline-search :deep(.el-col:not(.action-column)) {
+        flex: 1 1 auto;
+        max-width: none;
+      }
+
+      &.is-inline-search :deep(.action-column.is-inline) {
+        flex: 0 0 auto;
+        width: auto;
+        max-width: none;
+      }
+    }
+
     .action-column {
       flex: 1;
       max-width: 100%;
+
+      &.is-inline {
+        flex: 0 0 auto;
+      }
 
       .action-buttons-wrapper {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         justify-content: flex-end;
+        min-height: 32px;
         margin-bottom: 12px;
       }
 
@@ -556,7 +598,7 @@
   }
 
   // 响应式优化
-  @media (width <= 768px) {
+  @media (width <= 500px) {
     .art-search-bar {
       padding: 16px 16px 0;
 
@@ -567,11 +609,11 @@
           align-items: stretch;
 
           .form-buttons {
-            justify-content: center;
+            justify-content: flex-end;
           }
 
           .filter-toggle {
-            justify-content: center;
+            justify-content: flex-end;
             margin-left: 0;
           }
         }

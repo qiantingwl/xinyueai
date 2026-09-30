@@ -441,13 +441,19 @@
     padding: 16px 20px 2px;
   }
 
+  .filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
   .filter-card :deep(.el-form-item) {
     margin-right: 10px;
     margin-bottom: 14px;
   }
 
   .search-field {
-    width: 270px;
+    width: min(270px, 100%);
   }
 
   .filter-select {
@@ -462,14 +468,14 @@
     flex: 0 0 auto;
     min-width: 0;
     max-width: 100%;
-    overflow: hidden;
+    overflow-x: auto;
   }
 
   .compact-table-card :deep(.el-card__body) {
     min-width: 0;
     max-width: 100%;
     height: auto;
-    overflow: hidden;
+    overflow-x: auto;
   }
 
   .table-heading {
@@ -491,7 +497,7 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    overflow: hidden;
+    overflow-x: auto;
   }
 
   .data-table {

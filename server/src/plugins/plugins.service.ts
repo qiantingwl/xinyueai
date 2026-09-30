@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { ensureDefaultSkillPresets } from './default-skill-presets'
 import { AdminPluginDto, PluginCategoryDto, PrivatePluginDto } from './plugin.dto'
 import { PREINSTALLED_CONFIG_KEY, isPreinstalledPlugin, pluginConfigObject, preinstalledPluginWhere } from './plugin-preinstall'
+import { matchPluginCapability } from './plugin-capability'
 
 const forbiddenConfigKeys = /(?:script|code|command|package|dependency|endpoint|webhook|callback|executable|binary|url|uri)/i
 const forbiddenConfigValues = /(?:javascript:|data:text\/html|<script|npm\s+(?:i|install)|pnpm\s+add|yarn\s+add|powershell|cmd\.exe|\/bin\/sh)/i
@@ -258,14 +259,15 @@ export class PluginsService {
     return keys
   }
 
-  async resolveForUse(userId: string, pluginId: string, capability: PluginCapability, role?: UserRole) {
+  async resolveForUse(userId: string, pluginId: string, capability: PluginCapability, role?: UserRole, fallbacks: PluginCapability[] = []) {
     const plugin = await this.prisma.plugin.findUnique({ where: { id: pluginId }, include: { installations: { where: { userId }, select: { enabled: true } } } })
     if (!plugin || plugin.status !== PluginStatus.PUBLISHED) throw new NotFoundException('插件不存在或已停用')
-    if (!this.effectiveCapabilities(plugin).includes(capability)) throw new BadRequestException('该插件不支持当前创作类型')
+    const matched = matchPluginCapability(capability, this.effectiveCapabilities(plugin), fallbacks)
+    if (!matched) throw new BadRequestException('该插件不支持当前创作类型')
     const officialAllowed = plugin.installations.length ? plugin.installations.some((row) => row.enabled) : isPreinstalledPlugin(plugin)
     const allowed = plugin.visibility === PluginVisibility.PRIVATE ? plugin.ownerId === userId : plugin.visibility === PluginVisibility.OFFICIAL && officialAllowed
     if (!allowed) throw new ForbiddenException('请先安装该插件')
-    return { id: plugin.id, name: plugin.name, instruction: plugin.instruction, outputRequirements: plugin.outputRequirements, recommendedModel: plugin.recommendedModel, version: plugin.version, capability }
+    return { id: plugin.id, name: plugin.name, instruction: plugin.instruction, outputRequirements: plugin.outputRequirements, recommendedModel: plugin.recommendedModel, version: plugin.version, capability: matched }
   }
 
   async adminList() {

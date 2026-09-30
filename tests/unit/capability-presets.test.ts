@@ -43,10 +43,20 @@ test('商品视觉、商业文案和知识服务助手绑定知识库检索', ()
   }
 })
 
+test('读取文件是默认启用的内置工具', () => {
+  const fileRead = defaultToolPresets.find((item) => item.key === 'file_read')
+  assert.ok(fileRead)
+  assert.equal(fileRead?.enabled, true)
+  assert.equal(fileRead?.endpoint, '')
+  for (const assistant of defaultAssistantPresets) {
+    assert.ok(assistant.toolIds.includes('xinyue_tool_file_read'))
+  }
+})
+
 test('第三方工具预设默认关闭且不内置部署地址或密钥', () => {
   assert.equal(new Set(defaultToolPresets.map((item) => item.key)).size, defaultToolPresets.length)
   const external = defaultToolPresets.filter((item) => item.documentationUrl)
-  assert.deepEqual(external.map((item) => item.key).sort(), ['dify_workflow', 'fastgpt_workflow', 'n8n_workflow'])
+  assert.deepEqual(external.map((item) => item.key).sort(), ['dify_workflow', 'fastgpt_workflow', 'langflow_workflow', 'n8n_workflow'])
   for (const tool of external) {
     assert.equal(tool.enabled, false)
     assert.equal(tool.endpoint, '')

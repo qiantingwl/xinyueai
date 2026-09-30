@@ -29,10 +29,15 @@ capture('uploads.tar.gz', ['run', '--rm', '-T', '--no-deps', 'backend', 'tar', '
 run(['up', '-d', '--wait', '--wait-timeout', '180', 'redis'])
 run(['exec', '-T', 'redis', 'redis-cli', 'SAVE'])
 capture('redis.tar.gz', ['run', '--rm', '-T', '--no-deps', 'redis', 'tar', 'czf', '-', '-C', '/data', '.'])
-copyFileSync(envFile, resolve(target, 'environment.production'))
 copyFileSync(composeFile, resolve(target, 'docker-compose.prod.yml'))
 
-const files = ['database.dump', 'uploads.tar.gz', 'redis.tar.gz', 'environment.production', 'docker-compose.prod.yml']
+// .env.production 含全部密钥，默认不进备份；需要连配置一起备份时显式传 --include-env，
+// 且备份目录应整体加密存放，避免密钥与全库数据并存泄露。
+const includeEnv = process.argv.includes('--include-env')
+if (includeEnv) copyFileSync(envFile, resolve(target, 'environment.production'))
+
+const files = ['database.dump', 'uploads.tar.gz', 'redis.tar.gz', 'docker-compose.prod.yml']
+if (includeEnv) files.push('environment.production')
 const git = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' })
 const manifest = {
   format: 1,
@@ -44,3 +49,7 @@ const manifest = {
 writeFileSync(resolve(target, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 console.log(`[backup] 完成：${target}`)
 console.log(`[backup] 文件：${files.map(basename).join(', ')}`)
+if (!includeEnv) {
+  console.log('[backup] 注意：密钥文件（.env.production）未包含在备份中，恢复到新机器时需手工准备。')
+  console.log('[backup] 如需连配置一起备份请加 --include-env，并确保备份目录加密存放或严格限制访问权限。')
+}

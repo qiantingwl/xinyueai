@@ -140,19 +140,27 @@
 .office-deliverable > button:disabled { opacity: .55; }
 
 .office-composer-wrap { bottom: 24px; left: 50%; max-width: calc(100% - 40px); position: absolute; transform: translateX(-50%); width: min(1000px, calc(100% - 40px)); z-index: 10; }
-.office-composer { background: var(--office-composer-surface); border: 1px solid var(--office-composer-border); border-radius: 24px; box-shadow: var(--office-composer-shadow); min-height: 100px; padding: 10px; transition: border-color .16s ease, box-shadow .16s ease; }
+.office-composer { background: var(--office-composer-surface); border: 1px solid var(--office-composer-border); border-radius: 24px; box-shadow: var(--office-composer-shadow); container-type: inline-size; min-height: 100px; padding: 10px; transition: border-color .16s ease, box-shadow .16s ease; }
 .office-composer textarea { background: transparent; border: 0; color: var(--studio-text); display: block; font: inherit; font-size: 15px; height: 36px; line-height: 1.5; min-height: 36px; outline: 0; overflow-y: hidden; padding: 3px 10px 7px; resize: none; width: 100%; }
 .office-composer textarea::placeholder { color: var(--studio-muted); }
-.office-composer > footer { align-items: center; display: flex; gap: 8px; justify-content: space-between; min-height: 36px; position: relative; }
-.office-composer > footer > div { align-items: center; display: flex; gap: 2px; min-width: 0; overflow: visible; }
-.office-composer > footer > div::-webkit-scrollbar { display: none; }
+.office-composer > footer { align-items: center; display: flex; gap: 8px; justify-content: space-between; min-height: 36px; min-width: 0; position: relative; }
+.office-composer-tools { align-items: center; display: flex; flex: 1 1 auto; gap: 2px; min-width: 0; }
+.office-quick-skills { align-items: center; display: flex; flex: 1 1 auto; gap: 2px; min-width: 0; overflow: hidden; }
 .office-composer button { color: var(--studio-text); }
-.office-composer > footer button { align-items: center; background: transparent; border: 0; border-radius: 8px; display: inline-flex; flex: 0 0 auto; gap: 5px; height: 32px; justify-content: center; padding: 0 9px; transition: background-color .16s ease, color .16s ease; }
+.office-composer > footer button { align-items: center; background: transparent; border: 0; border-radius: 8px; display: inline-flex; flex: 0 0 auto; gap: 5px; height: 32px; justify-content: center; max-width: 100%; padding: 0 9px; transition: background-color .16s ease, color .16s ease; white-space: nowrap; }
 .office-composer > footer button:hover { background: var(--office-composer-control-hover); }
 .office-composer > footer button:disabled { cursor: not-allowed; }
 .office-composer .office-mode-button, .office-composer .office-model-button, .office-composer .office-skill-button { color: var(--studio-muted); font-size: 13px; max-width: 180px; }
+.office-composer .office-mode-button span, .office-composer .office-model-button { overflow: hidden; text-overflow: ellipsis; }
 .office-composer .office-skill-button.active, .office-composer .office-quick-skill.active { background: var(--office-composer-control); color: var(--studio-text); }
 .office-composer .office-quick-skill { color: var(--studio-muted); font-size: 13px; }
+@container (max-width: 860px) {
+  .office-quick-skill:nth-child(n+3) { display: none; }
+}
+@container (max-width: 700px) {
+  .office-quick-skills { display: none; }
+  .office-format-button span { display: none; }
+}
 .office-composer .office-web-button { color: var(--studio-muted); font-size: 13px; } .office-composer .office-web-button.active { background: rgba(79, 140, 255, .14); color: #7eaeff; }
 .office-composer .office-submit { background: var(--studio-inverse-bg); border-radius: 50%; color: var(--studio-inverse-text); height: 36px; padding: 0; width: 36px; }
 .office-composer .office-submit:hover { background: #fff; }
@@ -218,7 +226,6 @@ html[data-studio-theme="light"] .office-error { background: #fff1f2; border-colo
   .office-header { display: none; }
 }
 @media (max-width: 720px) {
-  .office-composer > footer > div { flex: 1 1 auto; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
   .office-composer .office-mode-menu, .office-composer .office-model-menu { bottom: 12px; left: 12px; max-width: none; position: fixed; right: 12px; transform: none; width: auto; }
   .office-welcome { align-content: start; gap: 44px; padding: 80px 16px 190px; }
   .office-welcome__copy h1 { font-size: 26px; }
@@ -226,7 +233,6 @@ html[data-studio-theme="light"] .office-error { background: #fff1f2; border-colo
   .office-recommendations small { display: none; }
   .office-composer-wrap { bottom: 16px; left: 10px; max-width: calc(100% - 20px); transform: none; width: calc(100% - 20px); }
   .office-composer .office-model-button { display: none; }
-  .office-composer .office-quick-skill:nth-of-type(n+4) { display: none; }
   .office-composer .office-mode-button, .office-composer .office-skill-button { max-width: 120px; overflow: hidden; }
   .office-result__inner { padding: 34px 16px 190px; }
   .office-user-message { max-width: 88%; }

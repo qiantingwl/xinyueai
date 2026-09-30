@@ -526,14 +526,14 @@
     flex: 0 0 auto;
     min-width: 0;
     max-width: 100%;
-    overflow: hidden;
+    overflow-x: auto;
   }
 
   .compact-table-card :deep(.el-card__body) {
     min-width: 0;
     max-width: 100%;
     height: auto;
-    overflow: hidden;
+    overflow-x: auto;
   }
 
   .table-heading {
@@ -554,7 +554,7 @@
   .table-scroll {
     width: 100%;
     min-width: 0;
-    overflow: hidden;
+    overflow-x: auto;
   }
 
   .data-table {

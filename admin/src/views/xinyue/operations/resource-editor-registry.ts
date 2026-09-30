@@ -719,7 +719,7 @@ export const operationEditorConfigs: Record<string, ResourceEditorConfig> = {
         rows: 3,
         placeholder: '{"Authorization":"Bearer ..."}',
         omitEmpty: true,
-        help: '敏感请求头会加密保存；编辑时留空表示保留现有值。Dify、FastGPT 等 Bearer Key 填在这里。'
+        help: '敏感请求头会加密保存；编辑时留空表示保留现有值。Dify / FastGPT 填 Authorization: Bearer；Langflow 填 x-api-key。'
       },
       { key: 'clearSecretHeaders', label: '清除已保存敏感请求头', type: 'switch' },
       {

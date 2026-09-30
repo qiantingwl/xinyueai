@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { canvasDocumentFromStudioAssets } from '../../src/types/canvas.ts'
+import { canvasDocumentFromStudioAssets, canvasOperationShouldGenerate } from '../../src/types/canvas.ts'
 
 test('生成结果写入画布时按素材建成图片节点', () => {
   const document = canvasDocumentFromStudioAssets([
@@ -20,4 +20,12 @@ test('生成结果写入画布时按素材建成图片节点', () => {
 test('没有文件地址的素材不会建成空节点', () => {
   const document = canvasDocumentFromStudioAssets([{ id: 'asset-1', title: '未完成' }], '海报')
   assert.equal(document.nodes.length, 0)
+})
+
+test('画布 Agent 在新增带提示词的图片或视频时会执行生成', () => {
+  assert.equal(canvasOperationShouldGenerate({ type: 'add_image', prompt: '洗发水主图' }), true)
+  assert.equal(canvasOperationShouldGenerate({ type: 'add_video', prompt: '15 秒成片' }), true)
+  assert.equal(canvasOperationShouldGenerate({ type: 'add_image' }), false)
+  assert.equal(canvasOperationShouldGenerate({ type: 'add_text', prompt: '文案' }), false)
+  assert.equal(canvasOperationShouldGenerate({ type: 'run_generation' }), true)
 })
