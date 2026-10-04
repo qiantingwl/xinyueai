@@ -4,7 +4,11 @@ import { cookieMutationAllowed, parseTrustProxy, parseWebOrigins } from '../../s
 
 test('proxy trust rejects blanket forwarded-header trust', () => {
   assert.equal(parseTrustProxy(undefined), false)
-  assert.equal(parseTrustProxy('1'), 1)
+  // platform-fastify 12 移除数字跳数；跳数配置以等价函数表达（hop 从 0 起算，信任前 N 跳）
+  const hopTrust = parseTrustProxy('1')
+  assert.equal(typeof hopTrust, 'function')
+  assert.equal((hopTrust as (addr: string, hop: number) => boolean)('10.0.0.1', 0), true)
+  assert.equal((hopTrust as (addr: string, hop: number) => boolean)('10.0.0.1', 1), false)
   assert.deepEqual(parseTrustProxy('loopback, 10.0.0.0/8'), ['loopback', '10.0.0.0/8'])
   assert.throws(() => parseTrustProxy('true'), /explicit hop count/)
 })
