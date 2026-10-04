@@ -2,7 +2,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 export const COOKIE_MUTATION_HEADER = 'x-xinyue-request'
 
-export type TrustProxySetting = false | number | string | string[]
+export type TrustProxySetting = false | string | string[] | ((addr: string, hop: number) => boolean)
 
 function normalizedOrigin(value: string | undefined): string | null {
   if (!value) return null
@@ -34,7 +34,8 @@ export function parseTrustProxy(value: string | undefined): TrustProxySetting {
   if (/^\d+$/.test(configured)) {
     const hops = Number(configured)
     if (!Number.isSafeInteger(hops) || hops < 1 || hops > 16) throw new Error('TRUST_PROXY hop count must be between 1 and 16')
-    return hops
+    // platform-fastify 12 移除了数字跳数（X-Forwarded 伪造修复的一部分），用等价的跳数函数表达
+    return (_addr: string, hop: number) => hop < hops
   }
   const proxies = configured.split(',').map((entry) => entry.trim()).filter(Boolean)
   if (!proxies.length) return false
