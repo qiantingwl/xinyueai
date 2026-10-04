@@ -19,6 +19,7 @@ server/storage/
 *.db
 *.dump
 /backups/
+/shengt-backups/
 /backup*.sql
 /dump*.sql
 /tmp/
