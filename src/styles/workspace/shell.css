@@ -454,7 +454,9 @@ html[data-studio-theme="light"] .settings-api-list article footer button { backg
 html[data-studio-theme="light"] .settings-action-row > button:hover,
 html[data-studio-theme="light"] .settings-api-list article footer button:hover { background: #f2f2f2; }
 .create-page-inner { margin: 0 auto; padding-top: 84px; width: min(1024px, calc(100% - 48px)); }
-.studio-create-page {
+/* --creation-* 变量必须挂在 :root：创作面板的下拉菜单 Teleport 到 body，
+   挂在 .studio-create-page 上会让浮层取不到变量，暗色下背景透明。 */
+:root {
   --creation-surface: #1f1f1f;
   --creation-surface-raised: #292929;
   --creation-control: #292929;
@@ -530,8 +532,8 @@ html[data-studio-theme="light"] .settings-api-list article footer button:hover {
 .creation-tools > button img { background: var(--studio-control, #292929); border-radius: 8px; flex: 0 0 54px; height: 54px; object-fit: cover; width: 54px; }
 .creation-tool-fallback-icon { align-items: center; background: color-mix(in srgb, var(--studio-control, #292929) 82%, #6c9ddd 18%); border-radius: 8px; display: inline-flex; flex: 0 0 54px; height: 54px; justify-content: center; width: 54px; }
 .creation-options-menu {
-  background: var(--creation-surface-raised);
-  border: 1px solid var(--creation-menu-border);
+  background: var(--creation-surface-raised, #292929);
+  border: 1px solid var(--creation-menu-border, rgba(255, 255, 255, .1));
   border-radius: 12px;
   bottom: auto;
   box-shadow: var(--creation-menu-shadow);
@@ -614,7 +616,7 @@ html[data-studio-theme="light"] .creation-options-menu > button.is-active { back
 html[data-studio-theme="light"] .creation-ratio-grid > button { background: #f7f7f7; color: #171717; }
 html[data-studio-theme="light"] .creation-ratio-grid > button:hover { background: #f1f1f1; }
 html[data-studio-theme="light"] .creation-ratio-grid > button.is-active { background: #f1f6ff; border-color: #1677ff; color: #1677ff; }
-html[data-studio-theme="light"] .studio-create-page {
+html[data-studio-theme="light"] {
   --creation-surface: #fff;
   --creation-surface-raised: #fff;
   --creation-control: #f4f5f6;
