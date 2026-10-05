@@ -10,6 +10,26 @@
 
 ![AI 创作](xinyue-creation.png)
 
+## 电商中心
+
+![电商中心](xinyue-commerce.png)
+
+## 办公中心
+
+![办公中心](xinyue-office.png)
+
+## 提示词库
+
+![提示词库](xinyue-prompts.png)
+
+## 无限画布
+
+![无限画布](xinyue-canvases.png)
+
+## 工作空间
+
+![工作空间](xinyue-workspace.png)
+
 ## 能力中心
 
 ![能力中心](xinyue-capability-center.png)

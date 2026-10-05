@@ -64,9 +64,19 @@
 | --- | --- |
 | ![对话](docs/images/xinyue-chat.png) | ![创作](docs/images/xinyue-creation.png) |
 
-| 管理后台 | 能力中心 |
+| 电商中心 | 办公中心 |
 | --- | --- |
-| ![管理后台](docs/images/xinyue-admin-dashboard.png) | ![能力中心](docs/images/xinyue-capability-center.png) |
+| ![电商中心](docs/images/xinyue-commerce.png) | ![办公中心](docs/images/xinyue-office.png) |
+
+| 提示词库 | 无限画布 |
+| --- | --- |
+| ![提示词库](docs/images/xinyue-prompts.png) | ![无限画布](docs/images/xinyue-canvases.png) |
+
+| 工作空间 | 能力中心 |
+| --- | --- |
+| ![工作空间](docs/images/xinyue-workspace.png) | ![能力中心](docs/images/xinyue-capability-center.png) |
+
+![管理后台](docs/images/xinyue-admin-dashboard.png)
 
 截图由 `npm run screenshots:demo` 在本地测试环境生成，不含密钥和用户隐私数据。
 
@@ -137,7 +147,7 @@ npm run admin:dev           # 管理端（5174）
 | --- | --- |
 | 用户端 `src/` | Vue 3、Vite、Pinia、Vue Router、Vue Flow、marked + KaTeX + highlight.js + DOMPurify |
 | 管理端 `admin/` | 基于 Art Design Pro 二次开发，Vue 3、Element Plus、Tailwind CSS 4、ECharts |
-| 后端 `server/` | NestJS 11、Fastify、Prisma、PostgreSQL 17、Redis 7、BullMQ、LangGraph.js |
+| 后端 `server/` | NestJS 12、Fastify、Prisma、PostgreSQL 17、Redis 7、BullMQ、LangGraph.js |
 | Worker `workers/` | FastAPI（Python），可选 Compose profile |
 | 部署 | Docker Compose、Nginx |
 | 测试 | Node test runner + tsx、Playwright |

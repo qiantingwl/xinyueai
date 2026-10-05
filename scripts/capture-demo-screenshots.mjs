@@ -49,6 +49,11 @@ try {
   await capture('/chat', '.studio-chat', 'xinyue-chat.png')
   await capture('/image', '.studio-create-page', 'xinyue-creation.png')
   await capture('/capabilities', '.capability-page', 'xinyue-capability-center.png')
+  await capture('/commerce', '.studio-create-page', 'xinyue-commerce.png')
+  await capture('/office', '.office-center', 'xinyue-office.png')
+  await capture('/prompts?type=image', '.prompt-library-page', 'xinyue-prompts.png')
+  await capture('/canvases', '.canvas-library-page', 'xinyue-canvases.png')
+  await capture('/workspace?tab=projects', '.workspace-main', 'xinyue-workspace.png')
 
   await page.unrouteAll({ behavior: 'wait' })
   await context.clearCookies()
